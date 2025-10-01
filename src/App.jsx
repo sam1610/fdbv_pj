@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
-import config from '../amplifyconfiguration.json';
+import output from '../amplify_outputs.json';
 import './App.css';
 
 // Configure the Amplify client
-Amplify.configure(config);
+Amplify.configure(output);
 
 // Generate a client for your backend data
 const client = generateClient();
