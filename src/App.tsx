@@ -15,13 +15,14 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Define the function to fetch in-stock products using GSI
+    // Define the function to fetch in-stock products
     const fetchInStockProducts = async () => {
       setLoading(true);
       setError(null);
       try {
         const response = await client.models.Product.byStockStatus({
-          stockStatus: 'IN_STOCK'
+          stockStatus: 'IN_STOCK',
+          
         });
 
         if (response.data) {
@@ -43,7 +44,7 @@ function App() {
   if (loading) {
     return (
       <div className="container">
-        <h1>Loading Products...</h1>
+        <h1>Loading In-Stock Products...</h1>
       </div>
     );
   }
@@ -62,8 +63,8 @@ function App() {
   return (
     <div className="container">
       <header>
-        <h1>All Products</h1>
-        <p>Showing all items.</p>
+        <h1>In-Stock Products</h1>
+        <p>Showing all in-stock items.</p>
       </header>
       <ul className="product-list">
         {products.length > 0 ? (
