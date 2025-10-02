@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { generateClient } from 'aws-amplify/api';
+import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
 
 // Generate the Amplify Data client
@@ -19,10 +19,10 @@ function App() {
       setLoading(true);
       setError(null);
       try {
-        // 🚀 Use the 'listByStockStatus' query generated from our named GSI
+        // ✅ FIX: Use the correct 'stockStatus' field and string value for the query
         const response = await client.models.Product.listByStockStatus({
-          inStock: true,      // This is the partition key for the GSI
-          sortDirection: 'DESC', // Sorts by 'orderDate' (the sort key), newest first
+          stockStatus: 'IN_STOCK', // This is the partition key for the GSI
+          sortDirection: 'DESC',   // Sorts by 'orderDate' (the sort key), newest first
         });
 
         if (response.data) {
