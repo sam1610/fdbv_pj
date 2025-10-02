@@ -20,7 +20,7 @@ function App() {
       setLoading(true);
       setError(null);
       try {
-        const response = await client.models.Product.listByStockStatus({
+        const response = await client.models.Product.byStockStatus({
           stockStatus: 'IN_STOCK'
         });
 

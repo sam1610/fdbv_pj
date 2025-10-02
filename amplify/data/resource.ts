@@ -32,10 +32,10 @@ const schema = a.schema({
     .authorization((allow) => [allow.publicApiKey()])
     .secondaryIndexes((index) => [
       // GSI 1 is based on the 'stockStatus' string field
-      index('stockStatus').sortKeys(['orderDate']).name('byStockStatus'),
+      index('stockStatus').sortKeys(['orderDate']).queryField('byStockStatus'),
       
       // GSI 2 remains the same
-      index('inventoryStatus').sortKeys(['price']).name('byInventoryStatus'),
+      index('inventoryStatus').sortKeys(['price']).queryField('byInventoryStatus'),
     ]),
 });
 
