@@ -1,12 +1,12 @@
-// amplify/data/resource.ts
-
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 
-// Define an enum for inventory status to ensure data consistency
+// Define enums for our status fields
+const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
 const inventoryStatus = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
 
 const schema = a.schema({
-  // Define the enum type within the schema
+  // ✅ FIX: Define enums as top-level types in the schema
+  StockStatus: a.enum(stockStatus),
   InventoryStatus: a.enum(inventoryStatus),
 
   Product: a
@@ -14,20 +14,27 @@ const schema = a.schema({
       name: a.string().required(),
       description: a.string(),
       price: a.float().required(),
-      inStock: a.boolean().default(true),
+      
+      // Use a.ref() to reference the enum and make it required.
+      // The .default() value must be handled in your client-side code.
+      stockStatus: a.ref('StockStatus').required(),
+
       category: a.string(),
       orderDate: a.datetime(),
       ingredients: a.string().array(),
       calories: a.integer(),
       allergens: a.string().array(),
       imageUrl: a.url(),
+      
+      // Use a.ref() for the second enum as well for consistency
       inventoryStatus: a.ref('InventoryStatus').required(),
     })
     .authorization((allow) => [allow.publicApiKey()])
-    
-    // ✅ FIX: Use an array [] and the .name() modifier for each index
     .secondaryIndexes((index) => [
-      index('inStock').sortKeys(['orderDate']).name('byStockStatus'),
+      // GSI 1 is based on the 'stockStatus' string field
+      index('stockStatus').sortKeys(['orderDate']).name('byStockStatus'),
+      
+      // GSI 2 remains the same
       index('inventoryStatus').sortKeys(['price']).name('byInventoryStatus'),
     ]),
 });
@@ -43,3 +50,4 @@ export const data = defineData({
     },
   },
 });
+
