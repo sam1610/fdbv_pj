@@ -15,12 +15,14 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Define the function to fetch all products
-    const fetchAllProducts = async () => {
+    // Define the function to fetch in-stock products using GSI
+    const fetchInStockProducts = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await client.models.Product.list();
+        const response = await client.models.Product.listByStockStatus({
+          stockStatus: 'IN_STOCK'
+        });
 
         if (response.data) {
           setProducts(response.data);
@@ -34,7 +36,7 @@ function App() {
     };
 
     // Call the fetch function
-    fetchAllProducts();
+    fetchInStockProducts();
   }, []); // The empty dependency array ensures this runs once on component mount
 
   // Render a loading state
@@ -77,7 +79,7 @@ function App() {
             </li>
           ))
         ) : (
-          <p>No products found.</p>
+          <p>No in-stock products found.</p>
         )}
       </ul>
     </div>
