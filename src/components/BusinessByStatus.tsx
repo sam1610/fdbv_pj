@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource'; // Adjust path if needed
-import './App.css';
+import '../App.css';
 
 // Generate the Amplify Data client
 const client = generateClient<Schema>();
