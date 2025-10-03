@@ -53,16 +53,16 @@ const schema = a.schema({
     })
     .secondaryIndexes((index) => [
       // GSI 1: For the Business Admin Dashboard
-      index('gsi1pk').sortKeys(['gsi1sk']).name('byBusinessByStatus').queryField('listBusinessDataByBusinessByStatus'),
+      index('gsi1pk').sortKeys(['gsi1sk']).queryField('listBusinessDataByBusinessByStatus'),
       
       // GSI 2: For Business Relationship Management
-      index('gsi2pk').sortKeys(['gsi2sk']).name('byBusinessByEntity').queryField('listBusinessDataByBusinessByEntity'),
+      index('gsi2pk').sortKeys(['gsi2sk']).queryField('listBusinessDataByBusinessByEntity'),
 
       // GSI 3: For the Delivery Agent's Dashboard (Sparse Index)
-      index('gsi3pk').sortKeys(['gsi3sk']).name('byAgentByStatus').queryField('listBusinessDataByAgentByStatus'),
+      index('gsi3pk').sortKeys(['gsi3sk']).queryField('listBusinessDataByAgentByStatus'),
       
       // GSI 4: For the Customer's Order History
-      index('gsi4pk').sortKeys(['gsi4sk']).name('byCustomer').queryField('listBusinessDataByCustomer'),
+      index('gsi4pk').sortKeys(['gsi4sk']).queryField('listBusinessDataByCustomer'),
     ])
     // ✅ FIX: Replaced .operations() with the correct .to() method
     .authorization((allow) => [
