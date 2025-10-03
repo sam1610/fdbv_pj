@@ -12,11 +12,9 @@ const schema = a.schema({
   BusinessData: a
     .model({
       // --- Primary Key (The "Address" of the data) ---
-      // The combination of pk + sk must be unique and is IMMUTABLE.
-      pk: a.string().required(), // e.g., "BUSINESS#B123" or "ORDER#O789"
-      sk: a.string().required(), // e.g., "METADATA#B123" for a main record or "ITEM#P001" for a line item
-      
-      entityType: a.string().required(), 
+      pk: a.string().required(),
+      sk: a.string().required(),
+      entityType: a.string().required(),
 
       // --- GSI Attributes (The "Indexes" for querying) ---
       gsi1pk: a.string(),
@@ -55,40 +53,25 @@ const schema = a.schema({
     })
     .secondaryIndexes((index) => [
       // GSI 1: For the Business Admin Dashboard
-      // Purpose: To list all Orders for a specific Business, with the ability to filter by status.
-      // PK: The Business ID, to group all orders for that business.
-      // SK: A composite key of Status + Timestamp, for filtering and chronological sorting.
-      // Example Query: "Get all 'PREPARED' orders for Business B123, newest first."
       index('gsi1pk').sortKeys(['gsi1sk']).name('byBusinessByStatus'),
       
       // GSI 2: For Business Relationship Management
-      // Purpose: To list all related entities (like Customers and Delivery Agents) for a specific Business.
-      // PK: The Business ID, to group all related entities.
-      // SK: The entity type + ID, to distinguish between customers and agents.
-      // Example Query: "Get all Customers for Business B123."
       index('gsi2pk').sortKeys(['gsi2sk']).name('byBusinessByEntity'),
 
       // GSI 3: For the Delivery Agent's Dashboard (Sparse Index)
-      // Purpose: To list only the active, "DELIVERING" orders assigned to a specific agent.
-      // PK: The Agent's ID, to get only their orders.
-      // SK: A composite key of Status + Timestamp, to ensure only 'DELIVERING' orders appear.
-      // This is a "sparse index": items only appear in this GSI when their status is 'DELIVERING'.
-      // Example Query: "Get my current delivery assignments."
       index('gsi3pk').sortKeys(['gsi3sk']).name('byAgentByStatus'),
       
       // GSI 4: For the Customer's Order History
-      // Purpose: To list all orders placed by a specific customer, sorted chronologically.
-      // PK: The Customer's ID.
-      // SK: The order timestamp, for sorting.
-      // Example Query: "Get my complete order history, newest first."
       index('gsi4pk').sortKeys(['gsi4sk']).name('byCustomer'),
     ])
-    .authorization((allow) => [
-      allow.groups(['Admins']).operations(['create', 'read', 'update', 'delete']),
-      allow.owner('deliveryAgentId').operations(['read']),
-      allow.authenticated().operations(['create', 'read']),
-    ]),
+    // ✅ FIX: Replaced .operations() with the correct .to() method
 
+    .authorization((allow) => [
+      allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
+      allow.ownerDefinedIn('deliveryAgentId').to(['read']),
+      allow.authenticated().to(['create', 'read']),
+    ]),
+    // --- Custom Mutations for Secure Business Logic ---
     createDeliveryAgent: a.mutation()
       .arguments({ username: a.string().required(), email: a.email().required() })
       .returns(a.string())
