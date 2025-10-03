@@ -53,24 +53,24 @@ const schema = a.schema({
     })
     .secondaryIndexes((index) => [
       // GSI 1: For the Business Admin Dashboard
-      index('gsi1pk').sortKeys(['gsi1sk']).name('byBusinessByStatus'),
+      index('gsi1pk').sortKeys(['gsi1sk']).name('byBusinessByStatus').queryField('listBusinessDataByBusinessByStatus'),
       
       // GSI 2: For Business Relationship Management
-      index('gsi2pk').sortKeys(['gsi2sk']).name('byBusinessByEntity'),
+      index('gsi2pk').sortKeys(['gsi2sk']).name('byBusinessByEntity').queryField('listBusinessDataByBusinessByEntity'),
 
       // GSI 3: For the Delivery Agent's Dashboard (Sparse Index)
-      index('gsi3pk').sortKeys(['gsi3sk']).name('byAgentByStatus'),
+      index('gsi3pk').sortKeys(['gsi3sk']).name('byAgentByStatus').queryField('listBusinessDataByAgentByStatus'),
       
       // GSI 4: For the Customer's Order History
-      index('gsi4pk').sortKeys(['gsi4sk']).name('byCustomer'),
+      index('gsi4pk').sortKeys(['gsi4sk']).name('byCustomer').queryField('listBusinessDataByCustomer'),
     ])
     // ✅ FIX: Replaced .operations() with the correct .to() method
-
     .authorization((allow) => [
       allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
       allow.ownerDefinedIn('deliveryAgentId').to(['read']),
       allow.authenticated().to(['create', 'read']),
     ]),
+
     // --- Custom Mutations for Secure Business Logic ---
     createDeliveryAgent: a.mutation()
       .arguments({ username: a.string().required(), email: a.email().required() })
@@ -93,4 +93,3 @@ export const data = defineData({
     defaultAuthorizationMode: 'userPool',
   },
 });
-
