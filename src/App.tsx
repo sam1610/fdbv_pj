@@ -1,88 +1,21 @@
-import { useState, useEffect } from 'react';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
+import React from 'react';
+import BusinessByStatus from  './components/BusinessByStatus';
+import BusinessByEntity from './components/BusinessByEntity';
+import AgentByStatus from './components/AgentByStatus';
+import CustomerOrders from './components/CustomerOrders';
 import './App.css';
 
-// Generate the Amplify Data client
-const client = generateClient<Schema>();
-
-// Define a type for our product for better readability in the component
-type Product = Schema['Product']['type'];
-
 function App() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Define the function to fetch in-stock products
-    const fetchInStockProducts = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await client.models.Product.byStockStatus({
-          stockStatus: 'IN_STOCK',
-          
-        });
-
-        if (response.data) {
-          setProducts(response.data);
-        }
-      } catch (e) {
-        console.error('Error fetching products:', e);
-        setError('Failed to fetch products. Please check the console');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Call the fetch function
-    fetchInStockProducts();
-  }, []); // The empty dependency array ensures this runs once on component mount
-
-  // Render a loading state
-  if (loading) {
-    return (
-      <div className="container">
-        <h1>Loading In-Stock Products...</h1>
-      </div>
-    );
-  }
-
-  // Render an error state
-  if (error) {
-    return (
-      <div className="container error">
-        <h1>Error</h1>
-        <p>{error}</p>
-      </div>
-    );
-  }
-  
-  // Render the list of products
   return (
     <div className="container">
       <header>
-        <h1>In-Stock Products</h1>
-        <p>Showing all in-stock items.</p>
+        <h1>Business Data Queries</h1>
+        <p>Results from all GSIs.</p>
       </header>
-      <ul className="product-list">
-        {products.length > 0 ? (
-          products.map((product) => (
-            <li key={product.id} className="product-item">
-              <div className="product-info">
-                <h2>{product.name}</h2>
-                <p className="price">${product.price.toFixed(2)}</p>
-              </div>
-              <p className="order-date">
-                Ordered: {product.orderDate ? new Date(product.orderDate).toLocaleDateString() : 'N/A'}
-              </p>
-            </li>
-          ))
-        ) : (
-          <p>No in-stock products found.</p>
-        )}
-      </ul>
+      <BusinessByStatus />
+      <BusinessByEntity />
+      <AgentByStatus />
+      <CustomerOrders />
     </div>
   );
 }
