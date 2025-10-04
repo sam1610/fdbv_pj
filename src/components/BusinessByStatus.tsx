@@ -1,7 +1,7 @@
+// components/A.tsx (BusinessByStatus)
 import { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource'; // Adjust path if needed
-import '../App.css';
 
 // Generate the Amplify Data client
 const client = generateClient<Schema>();
@@ -9,7 +9,11 @@ const client = generateClient<Schema>();
 // Define a type for our data for better readability in the component
 type BusinessData = Schema['BusinessData']['type'];
 
-function BusinessByStatus() {
+interface AProps {
+  user: { username: string; attributes?: { businessId?: string } } | null;
+}
+
+function BusinessByStatus({ user }: AProps) {
   const [data, setData] = useState<BusinessData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,8 +23,8 @@ function BusinessByStatus() {
       setLoading(true);
       setError(null);
       try {
-        // Example value - replace with actual ID
-        const exampleBusinessId = 'BUSINESS#B123';
+        // Use user attributes for dynamic ID (fallback to example)
+        const exampleBusinessId = user?.attributes?.businessId || 'BUSINESS#B123';
         const response = await client.models.BusinessData.listBusinessDataByBusinessByStatus({
           gsi1pk: exampleBusinessId,
         });
@@ -33,8 +37,13 @@ function BusinessByStatus() {
       }
     };
 
-    fetchData();
-  }, []);
+    if (user) {
+      fetchData();
+    } else {
+      setError('User not authenticated');
+      setLoading(false);
+    }
+  }, [user]);
 
   if (loading) return <p>Loading byBusinessByStatus...</p>;
   if (error) return <p>{error}</p>;
