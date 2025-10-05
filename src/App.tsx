@@ -63,6 +63,7 @@ function App({ signOut, user }: AppProps) {
         <button onClick={signOut}>Sign Out</button>
       </header>
       <BusinessByStatus user={user} client={client} />
+      <CustomerOrders user={user} client={client} />
       {/* <BusinessByEntity user={user} client={client} />
       <AgentByStatus user={user} client={client} />
       <CustomerOrders user={user} client={client} /> */}

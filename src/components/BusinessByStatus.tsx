@@ -1,19 +1,16 @@
 // components/A.tsx (BusinessByStatus)
 import { useState, useEffect } from 'react';
-import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource'; // Adjust path if needed
-
-// Generate the Amplify Data client
-const client = generateClient<Schema>();
-
+import { generateClient } from 'aws-amplify/data';
 // Define a type for our data for better readability in the component
 type BusinessData = Schema['BusinessData']['type'];
 
 interface AProps {
   user: { username: string; attributes?: { businessId?: string } } | null;
+  client: ReturnType<typeof generateClient<Schema>>;
 }
 
-function BusinessByStatus({ user }: AProps) {
+function BusinessByStatus({ user, client }: AProps) {
   const [data, setData] = useState<BusinessData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +40,7 @@ function BusinessByStatus({ user }: AProps) {
       setError('User not authenticated');
       setLoading(false);
     }
-  }, [user]);
+  }, [user, client]);
 
   if (loading) return <p>Loading byBusinessByStatus...</p>;
   if (error) return <p>{error}</p>;

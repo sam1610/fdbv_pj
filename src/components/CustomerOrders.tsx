@@ -3,12 +3,15 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource'; // Adjust path if needed
 
 // Generate the Amplify Data client
-const client = generateClient<Schema>();
+// const client = generateClient<Schema>();
 
 // Define a type for our data for better readability in the component
 type BusinessData = Schema['BusinessData']['type'];
-
-function CustomerOrders() {
+interface AProps {
+  user: { username: string; attributes?: { businessId?: string } } | null;
+  client: ReturnType<typeof generateClient<Schema>>;
+}
+function CustomerOrders({ user, client }: AProps) {
   const [data, setData] = useState<BusinessData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +22,7 @@ function CustomerOrders() {
       setError(null);
       try {
         // Example value - replace with actual ID
-        const exampleCustomerId = 'CUSTOMER#C789';
+        const exampleCustomerId = 'CUSTOMER#C001';
         const response = await client.models.BusinessData.listBusinessDataByCustomer({
           gsi4pk: exampleCustomerId,
         });
@@ -32,8 +35,13 @@ function CustomerOrders() {
       }
     };
 
-    fetchData();
-  }, []);
+  if (user) {
+      fetchData();
+    } else {
+      setError('User not authenticated');
+      setLoading(false);
+    }
+  }, [user, client]);
 
   if (loading) return <p>Loading byCustomer...</p>;
   if (error) return <p>{error}</p>;
