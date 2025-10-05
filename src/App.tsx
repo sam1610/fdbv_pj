@@ -1,20 +1,15 @@
 import React from 'react';
-import BusinessByStatus from  './components/BusinessByStatus';
-import BusinessByEntity from './components/BusinessByEntity';
-import AgentByStatus from './components/AgentByStatus';
+import BusinessByStatus from './components/BusinessByStatus';
 import CustomerOrders from './components/CustomerOrders';
 import { FetchUserAttributesOutput, fetchUserAttributes } from 'aws-amplify/auth';
-
 import { generateClient } from 'aws-amplify/data';
-
 import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
-
 import './App.css';
+import RecordsView from './components/GlobalCustomerList';
 
+const client = generateClient<Schema>({ authMode: 'userPool' });
 
-const client = generateClient<Schema>({ authMode: "userPool" });
-
-// Custom hook to fetch user attributes
+// Custom hook to fetch user attributes like email and phone number
 function useUserAttributes() {
   const [userAttributes, setUserAttributes] = React.useState<FetchUserAttributesOutput | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -30,16 +25,19 @@ function useUserAttributes() {
         setLoading(false);
       }
     };
-
     fetchAttributes();
   }, []);
 
   return { userAttributes, loading };
 }
 
+// ✅ FIX: Updated the user prop interface to include userId (the 'sub')
 interface AppProps {
   signOut: () => void;
-  user: { username: string  } | null;
+  user: {
+    username: string;
+    userId: string; // The 'userId' from the authenticator is the Cognito 'sub'
+  } | null;
 }
 
 function App({ signOut, user }: AppProps) {
@@ -57,18 +55,20 @@ function App({ signOut, user }: AppProps) {
     <div className="container">
       <header>
         <h1>Business Data Queries</h1>
-        <p>Results from all GSIs. Signed in as {user.username}.</p>
+        <p>Signed in as: {user.username}.</p>
         <p>User Email: {userAttributes?.email || 'N/A'}</p>
         <p>User Phone Number: {userAttributes?.phone_number || 'N/A'}</p>
+        {/* ✅ NEW: Display the Cognito User ID (sub) */}
+        <p className="user-sub">Cognito User ID (sub): {user.userId}</p>
         <button onClick={signOut}>Sign Out</button>
       </header>
+      {/* Pass the full user object to child components that might need the ID */}
       <BusinessByStatus user={user} client={client} />
       <CustomerOrders user={user} client={client} />
-      {/* <BusinessByEntity user={user} client={client} />
-      <AgentByStatus user={user} client={client} />
-      <CustomerOrders user={user} client={client} /> */}
+      <RecordsView user={user} client={client} />
     </div>
   );
 }
 
 export default App;
+

@@ -8,15 +8,14 @@ const schema = a.schema({
   OrderStatus: a.enum(orderStatus),
   StockStatus: a.enum(stockStatus),
 
-  // This single model represents all data types in our table (e.g., Businesses, Orders, Customers).
   BusinessData: a
     .model({
-      // --- Primary Key (The "Address" of the data) ---
+      // --- Primary Key ---
       pk: a.string().required(),
       sk: a.string().required(),
       entityType: a.string().required(),
 
-      // --- GSI Attributes (The "Indexes" for querying) ---
+      // --- GSI Attributes ---
       gsi1pk: a.string(),
       gsi1sk: a.string(),
       gsi2pk: a.string(),
@@ -36,44 +35,40 @@ const schema = a.schema({
       deliveryAgentId: a.string(), 
       deliveryDate: a.datetime(),
       details: a.json(),
+      
+      // Add a field to store the Cognito ID of the business owner (Admin)
+      businessOwnerId: a.string(),
 
-      // Product-specific fields
-      description: a.string(),
-      price: a.float(),
-      stockStatus: a.ref('StockStatus'),
-      category: a.string(),
-      ingredients: a.string().array(),
-      calories: a.integer(),
-      allergens: a.string().array(),
-      imageUrl: a.url(),
-
+      // --- Product-specific fields can be added here if needed ---
       productId: a.string(),
       quantity: a.integer(),
       unitPrice: a.float(),
     })
     .secondaryIndexes((index) => [
-      // GSI 1: For the Business Admin Dashboard
       index('gsi1pk').sortKeys(['gsi1sk']).queryField('listBusinessDataByBusinessByStatus'),
-      
-      // GSI 2: For Business Relationship Management
       index('gsi2pk').sortKeys(['gsi2sk']).queryField('listBusinessDataByBusinessByEntity'),
-
-      // GSI 3: For the Delivery Agent's Dashboard (Sparse Index)
       index('gsi3pk').sortKeys(['gsi3sk']).queryField('listBusinessDataByAgentByStatus'),
-      
-      // GSI 4: For the Customer's Order History
       index('gsi4pk').sortKeys(['gsi4sk']).queryField('listBusinessDataByCustomer'),
     ])
-    // ✅ FIX: Replaced .operations() with the correct .to() method
+    // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
-      allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
+      // An Admin can perform all actions ONLY on records they own.
+      allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
+      
+      // A Delivery Agent can only read records they own.
       allow.ownerDefinedIn('deliveryAgentId').to(['read']),
-      allow.authenticated().to(['create', 'read']),
+      
+      // Any authenticated user can create and read records.
+      // allow.authenticated().to(['create', 'read']),
     ]),
 
-    // --- Custom Mutations for Secure Business Logic ---
+    // --- Custom Mutations remain the same ---
     createDeliveryAgent: a.mutation()
-      .arguments({ username: a.string().required(), email: a.email().required() })
+      .arguments({ 
+        username: a.string().required(), 
+        email: a.email().required(),
+        phoneNumber: a.phone().required()
+      })
       .returns(a.string())
       .authorization((allow) => [allow.groups(['Admins'])])
       .handler(a.handler.function('addDeliveryAgentHandler')),

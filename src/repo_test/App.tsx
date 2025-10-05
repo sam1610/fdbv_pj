@@ -4,6 +4,7 @@ import BusinessByEntity from './components/BusinessByEntity';
 import AgentByStatus from './components/AgentByStatus';
 import CustomerOrders from './components/CustomerOrders';
 import './App.css';
+import RecordsView from '../components/GlobalCustomerList';
 
 interface AppProps {
   signOut: () => void;
@@ -22,7 +23,9 @@ function App({ signOut, user }: AppProps) {
         <p>Results from all GSIs. Signed in as {user.username}.</p>
         <button onClick={signOut}>Sign Out</button>
       </header>
-      <BusinessByStatus user={user} />
+      <BusinessByStatus user={user} client={client} />
+      <CustomerOrders user={user} client={client} />
+      <RecordsView user={user} client={client} />
     </div>
   );
 }
