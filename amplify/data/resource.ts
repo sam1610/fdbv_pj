@@ -54,7 +54,7 @@ const schema = a.schema({
     .authorization((allow) => [
       // An Admin can perform all actions ONLY on records they own.
       allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
-      
+      // allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
       // A Delivery Agent can only read records they own.
       allow.ownerDefinedIn('deliveryAgentId').to(['read']),
       
