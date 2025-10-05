@@ -1,14 +1,17 @@
+// components/AgentByStatus.tsx
 import { useState, useEffect } from 'react';
-import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource'; // Adjust path if needed
-
-// Generate the Amplify Data client
-const client = generateClient<Schema>();
+import { generateClient } from 'aws-amplify/data';
 
 // Define a type for our data for better readability in the component
 type BusinessData = Schema['BusinessData']['type'];
 
-function AgentByStatus() {
+interface AgentByStatusProps {
+  user: { username: string; attributes?: { agentId?: string } } | null;
+  client: ReturnType<typeof generateClient<Schema>>;
+}
+
+function AgentByStatus({ user, client }: AgentByStatusProps) {
   const [data, setData] = useState<BusinessData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +21,8 @@ function AgentByStatus() {
       setLoading(true);
       setError(null);
       try {
-        // Example value - replace with actual ID
-        const exampleAgentId = 'AGENT#A456';
+        // Use user attributes for dynamic ID (fallback to example)
+        const exampleAgentId = user?.attributes?.agentId || 'AGENT#A456';
         const response = await client.models.BusinessData.listBusinessDataByAgentByStatus({
           gsi3pk: exampleAgentId,
         });
@@ -32,8 +35,13 @@ function AgentByStatus() {
       }
     };
 
-    fetchData();
-  }, []);
+    if (user) {
+      fetchData();
+    } else {
+      setError('User not authenticated');
+      setLoading(false);
+    }
+  }, [user, client]); // Add client to dependencies if it could change (rare)
 
   if (loading) return <p>Loading byAgentByStatus...</p>;
   if (error) return <p>{error}</p>;

@@ -1,14 +1,17 @@
+// components/BusinessByEntity.tsx
 import { useState, useEffect } from 'react';
-import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource'; // Adjust path if needed
-
-// Generate the Amplify Data client
-const client = generateClient<Schema>();
+import { generateClient } from 'aws-amplify/data';
 
 // Define a type for our data for better readability in the component
 type BusinessData = Schema['BusinessData']['type'];
 
-function BusinessByEntity() {
+interface BusinessByEntityProps {
+  user: { username: string; attributes?: { businessId?: string } } | null;
+  client: ReturnType<typeof generateClient<Schema>>;
+}
+
+function BusinessByEntity({ user, client }: BusinessByEntityProps) {
   const [data, setData] = useState<BusinessData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +21,8 @@ function BusinessByEntity() {
       setLoading(true);
       setError(null);
       try {
-        // Example value - replace with actual ID
-        const exampleBusinessId = 'BUSINESS#B123';
+        // Use user attributes for dynamic ID (fallback to example)
+        const exampleBusinessId = user?.attributes?.businessId || 'BUSINESS#B123';
         const response = await client.models.BusinessData.listBusinessDataByBusinessByEntity({
           gsi2pk: exampleBusinessId,
         });
@@ -32,8 +35,13 @@ function BusinessByEntity() {
       }
     };
 
-    fetchData();
-  }, []);
+    if (user) {
+      fetchData();
+    } else {
+      setError('User not authenticated');
+      setLoading(false);
+    }
+  }, [user, client]); // Add client to dependencies if it could change (rare)
 
   if (loading) return <p>Loading byBusinessByEntity...</p>;
   if (error) return <p>{error}</p>;
