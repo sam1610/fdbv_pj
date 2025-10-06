@@ -34,7 +34,8 @@ const schema = a.schema({
       customerId: a.string(),
       deliveryAgentId: a.string(), 
       deliveryDate: a.datetime(),
-      details: a.json(),
+      location: a.json(),
+      itemCount: a.integer(), // For order's number of items
       
       // Add a field to store the Cognito ID of the business owner (Admin)
       businessOwnerId: a.string(),
@@ -45,18 +46,22 @@ const schema = a.schema({
       unitPrice: a.float(),
     })
     .secondaryIndexes((index) => [
+      // list of orders related to a business, filtered by status
       index('gsi1pk').sortKeys(['gsi1sk']).queryField('listBusinessDataByBusinessByStatus'),
+      // list of Customers | Agents  (e.g., products) related to a specific business
       index('gsi2pk').sortKeys(['gsi2sk']).queryField('listBusinessDataByBusinessByEntity'),
+      // list of orders assigned to a delivery agent, filtered by status
       index('gsi3pk').sortKeys(['gsi3sk']).queryField('listBusinessDataByAgentByStatus'),
-      index('gsi4pk').sortKeys(['gsi4sk']).queryField('listBusinessDataByCustomer'),
+      // list of orders related to a specific customer
+      index('gsi4pk').sortKeys(['gsi1sk']).queryField('listBusinessDataByCustomer'),
     ])
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
       // An Admin can perform all actions ONLY on records they own.
-      allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
-      // allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
+      // allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
+      allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
       // A Delivery Agent can only read records they own.
-      allow.ownerDefinedIn('deliveryAgentId').to(['read']),
+      allow.groups(['DeliveryAgents']).to(['read']),
       
       // Any authenticated user can create and read records.
       // allow.authenticated().to(['create', 'read']),

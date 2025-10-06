@@ -1,53 +1,80 @@
-// components/A.tsx (BusinessByStatus)
-import { useState, useEffect } from 'react';
-import type { Schema } from '../../amplify/data/resource'; // Adjust path if needed
-import { generateClient } from 'aws-amplify/data';
-// Define a type for our data for better readability in the component
-type BusinessData = Schema['BusinessData']['type'];
-
 interface AProps {
-  user: { username: string; attributes?: Record<string, unknown> } | null; 
+  user: { username: string; attributes?: Record<string, unknown> } | null;
   client: ReturnType<typeof generateClient<Schema>>;
-  phoneNbr: string; // Prop for the phone number associated with the business
+  phoneNbr: string;
 }
 
+// Custom type for limited response (adjust fields to match your selection set)
+type LimitedBusinessData = Pick<BusinessData, 'pk' | 'sk' | 'entityType' | 'name' | 'orderStatus'>;
+
 function BusinessByStatus({ user, client, phoneNbr }: AProps) {
-  const [data, setData] = useState<BusinessData[]>([]);
+  const [data, setData] = useState<LimitedBusinessData[]>([]);
   const [nextToken, setNextToken] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async (token: string | null = null) => {
+  useEffect(() => {
+    const fetchData = async (token: string | null = null) => {
       if (token ? loadingMore : loading) return;
       token ? setLoadingMore(true) : setLoading(true);
       setError(null);
       try {
-        // Construct gsi1pk using phoneNbr (e.g., 'BUSINESS#+1234567890')
         const businessPk = `BUSINESS#${phoneNbr}`;
-        const response = await client.models.BusinessData.listBusinessDataByBusinessByStatus({
+
+        // Custom GraphQL query string with limited selection set
+        const query = `
+          query listBusinessDataByBusinessByStatus(
+            $gsi1pk: String!,
+            $gsi1sk: ModelStringKeyConditionInput,
+            $sortDirection: ModelSortDirection,
+            $limit: Int,
+            $nextToken: String
+          ) {
+            listBusinessDataByBusinessByStatus(
+              gsi1pk: $gsi1pk,
+              gsi1sk: $gsi1sk,
+              sortDirection: $sortDirection,
+              limit: $limit,
+              nextToken: $nextToken
+            ) {
+              items {
+                pk      # Only select desired fields here
+                sk
+                entityType
+                name
+                orderStatus
+                # Add more if needed, e.g., orderDate, totalPrice
+              }
+              nextToken
+            }
+          }
+        `;
+
+        const variables = {
           gsi1pk: businessPk,
-          gsi1sk: { beginsWith: 'ORDER#' }, // Filter only orders, sorted server-side by orderDate
-          limit: 10, // Pagination with 10 items per fetch
+          gsi1sk: { beginsWith: 'ORDER#' }, // Filter only orders
+          sortDirection: 'DESC', // Descending (newest first)
+          limit: 10, // Pagination batch size
           nextToken: token,
-          sortDirection: 'DESC', // Default descending order (newest first)
-        });
-        const newData = response.data || [];
+        };
+
+        const response = await client.graphql({ query, variables });
+        const newData = response.data.listBusinessDataByBusinessByStatus.items || [];
         setData((prev) => [...prev, ...newData]);
-        setNextToken(response.nextToken || null);
-        setHasMore(!!response.nextToken);
+        setNextToken(response.data.listBusinessDataByBusinessByStatus.nextToken || null);
+        setHasMore(!!response.data.listBusinessDataByBusinessByStatus.nextToken);
       } catch (e) {
         console.error('Error fetching byBusinessByStatus:', e);
         setError('Failed to fetch byBusinessByStatus data');
       } finally {
         token ? setLoadingMore(false) : setLoading(false);
       }
-  };
+    };
 
-  useEffect(() => {
     if (user) {
-      setData([]); // Reset data on user/phoneNbr change
+      setData([]); // Reset on user/phoneNbr change
       setNextToken(null);
       setHasMore(true);
       fetchData();

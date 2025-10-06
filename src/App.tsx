@@ -1,11 +1,11 @@
 import React from 'react';
 import BusinessByStatus from './components/BusinessByStatus';
+import B from './components/B';
 import CustomerOrders from './components/CustomerOrders';
 import { FetchUserAttributesOutput, fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
 import './App.css';
-import RecordsView from './components/GlobalCustomerList';
 
 const client = generateClient<Schema>({ authMode: 'userPool' });
 
@@ -63,9 +63,10 @@ function App({ signOut, user }: AppProps) {
         <button onClick={signOut}>Sign Out</button>
       </header>
       {/* Pass the full user object to child components that might need the ID */}
-      <BusinessByStatus user={user} client={client} />
-      <CustomerOrders user={user} client={client} />
-      <RecordsView user={user} client={client} />
+      {/*  associte  "BUSINESS#" to the userAttributes?.phone_number  */}
+      <BusinessByStatus user={user} client={client} phoneNbr={`BUSINESS#${userAttributes?.phone_number}`} />
+      <CustomerOrders user={user} client={client}/>
+      <B client={client}/>
     </div>
   );
 }
