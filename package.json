@@ -15,7 +15,8 @@
     "@aws-sdk/lib-dynamodb": "^3.902.0",
     "aws-amplify": "^6.15.7",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "recharts": "^3.2.1"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.16.1",
