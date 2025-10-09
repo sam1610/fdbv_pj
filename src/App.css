@@ -13,6 +13,11 @@ section h2 { color: #34495e; border-bottom: 2px solid #eee; padding-bottom: 0.5r
 .data-table tr:nth-child(even) { background-color: #f9f9f9; }
 .data-table tr:hover { background-color: #f1f1f1; }
 .error { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; padding: 1rem; text-align: center; } */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 .App-1 {
   text-align: center;
 }

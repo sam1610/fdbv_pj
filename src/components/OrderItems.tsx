@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import type { Schema } from '../../amplify/data/resource'; // Adjust path
 import { generateClient } from 'aws-amplify/data';
-
+import '../App.css';
 type BusinessData = Schema['BusinessData']['type'];
 
 interface Props {

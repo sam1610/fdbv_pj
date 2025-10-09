@@ -17,43 +17,34 @@ const schema = a.schema({
 
       // --- GSI Attributes ---
       gsi1pk: a.string(),
-      gsi1sk: a.string(),
       gsi2pk: a.string(),
-      gsi2sk: a.string(),
-      gsi3pk: a.string(),
-      gsi3sk: a.string(),
-      gsi4pk: a.string(),
-      gsi4sk: a.string(),
+
       
       // --- All Possible Entity Attributes ---
       name: a.string(),
-      phone: a.phone(),
+      phone: a.string(),
       orderDate: a.datetime(),
-      totalPrice: a.float(),
+      totalAmount: a.float(),
       orderStatus: a.ref('OrderStatus'),
-      customerId: a.string(),
-      deliveryAgentId: a.string(), 
       deliveryDate: a.datetime(),
       location: a.json(),
       itemCount: a.integer(), // For order's number of items
       
-      // Add a field to store the Cognito ID of the business owner (Admin)
-      businessOwnerId: a.string(),
-
       // --- Product-specific fields can be added here if needed ---
       productId: a.string(),
       quantity: a.integer(),
       unitPrice: a.float(),
-    })
+      imageUrl:a.string(),
+      description: a.string(),
+      stockStatus: a.ref('StockStatus'),
+
+
+    }).identifier(['pk', 'sk'])
     .secondaryIndexes((index) => [
-      // list of orders related to a business, filtered by status
-      index('gsi1pk').sortKeys(['gsi1sk']).queryField('listBusinessDataByBusinessByStatus'),
-      // list of Customers | Agents  (e.g., products) related to a specific business
-      index('gsi2pk').sortKeys(['gsi2sk']).queryField('listBusinessDataByBusinessByEntity'),
       // list of orders assigned to a delivery agent, filtered by status
-      index('gsi3pk').sortKeys(['gsi3sk']).queryField('listBusinessDataByAgentByStatus'),
+      index('gsi1pk').sortKeys(['sk']).queryField('listBusinessDataByAgentByStatus'),
       // list of orders related to a specific customer
-      index('gsi4pk').sortKeys(['gsi1sk']).queryField('listBusinessDataByCustomer'),
+      index('gsi2pk').sortKeys(['sk']).queryField('listBusinessDataByCustomer'),
     ])
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [

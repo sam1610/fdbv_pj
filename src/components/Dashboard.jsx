@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import * as Recharts from 'recharts';
+import { useOrderStatus } from '../DataHook/useOrderStatus';
 
 // --- Mock Data ---
 // This data simulates the items you would fetch from your DynamoDB table.
@@ -18,20 +19,20 @@ const mockData = {
     { BusinessPhone: "+15551112222", SortKey: "CUSTOMER#+1987654321", CustomerName: "Jane Smith", TotalOrders: 8, TotalSpent: 275.50, DefaultDeliveryAddress: { lat: 26.2311, lon: 50.5987 } },
     
     // Today's Orders & a few historical ones
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-001", OrderID: "ORD-2222-001", CustomerPhone: "+1234567890", OrderDate: new Date().toISOString(), Status: "delivered", TotalAmount: 45.50, ItemsNumber: 3 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-002", OrderID: "ORD-2222-002", CustomerPhone: "+1987654321", OrderDate: new Date().toISOString(), Status: "prepared", TotalAmount: 22.75, ItemsNumber: 2 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-003", OrderID: "ORD-2222-003", CustomerPhone: "+1234567890", OrderDate: new Date().toISOString(), Status: "in preparation", TotalAmount: 33.00, ItemsNumber: 2 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-004", OrderID: "ORD-2222-004", CustomerPhone: "+1234567890", OrderDate: new Date().toISOString(), Status: "in preparation", TotalAmount: 15.25, ItemsNumber: 1 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-005", OrderID: "ORD-2222-005", CustomerPhone: "+1987654321", OrderDate: new Date().toISOString(), Status: "ordered", TotalAmount: 88.00, ItemsNumber: 5 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-006", OrderID: "ORD-2222-006", CustomerPhone: "+1234567890", OrderDate: new Date().toISOString(), Status: "prepared", TotalAmount: 12.50, ItemsNumber: 1 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-007", OrderID: "ORD-2222-007", CustomerPhone: "+1987654321", OrderDate: "2025-09-14T12:30:00Z", Status: "delivered", TotalAmount: 55.00, ItemsNumber: 4 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-001", OrderID: "ORD-2222-001", phone: "+1234567890", orderDate: new Date().toISOString(), orderStatus: "DELIVERED", totalPrice: 45.50, ItemsNumber: 3 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-002", OrderID: "ORD-2222-002", phone: "+1987654321", orderDate: new Date().toISOString(), orderStatus: "PREPARED", totalPrice: 22.75, ItemsNumber: 2 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-003", OrderID: "ORD-2222-003", phone: "+1234567890", orderDate: new Date().toISOString(), orderStatus: "IN-PREPARATION", totalPrice: 33.00, ItemsNumber: 2 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-004", OrderID: "ORD-2222-004", phone: "+1234567890", orderDate: new Date().toISOString(), orderStatus: "IN-PREPARATION", totalPrice: 15.25, ItemsNumber: 1 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-005", OrderID: "ORD-2222-005", phone: "+1987654321", orderDate: new Date().toISOString(), orderStatus: "ORDERED", totalPrice: 88.00, ItemsNumber: 5 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-006", OrderID: "ORD-2222-006", phone: "+1234567890", orderDate: new Date().toISOString(), orderStatus: "PREPARED", totalPrice: 12.50, ItemsNumber: 1 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-007", OrderID: "ORD-2222-007", phone: "+1987654321", orderDate: "2025-09-14T12:30:00Z", Status: "DELIVERED", totalPrice: 55.00, ItemsNumber: 4 },
 
     
     // Order Line Items (for Order Detail view)
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-001#ITEM#A", ItemName: "Margherita Pizza", Quantity: 2, UnitPrice: 12.50 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-001#ITEM#B", ItemName: "Soda", Quantity: 3, UnitPrice: 2.50 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-002#ITEM#A", ItemName: "Classic Burger", Quantity: 1, UnitPrice: 9.75 },
-    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-002#ITEM#B", ItemName: "Fries", Quantity: 1, UnitPrice: 3.00 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-001#ITEM#A", ItemName: "Margherita Pizza", quantity: 2, unitPrice: 12.50 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-001#ITEM#B", ItemName: "Soda", quantity: 3, unitPrice: 2.50 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-002#ITEM#A", ItemName: "Classic Burger", quantity: 1, unitPrice: 9.75 },
+    { BusinessPhone: "+15551112222", SortKey: "ORDER#ORD-2222-002#ITEM#B", ItemName: "Fries", quantity: 1, unitPrice: 3.00 },
   ]
 };
 
@@ -54,12 +55,19 @@ export default function Dashboard({ user, client, phoneNbr }) {
     const businessPhone = "+15551112222";
     const businessData = useMemo(() => appData.items.filter(item => item.BusinessPhone === businessPhone), [appData, businessPhone]);
     
+     // 1. Call the custom hook with the businessId and the status filter
+    const BData =useOrderStatus(client , phoneNbr);
+    console.log("BData:", BData);
+
+
+
+
     const orders = useMemo(() => businessData.filter(item => item.SortKey.startsWith('ORDER#') && !item.SortKey.includes('#ITEM#')), [businessData]);
     const customers = useMemo(() => businessData.filter(item => item.SortKey.startsWith('CUSTOMER#')), [businessData]);
 
     const handleAssignDelivery = (agentId, selectedOrders) => {
         console.log(`Assigning ${selectedOrders.length} orders to ${agentId}`);
-        // Here you would typically update the state, but for now we just log it
+        // Here I would typically update the state, but for now I just log it
         // and close the modal.
         setModal(null);
     };
@@ -118,18 +126,19 @@ export default function Dashboard({ user, client, phoneNbr }) {
 
 const DashboardView = ({ orders, setModal, businessName }) => {
     const today = new Date().toISOString().slice(0, 10);
-    const todaysOrders = useMemo(() => orders.filter(o => o.OrderDate.startsWith(today)), [orders, today]);
+    const todaysOrders = useMemo(() => orders.filter(o => o.orderDate.startsWith(today)), [orders, today]);
+    
 
     const kpis = useMemo(() => ({
         totalOrders: todaysOrders.length,
-        revenueToday: todaysOrders.reduce((acc, o) => o.Status === 'delivered' ? acc + o.TotalAmount : acc, 0),
-        inProgress: todaysOrders.filter(o => o.Status === 'in preparation').length,
-        readyForDelivery: todaysOrders.filter(o => o.Status === 'prepared').length,
+        revenueToday: todaysOrders.reduce((acc, o) => o.orderStatus === 'DEVLIVERED' ? acc + o.totalPrice : acc, 0),
+        inProgress: todaysOrders.filter(o => o.orderStatus === 'IN-PREPARATION').length,
+        readyForDelivery: todaysOrders.filter(o => o.orderStatus === 'PREPARED').length,
     }), [todaysOrders]);
     
     const chartData = useMemo(() => {
         const statusCounts = todaysOrders.reduce((acc, o) => {
-            acc[o.Status] = (acc[o.Status] || 0) + 1;
+            acc[o.orderStatus] = (acc[o.orderStatus] || 0) + 1;
             return acc;
         }, {});
         return Object.entries(statusCounts).map(([name, value]) => ({ name, orders: value }));
@@ -196,7 +205,7 @@ const OrdersView = ({ allItems, setModal }) => {
                             <p className="text-sm text-slate-400">{order.CustomerPhone}</p>
                         </div>
                         <div className="text-right">
-                            <p className="font-bold text-white">${order.TotalAmount.toFixed(2)}</p>
+                            <p className="font-bold text-white">${order.totalPrice.toFixed(2)}</p>
                             <span className={classNames(statusColors[order.Status], 'text-xs font-semibold px-2 py-0.5 rounded-full text-white')}>{order.Status}</span>
                         </div>
                     </div>
@@ -320,3 +329,7 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
         </div>
     );
 };
+
+
+
+
