@@ -25,7 +25,7 @@ export const useOrderStatus = (client, phoneNbr) => {
         });
 
         setOrders(response.items || []);  // Use .items for the array of results
-        console.log("Fetched Orders:", response.items);
+        console.log("Fetched Orders:", response);
       } catch (err) {
         setError(err.message);
       } finally {
