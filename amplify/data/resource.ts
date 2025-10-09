@@ -19,24 +19,22 @@ const schema = a.schema({
       gsi1pk: a.string(),
       gsi2pk: a.string(),
 
-      
-      // --- All Possible Entity Attributes ---
-      name: a.string(),
-      phone: a.string(),
-      orderDate: a.datetime(),
-      totalAmount: a.float(),
-      orderStatus: a.ref('OrderStatus'),
-      deliveryDate: a.datetime(),
-      location: a.json(),
-      itemCount: a.integer(), // For order's number of items
-      
-      // --- Product-specific fields can be added here if needed ---
-      productId: a.string(),
-      quantity: a.integer(),
-      unitPrice: a.float(),
-      imageUrl:a.string(),
-      description: a.string(),
-      stockStatus: a.ref('StockStatus'),
+
+// --- All Possible Entity Attributes ---
+name: a.string(),
+phone: a.phone(),
+orderDate: a.datetime(),
+totalAmount: a.float(),
+orderStatus: a.ref('OrderStatus'),
+deliveryDate: a.datetime(),
+location: a.json(),
+itemsNbr: a.integer(), // For order's number of items
+// --- Product-specific fields can be added here if needed ---
+quantity: a.integer(),
+unitPrice: a.float(),
+imageUrl:a.string(),
+description: a.string(),
+stockStatus: a.ref('StockStatus'),
 
 
     })
