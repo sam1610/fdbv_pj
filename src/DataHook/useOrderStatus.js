@@ -11,11 +11,11 @@ export const useOrderStatus = (client, phoneNbr) => {
         // Calculate 24-hour range
         const now = new Date();
         const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        const pk = `BUSINESS#+${phoneNbr}`;
+        const pk ="BUSINESS#+97333787389" // `BUSINESS#+${phoneNbr}`;
         const startKey = `ORDER#${twentyFourHoursAgo.toISOString().split('.')[0]}Z`; // ISO format matching your sk
         const endKey = `ORDER#${now.toISOString().split('.')[0]}Z`;
 
-        const response = await client.models.BusinessData.listBusinessDatasByPkAndSk({  // Or listBusinessDataByPkAndSk if no 's'
+        const response = await client.models.BusinessData.listBusinessDataByPkAndSk({  // Or listBusinessDataByPkAndSk if no 's'
           pk: pk,
           sk: { beginsWith: "ORDER#"
             // between: [startKey, endKey]  // Efficient range for last 24 hours
@@ -25,6 +25,7 @@ export const useOrderStatus = (client, phoneNbr) => {
         });
 
         setOrders(response.items || []);  // Use .items for the array of results
+        console.log("Fetched Orders:", phoneNbr, response.items);
       } catch (err) {
         setError(err.message);
       } finally {

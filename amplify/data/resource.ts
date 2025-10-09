@@ -11,8 +11,8 @@ const schema = a.schema({
   BusinessData: a
     .model({
       // --- Primary Key ---
-      pk: a.string().required(),
-      sk: a.string().required(),
+      pk: a.string(),
+      sk: a.string(),
       entityType: a.string().required(),
 
       // --- GSI Attributes ---
@@ -39,8 +39,11 @@ const schema = a.schema({
       stockStatus: a.ref('StockStatus'),
 
 
-    }).identifier(['pk', 'sk'])
+    })
     .secondaryIndexes((index) => [
+      // Primary access pattern: list all data for a orders/ Customers/ DeliveryAgents by business
+      index('pk').sortKeys(['sk']).queryField('listBusinessDataByPkAndSk'),
+
       // list of orders assigned to a delivery agent, filtered by status
       index('gsi1pk').sortKeys(['sk']).queryField('listBusinessDataByAgentByStatus'),
       // list of orders related to a specific customer
