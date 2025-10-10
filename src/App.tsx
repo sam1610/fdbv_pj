@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import BusinessByStatus from './components/BusinessByStatus';
 import B from './components/B';
 import CustomerOrders from './components/CustomerOrders';
@@ -8,11 +8,11 @@ import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
 import './App.css';
 import Dashboard from './components/Dashboard';
 
-const client = generateClient<Schema>({ authMode: 'userPool' });
+const client = generateClient({ authMode: 'userPool' });
 
 // Custom hook to fetch user attributes like email and phone number
 function useUserAttributes() {
-  const [userAttributes, setUserAttributes] = React.useState<FetchUserAttributesOutput | null>(null);
+  const [userAttributes, setUserAttributes] = useState(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -66,7 +66,7 @@ function App({ signOut, user }: AppProps) {
       {/* Pass the full user object to child components that might need the ID */}
       {/*  associte  "BUSINESS#" to the userAttributes?.phone_number  */}
       {/* <BusinessByStatus user={user} client={client} phoneNbr={`BUSINESS#${userAttributes?.phone_number}`} /> */}
-      <Dashboard user={user} client={client} phoneNbr={`BUSINESS#${userAttributes?.phone_number}`} />
+      <Dashboard  phoneNbr={userAttributes?.phone_number} />
       {/* <CustomerOrders user={user} client={client}/>
       <B client={client}/> */}
     </div>

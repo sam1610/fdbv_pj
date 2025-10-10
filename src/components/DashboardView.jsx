@@ -1,10 +1,15 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import * as Recharts from 'recharts';
-import '../App.css';
+import OrdersView from '../repo_test/Orders';
 
-
-
+/**
+ * A presentational component for the main business dashboard.
+ * It receives all necessary data as props and is responsible for rendering the UI.
+ * @param {object} props
+ * @param {Array<object>} props.orders - The list of order records for the business.
+ * @param {Function} props.setModal - A function to open a modal window.
+ * @param {string} props.businessName - The name of the business to display.
+ */
 const DashboardView = ({ orders, setModal, businessName }) => {
     const today = new Date().toISOString().slice(0, 10);
     const todaysOrders = useMemo(() => orders.filter(o => o.OrderDate.startsWith(today)), [orders, today]);
@@ -58,3 +63,5 @@ const DashboardView = ({ orders, setModal, businessName }) => {
         </div>
     );
 };
+
+export default DashboardView;

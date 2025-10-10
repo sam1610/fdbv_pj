@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import '../App.css';
+
 
 const OrderDetailModal = ({ order, allItems, onClose }) => {
     const lineItems = useMemo(() => allItems.filter(item => item.SortKey.startsWith(`ORDER#${order.OrderID}#ITEM#`)), [allItems, order.OrderID]);
@@ -32,3 +32,4 @@ const OrderDetailModal = ({ order, allItems, onClose }) => {
         </div>
     );
 };
+export default OrderDetailModal;

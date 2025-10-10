@@ -1,8 +1,4 @@
-
 import React, { useState, useMemo } from 'react';
-import * as Recharts from 'recharts';
-import '../App.css';
-
 
 const CustomersView = ({ customers, setModal }) => {
     return (
@@ -25,4 +21,5 @@ const CustomersView = ({ customers, setModal }) => {
         </div>
     );
 };
+export default CustomersView;
 
