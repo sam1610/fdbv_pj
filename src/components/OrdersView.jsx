@@ -96,7 +96,7 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                                 <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
                                 {/* The customer phone is on gsi2pk: CUSTOMER#<business_phone>#<customer_phone> */}
                                 <p className="text-sm text-slate-400">Customer Phone: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
-                                <p className="text-sm text-slate-200">Order ID : {order.sk }</p>
+                                {/* <p className="text-sm text-slate-200">Order ID : {order.sk }</p> */}
                             </div>
                             <div className="text-right">
                                 <p className="font-bold text-white">${order.totalAmount ? order.totalAmount.toFixed(2) : '0.00'}</p>

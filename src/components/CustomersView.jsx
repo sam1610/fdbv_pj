@@ -88,10 +88,12 @@ return (
             <h1 className="text-2xl font-bold text-white mb-4">Customers</h1>
             <div className="space-y-3">
                 {customers.map(customer => (
-                    <div key={customer.sk} className="bg-slate-800 p-3 rounded-lg flex justify-between items-center">
+                    <div key={customer.sk} 
+                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk , totalAmount: customer.totalAmount })} 
+                    className="bg-slate-800 p-3 rounded-lg flex justify-between items-center">
                         <div>
                             <p className="font-bold text-white">{customer.name}</p>
-                            <p className="text-sm text-slate-400">{customer.phone}</p>
+                            <p className="text-sm text-slate-400">{customer.sk.split('#')[1]}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-slate-400 text-sm">Total Orders</p>
