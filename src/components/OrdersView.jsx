@@ -52,7 +52,7 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                     nextToken = response.nextToken;
                 } while (nextToken);
 
-                console.log("Fetched all orders for business:", allRecords);
+                // console.log("Fetched all orders for business:", allRecords);
                 setAllItems(allRecords);
             } catch (err) {
                 const msg = err.errors ? err.errors[0].message : err.message;
@@ -89,7 +89,7 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                             <div>
                                 <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
                                 {/* The customer phone is on gsi1pk: CUSTOMER#<business_phone>#<customer_phone> */}
-                                <p className="text-sm text-slate-400">Customer Phone: {order.gsi1pk ? order.gsi1pk.split('#')[2] : 'N/A'}</p>
+                                <p className="text-sm text-slate-400">Customer Phone: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
                             </div>
                             <div className="text-right">
                                 <p className="font-bold text-white">${order.totalAmount ? order.totalAmount.toFixed(2) : '0.00'}</p>

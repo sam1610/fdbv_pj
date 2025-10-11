@@ -3,15 +3,7 @@ import { generateClient } from 'aws-amplify/data';
 
 // --- Component Setup ---
 const client = generateClient({ authMode: 'userPool' });
-const classNames = (...classes) => classes.filter(Boolean).join(' ');
-// Updated to match the schema's enum values
-const statusColors = { 
-  ORDERED: 'bg-blue-500', 
-  IN_PREPARATION: 'bg-yellow-500', 
-  PREPARED: 'bg-green-500', 
-  DELIVERED: 'bg-gray-500', 
-  DELIVERING: 'bg-orange-500' 
-};
+
 
 /**
  * An Order Management component that fetches its own data from DynamoDB
@@ -20,7 +12,7 @@ const statusColors = {
  * @param {string | null} props.phoneNbr - The phone number of the business owner.
  * @param {Function} props.setModal - A function to open a modal window.
  */
-const CustomersView = ({ phoneNbr, setModal }) => {
+const ListPK = ({ phoneNbr,  flt}) => {
     // We only need one state for the raw data fetched from the API
     const [allItems, setAllItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -44,7 +36,7 @@ const CustomersView = ({ phoneNbr, setModal }) => {
                 do {
                     const response = await client.models.BusinessData.listBusinessDataByPkAndSk({
                         pk: pk,
-                        sk: { beginsWith: 'CUSTOMER#' }, // Only fetch Customer records
+                        sk: { beginsWith: 'CUSTOMER#' }, // Only fetch Order records
                         nextToken: nextToken,
                     });
                     const items = response.data || [];
@@ -52,7 +44,7 @@ const CustomersView = ({ phoneNbr, setModal }) => {
                     nextToken = response.nextToken;
                 } while (nextToken);
 
-                console.log("Fetched all customers for business:", allRecords);
+                console.log("Fetched all orders for business:", allRecords);
                 setAllItems(allRecords);
             } catch (err) {
                 const msg = err.errors ? err.errors[0].message : err.message;
@@ -74,34 +66,4 @@ const CustomersView = ({ phoneNbr, setModal }) => {
         // The data fetching is already filtering by 'ORDER#', so we can just use it directly.
         return allItems;
     }, [allItems]);
-
-    if (loading) return <div className="p-4 text-center">Loading Customers...</div>;
-    if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
-
-
-
-
-return (
-        <div className="p-4">
-            <h1 className="text-2xl font-bold text-white mb-4">Customers</h1>
-            <div className="space-y-3">
-                {customers.map(customer => (
-                    <div key={customer.sk} className="bg-slate-800 p-3 rounded-lg flex justify-between items-center">
-                        <div>
-                            <p className="font-bold text-white">{customer.name}</p>
-                            <p className="text-sm text-slate-400">{customer.phone}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-slate-400 text-sm">Total Orders</p>
-                            {/* <p className="font-bold text-white">{customer.totalAmount}</p> */}
-                            <p className="font-bold text-white">${customer.totalAmount ? customer.totalAmount.toFixed(2) : '0.00'}</p>
-
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-export default CustomersView;
-
+    return { customers, loading, error };

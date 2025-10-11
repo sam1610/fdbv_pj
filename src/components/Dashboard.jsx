@@ -75,7 +75,7 @@ export default function Dashboard({phoneNbr}) {
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
-                return <CustomersView customers={customers} setModal={setModal} />;
+                return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
                 return <DashboardView orders={orders} setModal={setModal} businessName={appData.businessName} />;
         }
