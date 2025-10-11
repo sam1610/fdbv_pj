@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { generateClient } from 'aws-amplify/data';
+// import { generateClient } from 'aws-amplify/data';
+import { useEntityList } from '../DataHook/useEntityList';
 
 // --- Component Setup ---
-const client = generateClient({ authMode: 'userPool' });
+// const client = generateClient({ authMode: 'userPool' });
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 // Updated to match the schema's enum values
 const statusColors = { 
@@ -22,58 +23,63 @@ const statusColors = {
  */
 const OrdersView = ({ phoneNbr, setModal }) => {
     // We only need one state for the raw data fetched from the API
-    const [allItems, setAllItems] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    // const [allItems, setAllItems] = useState([]);
+    // const [loading, setLoading] = useState(true);
+    // const [error, setError] = useState(null);
 
     // --- Data Fetching Logic ---
-    useEffect(() => {
-        if (!phoneNbr) {
-            setLoading(false);
-            return;
-        }
+    // useEffect(() => {
+       
 
-        const fetchData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const allRecords = [];
-                let nextToken = null;
-                const pk = `BUSINESS#${phoneNbr}`;
+    //     if (!phoneNbr) {
+    //         setLoading(false);
+    //         return;
+    //     }
 
-                do {
-                    const response = await client.models.BusinessData.listBusinessDataByPkAndSk({
-                        pk: pk,
-                        sk: { beginsWith: 'ORDER#' }, // Only fetch Order records
-                        nextToken: nextToken,
-                    });
-                    const items = response.data || [];
-                    allRecords.push(...items);
-                    nextToken = response.nextToken;
-                } while (nextToken);
+    //     const fetchData = async () => {
+    //         setLoading(true);
+    //         setError(null);
+    //         try {
+    //             const allRecords = [];
+    //             let nextToken = null;
+    //             const pk = `BUSINESS#${phoneNbr}`;
 
-                // console.log("Fetched all orders for business:", allRecords);
-                setAllItems(allRecords);
-            } catch (err) {
-                const msg = err.errors ? err.errors[0].message : err.message;
-                setError(`Failed to fetch orders: ${msg}`);
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
+    //             do {
+    //                 const response = await client.models.BusinessData.listBusinessDataByPkAndSk({
+    //                     pk: pk,
+    //                     sk: { beginsWith: 'ORDER#' }, // Only fetch Order records
+    //                     nextToken: nextToken,
+    //                 });
+    //                 const items = response.data || [];
+    //                 allRecords.push(...items);
+    //                 nextToken = response.nextToken;
+    //             } while (nextToken);
 
-        fetchData();
-    }, [phoneNbr]);
+    //             console.log("Fetched all orders for business:", allRecords);
+    //             setAllItems(allRecords);
+    //         } catch (err) {
+    //             const msg = err.errors ? err.errors[0].message : err.message;
+    //             setError(`Failed to fetch orders: ${msg}`);
+    //             console.error(err);
+    //         } finally {
+    //             setLoading(false);
+    //         }
+    //     };
 
+    //     fetchData();
+    // }, []);
+   
     // ✅ FIX: The component now correctly derives the 'orders' list from 'allItems'
     // using useMemo. This prevents infinite re-renders.
-    const orders = useMemo(() => {
-        // A guard clause to ensure allItems is a valid array
-        if (!Array.isArray(allItems)) return [];
-        // The data fetching is already filtering by 'ORDER#', so we can just use it directly.
-        return allItems;
-    }, [allItems]);
+    const { data: orders, loading, error } = useEntityList(`BUSINESS#${phoneNbr}`, 'ORDER#');
+    console.log("Records:", orders);
+
+    // const orders = useMemo(() => {
+    //     // A guard clause to ensure Records is a valid array
+    //     if (!Array.isArray(Records)) return [];
+    //     // The data fetching is already filtering by 'ORDER#', so we can just use it directly.
+    //     return Records;
+    // }, [Records]);
 
     if (loading) return <div className="p-4 text-center">Loading Orders...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
@@ -85,11 +91,12 @@ const OrdersView = ({ phoneNbr, setModal }) => {
             <div className="space-y-3">
                 {orders.length > 0 ? (
                     orders.map(order => (
-                        <div key={order.sk} onClick={() => setModal({ type: 'orderDetail', data: { order } })} className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
+                        <div key={order.sk} onClick={() => setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
                             <div>
                                 <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
-                                {/* The customer phone is on gsi1pk: CUSTOMER#<business_phone>#<customer_phone> */}
+                                {/* The customer phone is on gsi2pk: CUSTOMER#<business_phone>#<customer_phone> */}
                                 <p className="text-sm text-slate-400">Customer Phone: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
+                                <p className="text-sm text-slate-200">Order ID : {order.sk }</p>
                             </div>
                             <div className="text-right">
                                 <p className="font-bold text-white">${order.totalAmount ? order.totalAmount.toFixed(2) : '0.00'}</p>

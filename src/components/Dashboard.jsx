@@ -5,6 +5,7 @@ import  OrdersView  from "./OrdersView";
 import  CustomersView  from "./CustomersView";
 import OrderDetailModal from './OrderDetailModal';
 import AssignDeliveryModal from './AssignDeliveryModal';    
+import { useEntityList } from '../DataHook/useEntityList';
 // --- Mock Data ---
 // This data simulates the items you would fetch from your DynamoDB table.
 // It's structured to match your single-table design with different item types.
@@ -58,8 +59,11 @@ export default function Dashboard({phoneNbr}) {
     const businessPhone = "+15551112222";
     const businessData = useMemo(() => appData.items.filter(item => item.BusinessPhone === businessPhone), [appData, businessPhone]);
     
+    // console.log("Business Data:", useEntityList(`BUSINESS#${phoneNbr}`,  "ORDER#"));
+
+
     const orders = useMemo(() => businessData.filter(item => item.SortKey.startsWith('ORDER#') && !item.SortKey.includes('#ITEM#')), [businessData]);
-    const customers = useMemo(() => businessData.filter(item => item.SortKey.startsWith('CUSTOMER#')), [businessData]);
+    // const customers = useMemo(() => businessData.filter(item => item.SortKey.startsWith('CUSTOMER#')), [businessData]);
     
     const handleAssignDelivery = (agentId, selectedOrders) => {
         console.log(`Assigning ${selectedOrders.length} orders to ${agentId}`);
@@ -84,7 +88,7 @@ export default function Dashboard({phoneNbr}) {
     const renderModal = () => {
         if (!modal) return null;
         if (modal.type === 'orderDetail') {
-            return <OrderDetailModal order={modal.data.order} allItems={businessData} onClose={() => setModal(null)} />;
+            return <OrderDetailModal orderId={modal.Id} orderTotal={modal.totalAmount} phoneNbr={phoneNbr} onClose={() => setModal(null)} />;
         }
         if (modal.type === 'assignDelivery') {
             return <AssignDeliveryModal orders={orders} deliveryAgents={appData.deliveryAgents} onAssign={handleAssignDelivery} onClose={() => setModal(null)} />;
