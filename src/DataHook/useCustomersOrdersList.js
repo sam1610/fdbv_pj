@@ -14,7 +14,7 @@ const client = generateClient({ authMode: 'userPool' });
  * @param {string} skPrefix - The prefix for the sort key to filter by (e.g., 'ORDER#', 'CUSTOMER#').
  * @returns {{ data: Array, loading: boolean, error: string | null, refetch: Function }}
  */
-export const useEntityList = (queryParam, queryName) => {
+export const useCustomersOrdersList = (pkPrefix, skPrefix, queryMethod) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -26,17 +26,15 @@ export const useEntityList = (queryParam, queryName) => {
     setError(null);
 
     try {
-      // const apiMethod = client.models.BusinessData[queryName];
       const allRecords = [];
       let nextToken = null;
-      // const pk = pkPrefix ; //`BUSINESS#${phoneNbr}`;
+      const pk = pkPrefix ; //`BUSINESS#${phoneNbr}`;
 
       // Loop to fetch all pages of data automatically
       do {
-        const response = await client.models.BusinessData[queryName]({
-          // pk: pk,
-          // sk: { beginsWith: skPrefix }, // Use the dynamic prefix
-          ...queryParam,
+        const response = await client.models.BusinessData.listBusinessDataByCustomer({
+          gsi2pk: "CUSTOMER#+97333787388#+97311122233",
+          sk: { beginsWith: "ORDER#" }, // Use the dynamic prefix
           nextToken: nextToken,
         });
 
@@ -45,7 +43,7 @@ export const useEntityList = (queryParam, queryName) => {
         nextToken = response.nextToken;
       } while (nextToken);
 
-      // console.log(`Fetched ${allRecords.length} items for PK=${pk} and SK prefix=${skPrefix}`, allRecords);
+      console.log(`Fetched ${allRecords.length} items for PK=${pk} and SK prefix=${skPrefix}`, allRecords);
       setData(allRecords);
 
     } catch (err) {
@@ -55,7 +53,7 @@ export const useEntityList = (queryParam, queryName) => {
     } finally {
       setLoading(false);
     }
-  }, [ queryName]); // The query logic depends on these two values
+  }, [pkPrefix, skPrefix]); // The query logic depends on these two values
 
   // Automatically fetch data when the component mounts or the filter criteria change
   useEffect(() => {

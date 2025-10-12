@@ -3,9 +3,9 @@ import { useEntityList } from '../DataHook/useEntityList';
 
 
 const OrderDetailModal = ({ orderId, orderTotal, phoneNbr, onClose }) => {
-    console.log("OrderDetailModal Props:", { orderId, orderTotal, phoneNbr });
+    // console.log("OrderDetailModal Props:", { orderId, orderTotal, phoneNbr });
     // const lineItems = useMemo(() => allItems.filter(item => item.SortKey.startsWith(`ORDER#${order.OrderID}#ITEM#`)), [allItems, order.OrderID]);
-    const { data: lineItems, loading, error } = useEntityList(`ORDER#${phoneNbr}#${orderId.split('#')[1]}`, 'ITEM#', "listBusinessDataByPkAndSk");
+    const { data: lineItems, loading, error } = useEntityList({pk: `ORDER#${phoneNbr}#${orderId.split('#')[1]}`, sk: {beginsWith: 'ITEM#'}}, "listBusinessDataByPkAndSk");
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">

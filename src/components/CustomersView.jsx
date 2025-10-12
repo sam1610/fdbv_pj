@@ -74,8 +74,8 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     //     // The data fetching is already filtering by 'ORDER#', so we can just use it directly.
     //     return allItems;
     // }, [allItems]);
-    const { data: customers, loading, error } = useEntityList(`BUSINESS#${phoneNbr}`, 'CUSTOMER#');
-    console.log("Records:", customers);
+    const { data: customers, loading, error } = useEntityList({pk:`BUSINESS#${phoneNbr}`, sk: {beginsWith: 'CUSTOMER#'}}, "listBusinessDataByPkAndSk");
+    // console.log("Records:", customers);
 
     if (loading) return <div className="p-4 text-center">Loading Customers...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
@@ -85,15 +85,15 @@ const CustomersView = ({ phoneNbr, setModal }) => {
 
 return (
         <div className="p-4">
-            <h1 className="text-2xl font-bold text-white mb-4">Customers</h1>
+            <h1 className="text-2xl font-bold text-orange-500 mb-4">Customers</h1>
             <div className="space-y-3">
                 {customers.map(customer => (
                     <div key={customer.sk} 
-                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk , totalAmount: customer.totalAmount })} 
-                    className="bg-slate-800 p-3 rounded-lg flex justify-between items-center">
+                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk })} 
+                    className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
                         <div>
                             <p className="font-bold text-white">{customer.name}</p>
-                            <p className="text-sm text-slate-400">{customer.sk.split('#')[1]}</p>
+                            <p className="text-amber-400 text-sm ">{customer.sk.split('#')[2]}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-slate-400 text-sm">Total Orders</p>

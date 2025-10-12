@@ -22,7 +22,7 @@ const schema = a.schema({
 
 // --- All Possible Entity Attributes ---
 name: a.string(),
-phone: a.phone(),
+phone: a.string(),
 orderDate: a.datetime(),
 totalAmount: a.float(),
 orderStatus: a.ref('OrderStatus'),

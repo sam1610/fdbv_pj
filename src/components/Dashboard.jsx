@@ -6,6 +6,7 @@ import  CustomersView  from "./CustomersView";
 import OrderDetailModal from './OrderDetailModal';
 import AssignDeliveryModal from './AssignDeliveryModal';    
 import { useEntityList } from '../DataHook/useEntityList';
+import CustomersDetailModal from './CustomersDetailModal';
 // --- Mock Data ---
 // This data simulates the items you would fetch from your DynamoDB table.
 // It's structured to match your single-table design with different item types.
@@ -54,7 +55,7 @@ export default function Dashboard({phoneNbr}) {
     const [activeView, setActiveView] = useState('dashboard');
     const [modal, setModal] = useState(null);
     const [appData, setAppData] = useState(mockData);
-    
+
     // Filter data for a specific business, simulating a logged-in user.
     const businessPhone = "+15551112222";
     const businessData = useMemo(() => appData.items.filter(item => item.BusinessPhone === businessPhone), [appData, businessPhone]);
@@ -75,7 +76,7 @@ export default function Dashboard({phoneNbr}) {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView orders={orders} setModal={setModal} businessName={appData.businessName} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays="30"/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
@@ -90,11 +91,11 @@ export default function Dashboard({phoneNbr}) {
         if (modal.type === 'orderDetail') {
             return <OrderDetailModal orderId={modal.Id} orderTotal={modal.totalAmount} phoneNbr={phoneNbr}  onClose={() => setModal(null)} />;
         }
+        if (modal.type === 'CustomerDetail') {
+            return <CustomersDetailModal IdCustomer={modal.IdCustomer}  onClose={() => setModal(null)} />;
+        }
         if (modal.type === 'assignDelivery') {
             return <AssignDeliveryModal orders={orders} deliveryAgents={appData.deliveryAgents} onAssign={handleAssignDelivery} onClose={() => setModal(null)} />;
-        }
-        if (modal.type === 'CustomerDetail') {
-            return <CustomersDetailModal customerID={modal.IdCustomer} phoneNbr={phoneNbr} onClose={() => setModal(null)} />;
         }
         return null;
     };
