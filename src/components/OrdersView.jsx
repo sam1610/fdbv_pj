@@ -74,13 +74,6 @@ const OrdersView = ({ phoneNbr, setModal }) => {
     const { data: orders, loading, error } = useEntityList({pk:`BUSINESS#${phoneNbr}`, sk: {beginsWith: 'ORDER#'}}, "listBusinessDataByPkAndSk");
     // console.log("Records:", orders);
 
-    // const orders = useMemo(() => {
-    //     // A guard clause to ensure Records is a valid array
-    //     if (!Array.isArray(Records)) return [];
-    //     // The data fetching is already filtering by 'ORDER#', so we can just use it directly.
-    //     return Records;
-    // }, [Records]);
-
     if (loading) return <div className="p-4 text-center">Loading Orders...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 

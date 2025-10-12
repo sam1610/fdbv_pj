@@ -19,20 +19,17 @@ const Dashboard = ({ phoneNbr, filterDays = 1 }) => {
     // const [error, setError] = useState(null);
 
     // --- Data Fetching Logic ---
-    const now = new Date();
-    const startDate = new Date();
-    // Set the start date to midnight, 'filterDays' ago.
-    startDate.setDate(startDate.getDate() - (filterDays - 1));
-    // This is the critical change: .setHours() works with the local timezone.
-    startDate.setHours(0, 0, 0, 0);
-    console.log("Dashboard Date Range:", startDate.toISOString(), "to", now.toISOString());
-
-    const { data: orders, loading, error } = useEntityList(
-        {
-        pk:`BUSINESS#${phoneNbr}`, 
-            sk: { between: [`ORDER#${startDate.toISOString()}`, `ORDER#${now.toISOString()}`] }
-        }, "listBusinessDataByPkAndSk"
-    );
+const now = new Date();
+const startDate = new Date();
+// Set the start date to midnight, 'filterDays' ago, using local time.
+startDate.setDate(startDate.getDate() - (filterDays - 1));
+startDate.setHours(0, 0, 0, 0); // Use setHours for local timezone adjustment instead of setUTCHours
+const { data: orders, loading, error } = useEntityList(
+    {
+        pk: `BUSINESS#${phoneNbr}`, 
+        sk: { between: [`ORDER#${startDate.toISOString()}`, `ORDER#${now.toISOString()}`] }
+    }, "listBusinessDataByPkAndSk"
+);
     console.log("Dashboard Orders:", orders);
     // --- Client-Side Calculations for the Dashboard ---
     const kpis = useMemo(() => {
