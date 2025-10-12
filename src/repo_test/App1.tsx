@@ -1,7 +1,4 @@
 import React from 'react';
-import BusinessByStatus from './components/BusinessByStatus';
-import B from './components/B';
-import CustomerOrders from './components/CustomerOrders';
 import { FetchUserAttributesOutput, fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
@@ -55,10 +52,10 @@ function App({ signOut, user }: AppProps) {
   return (
     <div className="App">
       <header>
-        <h1>Business Data Queries</h1>
+        {/* <h1>Business Data Queries</h1>
         <p>Signed in as: {user.username}.</p>
         <p>User Email: {userAttributes?.email || 'N/A'}</p>
-        <p>User Phone Number: {userAttributes?.phone_number || 'N/A'}</p>
+        <p>User Phone Number: {userAttributes?.phone_number || 'N/A'}</p> */}
         {/* ✅ NEW: Display the Cognito User ID (sub) */}
         <p className="user-sub">Cognito User ID (sub): {user.userId}</p>
         <button onClick={signOut}>Sign Out</button>

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import * as Recharts from 'recharts';
-import OrdersView from '../repo_test/Orders';
+import OrdersView from './Orders';
 
 /**
  * A presentational component for the main business dashboard.
@@ -13,6 +13,7 @@ import OrdersView from '../repo_test/Orders';
 const DashboardView = ({ orders, setModal, businessName }) => {
     const today = new Date().toISOString().slice(0, 10);
     const todaysOrders = useMemo(() => orders.filter(o => o.OrderDate.startsWith(today)), [orders, today]);
+
 
     const kpis = useMemo(() => ({
         totalOrders: todaysOrders.length,

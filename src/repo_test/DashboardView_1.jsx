@@ -3,7 +3,6 @@ import { useEntityList } from '../DataHook/useEntityList';
 
 import { generateClient } from 'aws-amplify/data';
 import * as Recharts from 'recharts';
-import DashboardView from '../repo_test/DashboardView_0';
 
 // --- Component Setup ---
 const client = generateClient({ authMode: 'userPool' });
@@ -15,34 +14,21 @@ const client = generateClient({ authMode: 'userPool' });
  * @param {string | null} props.phoneNbr - The phone number of the business owner.
  * @param {number} [props.filterDays=1] - The number of days to look back for orders. Defaults to 1 (Today).
  */
-const  DashboardView = ({ phoneNbr, filterDays = 1 }) => {
+const Dashboard = ({ phoneNbr, filterDays = 1 }) => {
     // const [loading, setLoading] = useState(true);
     // const [error, setError] = useState(null);
 
     // --- Data Fetching Logic ---
-const localOffsetMs = 3 * 60 * 60 * 1000; // GMT+3 in milliseconds
-
-const startDateLocal = new Date();
-startDateLocal.setDate(startDateLocal.getDate() - (filterDays - 1));
-startDateLocal.setHours(0, 0, 0, 0); // Local midnight start
-
-const endDateLocal = new Date();
-endDateLocal.setDate(endDateLocal.getDate() + 1); // Tomorrow local midnight
-endDateLocal.setHours(0, 0, 0, 0);
-
-// Convert to UTC by subtracting offset (since GMT+3 is ahead of UTC)
-const startUtc = new Date(startDateLocal.getTime() - localOffsetMs);
-const endUtc = new Date(endDateLocal.getTime() - localOffsetMs);
-
-const startSk = `ORDER#${startUtc.toISOString()}`;
-const endSk = `ORDER#${endUtc.toISOString()}`;
-
+const now = new Date();
+const startDate = new Date();
+// Set the start date to midnight, 'filterDays' ago, using local time.
+startDate.setDate(startDate.getDate() - (filterDays - 1));
+startDate.setHours(0, 0, 0, 0); // Use setHours for local timezone adjustment instead of setUTCHours
 const { data: orders, loading, error } = useEntityList(
-  {
-    pk: `BUSINESS#${phoneNbr}`,
-    sk: { between: [startSk, endSk] } // UTC-based range covering full local period
-  },
-  "listBusinessDataByPkAndSk"
+    {
+        pk: `BUSINESS#${phoneNbr}`, 
+        sk: { between: [`ORDER#${startDate.toISOString()}`, `ORDER#${now.toISOString()}`] }
+    }, "listBusinessDataByPkAndSk"
 );
     console.log("Dashboard Orders:", orders);
     // --- Client-Side Calculations for the Dashboard ---
@@ -52,8 +38,8 @@ const { data: orders, loading, error } = useEntityList(
         }
         return {
             totalOrders: orders.length,
-            revenue: orders.reduce((acc, o) =>  acc + (o.totalAmount || 0), 0),
-            inProgress: orders.filter(o => o.orderStatus === 'IN-PREPARATION').length,
+            revenue: orders.reduce((acc, o) => o.orderStatus === 'DELIVERED' ? acc + (o.totalAmount || 0) : acc, 0),
+            inProgress: orders.filter(o => o.orderStatus === 'IN_PREPARATION').length,
             readyForDelivery: orders.filter(o => o.orderStatus === 'PREPARED').length,
         };
     }, [orders]);
@@ -116,5 +102,5 @@ const { data: orders, loading, error } = useEntityList(
     );
 };
 
-export default DashboardView ;
+export default Dashboard;
 
