@@ -39,7 +39,7 @@ const { data: orders, loading, error } = useEntityList(
         return {
             totalOrders: orders.length,
             revenue: orders.reduce((acc, o) => o.orderStatus === 'DELIVERED' ? acc + (o.totalAmount || 0) : acc, 0),
-            inProgress: orders.filter(o => o.orderStatus === 'IN_PREPARATION').length,
+            inProgress: orders.filter(o => o.orderStatus === 'IN-PREPARATION').length,
             readyForDelivery: orders.filter(o => o.orderStatus === 'PREPARED').length,
         };
     }, [orders]);

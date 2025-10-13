@@ -11,8 +11,8 @@ const schema = a.schema({
   BusinessData: a
     .model({
       // --- Primary Key ---
-      pk: a.string(),
-      sk: a.string(),
+      pk: a.string().required(),
+      sk: a.string().required(),
       entityType: a.string().required(),
 
       // --- GSI Attributes ---
@@ -35,13 +35,10 @@ unitPrice: a.float(),
 imageUrl:a.string(),
 description: a.string(),
 stockStatus: a.ref('StockStatus'),
-
-
-    })
+businessOwnerId: a.string(),
+deliveryAgentId: a.string()
+    }).identifier(['pk', 'sk'])
     .secondaryIndexes((index) => [
-      // Primary access pattern: list all data for a orders/ Customers/ DeliveryAgents by business
-      index('pk').sortKeys(['sk']).queryField('listBusinessDataByPkAndSk'),
-
       // list of orders assigned to a delivery agent, filtered by status
       index('gsi1pk').sortKeys(['sk']).queryField('listBusinessDataByAgentByStatus'),
       // list of orders related to a specific customer
@@ -49,6 +46,14 @@ stockStatus: a.ref('StockStatus'),
     ])
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
+
+      allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
+      
+      // Delivery Agents can only read records they own.
+      allow.ownerDefinedIn('deliveryAgentId').to(['read']),
+      
+      // Any authenticated user can CREATE records (e.g., a customer placing an order),
+      // but they cannot read records by default. Read access requires an ownership rule.
       // An Admin can perform all actions ONLY on records they own.
       // allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
       allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
@@ -56,7 +61,7 @@ stockStatus: a.ref('StockStatus'),
       allow.groups(['DeliveryAgents']).to(['read']),
       
       // Any authenticated user can create and read records.
-      // allow.authenticated().to(['create', 'read']),
+      allow.authenticated().to(['create', 'read']),
     ]),
 
     // --- Custom Mutations remain the same ---

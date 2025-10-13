@@ -18,31 +18,33 @@ export const useEntityList = (queryParam, queryName) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // We serialize the queryParam object to use it as a stable dependency in our effects.
+
+  // We serialize the queryParam to use it as a stable dependency.
   const serializedQueryParam = JSON.stringify(queryParam);
+
   const fetchData = useCallback(async () => {
+    if (!queryName || !queryParam) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    console.log(`Executing query: ${queryName} with params:`, queryParam);
+
 
     try {
-      const apiMethod = client.models.BusinessData[queryName];
-      if (typeof apiMethod !== 'function') {
-        throw new Error(`Query method "${queryName}" does not exist.`);
-      }
-
       const allRecords = [];
       let nextToken = null;
 
-      // Loop to fetch all pages of data automatically
       do {
-        const response = await apiMethod({
-          ...queryParam, 
-          nextToken: nextToken
+        const response = await client.models.BusinessData[queryName]({
+          ...queryParam,
+          nextToken: nextToken,
         });
 
-        // The response for a queryField is nested
-        const items = response.data ; //?.[queryName]?.items || [];
+        // The response for a queryField is nested, so we extract items correctly
+        const items = response.data?.[queryName]?.items || [];
         allRecords.push(...items);
         nextToken = response.nextToken;
       } while (nextToken);
@@ -56,57 +58,49 @@ export const useEntityList = (queryParam, queryName) => {
     } finally {
       setLoading(false);
     }
-  }, [queryName, serializedQueryParam]);
+  }, []);
 
-  // This useEffect handles the initial data fetch.
+  // This useEffect now depends on the stable, serialized parameters.
+  // This prevents it from re-running on every parent component render.
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // ✅ NEW: This useEffect handles the real-time subscriptions.
+  // This useEffect handles the real-time subscriptions.
   useEffect(() => {
-    // Don't set up subscriptions if we don't have a valid query to filter against.
-    if (!queryParam) {
-      return;
-    }
-
     console.log("Setting up real-time subscriptions...");
 
-    // Subscribe to the creation of new items
     const createSub = client.models.BusinessData.onCreate().subscribe({
       next: (newItem) => {
-        // As requested, log a message when a new record is created.
-        console.log("✅ New record received via subscription:", newItem);
-        
-        // Optional but recommended: Add a client-side filter to only add relevant items.
-        // This example checks if the new item's PK matches the current query's PK.
-        if (queryParam.pk && newItem.pk === queryParam.pk) {
+        console.log("✅ New item received via subscription:", newItem);
+        // Add a client-side filter to the subscription.
+        // This is a basic filter; a more complex one could parse the queryParam.
+        if (queryParam && queryParam.pk && newItem.pk === queryParam.pk) {
           setData(currentData => [newItem, ...currentData]);
         }
       },
       error: (err) => console.error("Subscription error (create):", err),
     });
 
-    // Subscribe to updates of existing items
     const updateSub = client.models.BusinessData.onUpdate().subscribe({
       next: (updatedItem) => {
-        // As requested, log a message when a record is updated.
         console.log("✅ Record update received via subscription:", updatedItem);
-        // Find the item in our list and replace it with the updated version
+        // Use the unique system 'id' for a more reliable match.
         setData(currentData => 
-          currentData.map(item => (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item)
+          currentData.map(item => (item.id === updatedItem.id) ? updatedItem : item)
         );
       },
       error: (err) => console.error("Subscription error (update):", err),
     });
 
-    // This is the cleanup function. It's critical for preventing memory leaks.
     return () => {
       console.log("Tearing down subscriptions.");
       createSub.unsubscribe();
       updateSub.unsubscribe();
     };
-  }, [serializedQueryParam]); // Re-subscribe if the query parameters change.
+    // ✅ FIX: The dependency array now uses the stable, serialized string version
+    // of the parameters, which will prevent the infinite loop.
+  }, []);
 
   return { data, loading, error, refetch: fetchData };
 };

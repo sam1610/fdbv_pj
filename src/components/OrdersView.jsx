@@ -71,7 +71,8 @@ const OrdersView = ({ phoneNbr, setModal }) => {
    
     // ✅ FIX: The component now correctly derives the 'orders' list from 'allItems'
     // using useMemo. This prevents infinite re-renders.
-    const { data: orders, loading, error } = useEntityList({pk:`BUSINESS#${phoneNbr}`, sk: {beginsWith: 'ORDER#'}}, "listBusinessDataByPkAndSk");
+    const { data: orders, loading, error } = useEntityList(
+        {filter: {pk:{ eq:`BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'ORDER#'} }} , "list");
     // console.log("Records:", orders);
 
     if (loading) return <div className="p-4 text-center">Loading Orders...</div>;

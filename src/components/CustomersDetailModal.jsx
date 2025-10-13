@@ -11,7 +11,7 @@ const CustomersDetailModal = ({ IdCustomer, onClose }) => {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-lg w-full max-w-lg shadow-xl animate-fade-in-up">
                 <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-                    <h2 className="text-lg font-bold  text-orange-400 bg-black/10">Cuastomer  Oders</h2>
+                    <h2 className="text-lg font-bold  text-orange-400 bg-black/10">Customer Orders</h2>
                      <span className="text-amber-400 text-sm text-jusity-left">: ({IdCustomer.split('#')[2]})</span>
                     <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
                 </div>
@@ -30,7 +30,9 @@ const CustomersDetailModal = ({ IdCustomer, onClose }) => {
                             {lineItems.map(item => (
                                 <li key={item.sk} className="flex justify-between text-sm">
                                     {/* Added a check to prevent errors if unitPrice is null */}
+                                    
                                     <span>{item.sk.split("T")[0]+".."} </span>
+                                
                                     <span >{item.itemsNbr} </span>
                                     <span>{item.orderStatus} </span>
                                     <span>${item.totalAmount}</span>

@@ -5,9 +5,8 @@ import  OrdersView  from "./OrdersView";
 import  CustomersView  from "./CustomersView";
 import OrderDetailModal from './OrderDetailModal';
 import AssignDeliveryModal from './AssignDeliveryModal';    
-import { useEntityList } from '../DataHook/useEntityList';
+// import { useEntityList } from '../DataHook/useEntityList';
 import CustomersDetailModal from './CustomersDetailModal';
-import { BusinessDataProvider } from '../DataHook/BusinessDataProvider';
 // --- Mock Data ---
 // This data simulates the items you would fetch from your DynamoDB table.
 // It's structured to match your single-table design with different item types.
@@ -77,13 +76,13 @@ export default function Dashboard({phoneNbr}) {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays="30"/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={4}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
-                return <DashboardView orders={orders} setModal={setModal} businessName={appData.businessName} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={2} />;
         }
     };
 
@@ -104,12 +103,10 @@ export default function Dashboard({phoneNbr}) {
     return (
         <div className="bg-slate-900 text-slate-200 min-h-screen font-sans pb-20">
             {/* <BusinessDataProvider phoneNbr={phoneNbr}> */}
-            {renderModal()}
-            <main>
-                {renderView()}
-            </main>
-            {/* </BusinessDataProvider> */}
-
+      {renderModal()}
+      <main>
+        {renderView()}
+      </main>
             {/* Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 flex justify-around">
                 <button onClick={() => setActiveView('dashboard')} className={classNames('flex-1 flex flex-col items-center justify-center py-2', activeView === 'dashboard' ? 'text-sky-400' : 'text-slate-400')}>
