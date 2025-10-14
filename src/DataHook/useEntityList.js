@@ -90,7 +90,35 @@ useEffect(() => {
     return () => sub.unsubscribe();
   }, [serializedQueryParam]); // Re-subscribe if query params change
 
-  // Test mutation: Update an orderStatus after 10 seconds (for demonstration)
+ 
+  
+// 
+// Real-time subscription for new Order creations
+  useEffect(() => {
+    // Subscribe only if the query involves orders (e.g., sk beginsWith 'ORDER#')
+    const isOrderQuery = serializedQueryParam.includes('ORDER#');
+    if (!isOrderQuery) return;
+
+    const createSub = client.models.BusinessData.onCreate({
+      // Server-side filter to only trigger for Order entityType
+      filter: { entityType: { eq: 'Order' } }
+    }).subscribe({
+      next: (newItem) => {
+        console.log(`New order created: ${newItem.sk}`);
+        
+        // Append new item to local state (optimistic update)
+        setData(prevData => [...prevData, newItem]);
+      },
+      error: (err) => {
+        console.error('Create subscription error:', err);
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => createSub.unsubscribe();
+  }, [serializedQueryParam]); // Re-subscribe if query params change
+  //
+ // Test mutation: Update an orderStatus after 10 seconds (for demonstration)
   useEffect(() => {
     const timer = setTimeout(async () => {
       try {
@@ -108,9 +136,6 @@ useEffect(() => {
     // Cleanup timer on unmount
     return () => clearTimeout(timer);
   }, []);  // Empty dependency: Runs once on mount
-  
-// 
-
 
   return { data, loading, error, refetch: fetchData };
 };
