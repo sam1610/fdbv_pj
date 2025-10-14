@@ -60,8 +60,8 @@ function App({ signOut, user }: AppProps) {
         <p>User Email: {userAttributes?.email || 'N/A'}</p>
         <p>User Phone Number: {userAttributes?.phone_number || 'N/A'}</p> */}
         {/* ✅ NEW: Display the Cognito User ID (sub) */}
-        {/* <p className="user-sub">Cognito User ID (sub): {user.userId}</p>
-        <button onClick={signOut}>Sign Out</button> */}
+        <p className="user-sub">Cognito User ID (sub): {user.userId}</p>
+        <button onClick={signOut}>Sign Out</button>
       </header>
       {/* Pass the full user object to child components that might need the ID */}
       {/*  associte  "BUSINESS#" to the userAttributes?.phone_number  */}

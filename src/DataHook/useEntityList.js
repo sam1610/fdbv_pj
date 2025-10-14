@@ -3,46 +3,43 @@ import { generateClient } from 'aws-amplify/data';
 
 // Initialize the Amplify client once. It can be shared across all hooks and components.
 const client = generateClient({ authMode: 'userPool' });
-
-/**
- * A reusable custom hook to fetch all records for a specific business (PK)
- * that have a sort key (SK) beginning with a given prefix, with real-time updates.
- *
- * This hook automatically handles pagination and listens for live updates.
- *
- * @param {object} queryParam - An object containing the parameters for the GSI query.
- * @param {string} queryName - The name of the GSI helper function to call.
- * @returns {{ data: Array, loading: boolean, error: string | null, refetch: Function }}
- */
 export const useEntityList = (queryParam, queryName) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // We serialize the queryParam object to use it as a stable dependency in our effects.
+
+  // ✅ FIX: We serialize the queryParam object to create a stable dependency string.
+  // This is the key to preventing the infinite loop.
   const serializedQueryParam = JSON.stringify(queryParam);
   const fetchData = useCallback(async () => {
+    // The hook now receives a serialized string, so we parse it back into an object.
+    const params = JSON.parse(serializedQueryParam);
+    console.log( client.models.BusinessData[`listBusinessDatasBy${queryName}`])
+    // console.log(Object.keys(client.models.BusinessData).filter(key => key.startsWith('listBusinessData')));
+
+    let apiMethod  ;
+
     setLoading(true);
     setError(null);
+    
+    if (queryName === "ByCustomer") {
+      apiMethod = client.models.BusinessData.listBusinessDataByGsi2pkAndSk;
+    } else  {
+      apiMethod = client.models.BusinessData[queryName];
+   
+    }
 
     try {
-      const apiMethod = client.models.BusinessData[queryName];
-      if (typeof apiMethod !== 'function') {
-        throw new Error(`Query method "${queryName}" does not exist.`);
-      }
-
       const allRecords = [];
       let nextToken = null;
 
-      // Loop to fetch all pages of data automatically
       do {
         const response = await apiMethod({
-          ...queryParam, 
-          nextToken: nextToken
+          ...params,
+          nextToken: nextToken,
         });
 
-        // The response for a queryField is nested
-        const items = response.data ; //?.[queryName]?.items || [];
+        const items = response.data || [];
         allRecords.push(...items);
         nextToken = response.nextToken;
       } while (nextToken);
@@ -58,55 +55,62 @@ export const useEntityList = (queryParam, queryName) => {
     }
   }, [queryName, serializedQueryParam]);
 
-  // This useEffect handles the initial data fetch.
+  // This useEffect now depends on the stable, serialized string.
+  // It will only re-run when the query parameters actually change.
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // ✅ NEW: This useEffect handles the real-time subscriptions.
-  useEffect(() => {
-    // Don't set up subscriptions if we don't have a valid query to filter against.
-    if (!queryParam) {
-      return;
-    }
+// 
+useEffect(() => {
+    // Subscribe only if the query involves orders (e.g., sk beginsWith 'ORDER#')
+    const isOrderQuery = serializedQueryParam.includes('ORDER#');
+    if (!isOrderQuery) return;
 
-    console.log("Setting up real-time subscriptions...");
-
-    // Subscribe to the creation of new items
-    const createSub = client.models.BusinessData.onCreate().subscribe({
-      next: (newItem) => {
-        // As requested, log a message when a new record is created.
-        console.log("✅ New record received via subscription:", newItem);
-        
-        // Optional but recommended: Add a client-side filter to only add relevant items.
-        // This example checks if the new item's PK matches the current query's PK.
-        if (queryParam.pk && newItem.pk === queryParam.pk) {
-          setData(currentData => [newItem, ...currentData]);
+    const sub = client.models.BusinessData.onUpdate({
+      // Server-side filter to only trigger for Order entityType
+      filter: { entityType: { eq: 'Order' } }
+    }).subscribe({
+      next: (updatedItem) => {
+        if (updatedItem.orderStatus) {
+          console.log(`Order status updated for order ${updatedItem.sk}: New status - ${updatedItem.orderStatus}`);
+          
+          // Merge update into local state (optimistic update)
+          setData(prevData => prevData.map(item => 
+            item.sk === updatedItem.sk ? { ...item, ...updatedItem } : item
+          ));
         }
       },
-      error: (err) => console.error("Subscription error (create):", err),
+      error: (err) => {
+        console.error('Subscription error:', err);
+      }
     });
 
-    // Subscribe to updates of existing items
-    const updateSub = client.models.BusinessData.onUpdate().subscribe({
-      next: (updatedItem) => {
-        // As requested, log a message when a record is updated.
-        console.log("✅ Record update received via subscription:", updatedItem);
-        // Find the item in our list and replace it with the updated version
-        setData(currentData => 
-          currentData.map(item => (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item)
-        );
-      },
-      error: (err) => console.error("Subscription error (update):", err),
-    });
+    // Cleanup subscription on unmount
+    return () => sub.unsubscribe();
+  }, [serializedQueryParam]); // Re-subscribe if query params change
 
-    // This is the cleanup function. It's critical for preventing memory leaks.
-    return () => {
-      console.log("Tearing down subscriptions.");
-      createSub.unsubscribe();
-      updateSub.unsubscribe();
-    };
-  }, [serializedQueryParam]); // Re-subscribe if the query parameters change.
+  // Test mutation: Update an orderStatus after 10 seconds (for demonstration)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const updatedOrder = await client.models.BusinessData.update({
+          pk: 'BUSINESS#+97333787388',  // From your screenshot; adjust if needed
+          sk: 'ORDER#2025-10-12T15:30:00.000Z',  // Adjust to a valid order SK from your data
+          orderStatus: 'DELIVERING'  // Your new value
+        });
+        console.log('Test mutation executed:', updatedOrder);
+      } catch (mutationErr) {
+        console.error('Mutation error:', mutationErr);
+      }
+    }, 10000);  // 10 seconds delay
+
+    // Cleanup timer on unmount
+    return () => clearTimeout(timer);
+  }, []);  // Empty dependency: Runs once on mount
+  
+// 
+
 
   return { data, loading, error, refetch: fetchData };
 };

@@ -40,26 +40,16 @@ deliveryAgentId: a.string()
     }).identifier(['pk', 'sk'])
     .secondaryIndexes((index) => [
       // list of orders assigned to a delivery agent, filtered by status
-      index('gsi1pk').sortKeys(['sk']).queryField('listBusinessDataByAgentByStatus'),
+      index('gsi1pk').sortKeys(['sk']).name('ByAgentByStatus'),
       // list of orders related to a specific customer
-      index('gsi2pk').sortKeys(['sk']).queryField('listBusinessDataByCustomer'),
+      index('gsi2pk').sortKeys(['sk']).name('ByCustomer'),
     ])
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
 
       allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
-      
       // Delivery Agents can only read records they own.
       allow.ownerDefinedIn('deliveryAgentId').to(['read']),
-      
-      // Any authenticated user can CREATE records (e.g., a customer placing an order),
-      // but they cannot read records by default. Read access requires an ownership rule.
-      // An Admin can perform all actions ONLY on records they own.
-      // allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
-      allow.groups(['Admins']).to(['create', 'read', 'update', 'delete']),
-      // A Delivery Agent can only read records they own.
-      allow.groups(['DeliveryAgents']).to(['read']),
-      
       // Any authenticated user can create and read records.
       allow.authenticated().to(['create', 'read']),
     ]),

@@ -4,8 +4,10 @@ import { useEntityList } from '../DataHook/useEntityList';
 
 
 const CustomersDetailModal = ({ IdCustomer, onClose }) => {
-    // const lineItems = useMemo(() => allItems.filter(item => item.SortKey.startsWith(`ORDER#${order.OrderID}#ITEM#`)), [allItems, order.OrderID]);
-    const { data: lineItems, loading, error } = useEntityList({gsi2pk: IdCustomer, sk: {beginsWith: 'ORDER#'}}, "listBusinessDataByCustomer");
+
+    const { data: lineItems, loading, error } = useEntityList(
+        {gsi2pk: IdCustomer, sk: {beginsWith: 'ORDER#'}}, 
+        "ByCustomer");
     console.log("Customer Orders Props:", { lineItems });
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
