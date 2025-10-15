@@ -2,6 +2,7 @@
   "name": "fdbv_pj",
   "private": true,
   "version": "0.0.0",
+  "homepage": "[https://sam1610.github.io/fdbv_pj](https://my-username.github.io/my-react-repo)",
   "type": "module",
   "scripts": {
     "dev": "vite",
