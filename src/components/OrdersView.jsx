@@ -1,120 +1,146 @@
-import React, { useState, useMemo, useEffect } from 'react';
-// import { generateClient } from 'aws-amplify/data';
+import React, { useState, useMemo } from 'react';
+import { generateClient } from 'aws-amplify/data';
 import { useEntityList } from '../DataHook/useEntityList';
 
-// --- Component Setup ---
-// const client = generateClient({ authMode: 'userPool' });
+// --- Configuration ---
+const client = generateClient({ authMode: 'userPool' });
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
-// Updated to match the schema's enum values
-const statusColors = { 
-  ORDERED: 'bg-blue-500', 
-  IN_PREPARATION: 'bg-yellow-500', 
-  PREPARED: 'bg-green-500', 
-  DELIVERED: 'bg-gray-500', 
-  DELIVERING: 'bg-orange-500' 
+
+const ALL_STATUSES = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'];
+const statusColors = {
+    ORDERED: 'bg-blue-500',
+    IN_PREPARATION: 'bg-yellow-500',
+    PREPARED: 'bg-green-500',
+    DELIVERED: 'bg-gray-500',
+    DELIVERING: 'bg-orange-500'
 };
 
-/**
- * An Order Management component that fetches its own data from DynamoDB
- * and displays a simple list of all orders for the business.
- * @param {object} props
- * @param {string | null} props.phoneNbr - The phone number of the business owner.
- * @param {Function} props.setModal - A function to open a modal window.
- */
+// --- Sub-components ---
+
+// A dedicated component for filter buttons
+const OrderFilters = ({ currentFilter, setFilter }) => (
+    <div className="flex space-x-2 mb-4">
+        <button onClick={() => setFilter('active')} className={classNames(currentFilter === 'active' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Active</button>
+        <button onClick={() => setFilter('Prepared')} className={classNames(currentFilter === 'Prepared' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Prepared</button>
+        <button onClick={() => setFilter('all')} className={classNames(currentFilter === 'all' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>All Orders</button>
+    </div>
+);
+
+// A component to render the status dropdown or badge
+const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
+    if (isEditing) {
+        return (
+            <select
+                value={order.orderStatus}
+                onChange={(e) => onStatusChange(order, e.target.value)}
+                onBlur={() => onEdit(null)} // Close dropdown if user clicks away
+                onClick={(e) => e.stopPropagation()} // Prevent modal from opening
+                className="bg-slate-600 text-white text-xs rounded p-1"
+                autoFocus // Automatically focus the dropdown
+            >
+                {ALL_STATUSES.map(status => (
+                    <option key={status} value={status}>{status.replace('_', ' ').toLowerCase()}</option>
+                ))}
+            </select>
+        );
+    }
+
+    return (
+        <span
+            onClick={(e) => {
+                e.stopPropagation(); // Prevent modal from opening
+                onEdit(order.sk);
+            }}
+            className={classNames(statusColors[order.orderStatus], 'text-xs font-semibold px-2 py-0.5 rounded-full text-white cursor-pointer')}
+        >
+            {order.orderStatus ? order.orderStatus.replace('_', ' ').toLowerCase() : 'unknown'}
+        </span>
+    );
+};
+
+
+// Main OrdersView Component
 const OrdersView = ({ phoneNbr, setModal }) => {
-    // We only need one state for the raw data fetched from the API
-    // const [allItems, setAllItems] = useState([]);
-    // const [loading, setLoading] = useState(true);
-    // const [error, setError] = useState(null);
+    const { data: orders, loading, error, refetch } = useEntityList(
+        { filter: { pk: { eq: `BUSINESS#${phoneNbr}` }, sk: { beginsWith: 'ORDER#' } } }, "list"
+    );
 
-    // --- Data Fetching Logic ---
-    // useEffect(() => {
-       
+    const [filter, setFilter] = useState('active');
+    const [editingId, setEditingId] = useState(null); // Tracks which order is in edit mode
+    const [updatingId, setUpdatingId] = useState(null); // Tracks which order is currently saving
 
-    //     if (!phoneNbr) {
-    //         setLoading(false);
-    //         return;
-    //     }
+    const handleStatusChange = async (order, newStatus) => {
+        if (order.orderStatus === newStatus) {
+            setEditingId(null);
+            return;
+        }
 
-    //     const fetchData = async () => {
-    //         setLoading(true);
-    //         setError(null);
-    //         try {
-    //             const allRecords = [];
-    //             let nextToken = null;
-    //             const pk = `BUSINESS#${phoneNbr}`;
+        setUpdatingId(order.sk); // Set loading state for this specific order
+        setEditingId(null);      // Close the dropdown
 
-    //             do {
-    //                 const response = await client.models.BusinessData.listBusinessDataByPkAndSk({
-    //                     pk: pk,
-    //                     sk: { beginsWith: 'ORDER#' }, // Only fetch Order records
-    //                     nextToken: nextToken,
-    //                 });
-    //                 const items = response.data || [];
-    //                 allRecords.push(...items);
-    //                 nextToken = response.nextToken;
-    //             } while (nextToken);
+        try {
+            await client.models.BusinessData.update({
+                pk: order.pk,
+                sk: order.sk,
+                orderStatus: newStatus
+            });
+            // Let the real-time subscription handle the UI update.
+            // If subscriptions are not working, you can manually call `refetch()` here.
+            // await refetch(); 
+        } catch (err) {
+            console.error("Failed to update order status:", err);
+            alert(`Failed to update status for Order ${order.sk.replace('ORDER#', '')}. Please try again.`);
+        } finally {
+            setUpdatingId(null); // Clear loading state for this order
+        }
+    };
+    
+const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    if (filter === 'active') return orders.filter(o => o.orderStatus === 'ORDERED' || o.orderStatus === 'IN_PREPARATION');
+    if (filter === 'Prepared') return orders.filter(o => o.orderStatus === 'PREPARED');
+    if (filter === 'all') return orders;
+    return [];
+}, [orders, filter]);
 
-    //             console.log("Fetched all orders for business:", allRecords);
-    //             setAllItems(allRecords);
-    //         } catch (err) {
-    //             const msg = err.errors ? err.errors[0].message : err.message;
-    //             setError(`Failed to fetch orders: ${msg}`);
-    //             console.error(err);
-    //         } finally {
-    //             setLoading(false);
-    //         }
-    //     };
 
-    //     fetchData();
-    // }, []);
-   
-    // ✅ FIX: The component now correctly derives the 'orders' list from 'allItems'
-    // using useMemo. This prevents infinite re-renders.
-    const { data: orders, loading, error } = useEntityList(
-        {filter: {pk:{ eq:`BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'ORDER#'} }} , "list");
-    console.log("Records:", orders);
-        const [filter, setFilter] = useState('active');
-        const filteredOrders = useMemo(() => {
-        if (filter === 'active') return orders.filter(o => o.orderStatus == 'ORDERED' || o.orderStatus == 'IN_PREPARATION');
-        if (filter === 'Prepared') return orders.filter(o => o.orderStatus == 'PREPARED');
-
-        if (filter === 'all') return orders;
-        return orders.filter(o => o.orderStatus === filter);
-    }, [orders, filter]);
-
-    if (loading) return <div className="p-4 text-center">Loading Orders...</div>;
+    if (loading) return <div className="p-4 text-center text-slate-400">Loading Orders...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
     return (
         <div className="p-4">
-            <h1 className="text-2xl font-bold text-white mb-4">All Orders for this Business</h1>
-            
-            <div className="flex space-x-2 mb-4">
-                <button onClick={() => setFilter('active')} className={classNames(filter === 'active' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Active</button>
-                <button onClick={() => setFilter('Prepared')} className={classNames(filter === 'Prepared' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Prepared</button>
-                <button onClick={() => setFilter('all')} className={classNames(filter === 'all' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>All Orders</button>
-            </div>
+            <h1 className="text-2xl font-bold text-white mb-4">Orders Dashboard</h1>
+            <OrderFilters currentFilter={filter} setFilter={setFilter} />
+
             <div className="space-y-3">
                 {filteredOrders.length > 0 ? (
                     filteredOrders.map(order => (
-                        <div key={order.sk} onClick={() => setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
+                        <div 
+                            key={order.sk} 
+                            onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} 
+                            className={classNames(
+                                "bg-slate-800 p-3 rounded-lg flex justify-between items-center transition",
+                                updatingId === order.sk ? 'opacity-50' : 'hover:bg-slate-700',
+                                !editingId && 'cursor-pointer'
+                            )}
+                        >
                             <div>
                                 <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
-                                {/* The customer phone is on gsi2pk: CUSTOMER#<business_phone>#<customer_phone> */}
-                                <p className="text-sm text-slate-400">Customer Phone: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
-                                {/* <p className="text-sm text-slate-200">Order ID : {order.sk }</p> */}
+                                <p className="text-sm text-slate-400">Customer: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
                             </div>
                             <div className="text-right">
-                                <p className="font-bold text-white">${order.totalAmount ? order.totalAmount.toFixed(2) : '0.00'}</p>
-                                <span className={classNames(statusColors[order.orderStatus], 'text-xs font-semibold px-2 py-0.5 rounded-full text-white')}>
-                                    {order.orderStatus ? order.orderStatus.replace('_', ' ').toLowerCase() : 'unknown'}
-                                </span>
+                                <p className="font-bold text-white">${order.totalAmount?.toFixed(2) || '0.00'}</p>
+                                <OrderStatusEditor 
+                                    order={order}
+                                    isEditing={editingId === order.sk}
+                                    onEdit={setEditingId}
+                                    onStatusChange={handleStatusChange}
+                                />
                             </div>
                         </div>
                     ))
                 ) : (
-                    <p className="text-slate-400">No orders found for this business.</p>
+                    <p className="text-slate-400 text-center mt-8">No {filter} orders found.</p>
                 )}
             </div>
         </div>
@@ -122,4 +148,3 @@ const OrdersView = ({ phoneNbr, setModal }) => {
 };
 
 export default OrdersView;
-
