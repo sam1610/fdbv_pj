@@ -91,23 +91,23 @@ useEffect(() => {
   }, [serializedQueryParam]); // Re-subscribe if query params change
 
   // Test mutation: Update an orderStatus after 10 seconds (for demonstration)
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const updatedOrder = await client.models.BusinessData.update({
-          pk: 'BUSINESS#+97333787388',  // From your screenshot; adjust if needed
-          sk: 'ORDER#2025-10-12T01:00:00.000Z',  // Adjust to a valid order SK from your data
-          orderStatus: 'PREPARED'  // Your new value
-        });
-        console.log('Test mutation executed:', updatedOrder);
-      } catch (mutationErr) {
-        console.error('Mutation error:', mutationErr);
-      }
-    }, 10000);  // 10 seconds delay
+  // useEffect(() => {
+  //   const timer = setTimeout(async () => {
+  //     try {
+  //       const updatedOrder = await client.models.BusinessData.update({
+  //         pk: 'BUSINESS#+97333787388',  // From your screenshot; adjust if needed
+  //         sk: 'ORDER#2025-10-12T01:00:00.000Z',  // Adjust to a valid order SK from your data
+  //         orderStatus: 'PREPARED'  // Your new value
+  //       });
+  //       console.log('Test mutation executed:', updatedOrder);
+  //     } catch (mutationErr) {
+  //       console.error('Mutation error:', mutationErr);
+  //     }
+  //   }, 10000);  // 10 seconds delay
 
-    // Cleanup timer on unmount
-    return () => clearTimeout(timer);
-  }, []);  // Empty dependency: Runs once on mount
+  //   // Cleanup timer on unmount
+  //   return () => clearTimeout(timer);
+  // }, []);  // Empty dependency: Runs once on mount
   
 // 
 

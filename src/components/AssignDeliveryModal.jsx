@@ -7,7 +7,7 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
     const [selectedAgent, setSelectedAgent] = useState(deliveryAgents[0]?.sk || '');
     // const preparedOrders = useMemo(() => orders.filter(o => o.orderStatus === 'prepared'), [orders]);
     const [selectedOrders, setSelectedOrders] = useState(() => orders.map(o => o.sk));
-
+    console.log("  Orders",orders);
     const toggleOrderSelection = (orderId) => {
         setSelectedOrders(prev => 
             prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
@@ -25,7 +25,7 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
     } catch (err) {
       console.log(err.message);
     }
-    console.log("pk  Orders",deliveryAgents[0]?.pk);
+    
     };
 
     return (

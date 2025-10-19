@@ -73,7 +73,15 @@ const OrdersView = ({ phoneNbr, setModal }) => {
     // using useMemo. This prevents infinite re-renders.
     const { data: orders, loading, error } = useEntityList(
         {filter: {pk:{ eq:`BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'ORDER#'} }} , "list");
-    // console.log("Records:", orders);
+    console.log("Records:", orders);
+        const [filter, setFilter] = useState('active');
+        const filteredOrders = useMemo(() => {
+        if (filter === 'active') return orders.filter(o => o.orderStatus == 'ORDERED' || o.orderStatus == 'IN_PREPARATION');
+        if (filter === 'Prepared') return orders.filter(o => o.orderStatus == 'PREPARED');
+
+        if (filter === 'all') return orders;
+        return orders.filter(o => o.orderStatus === filter);
+    }, [orders, filter]);
 
     if (loading) return <div className="p-4 text-center">Loading Orders...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
@@ -82,10 +90,14 @@ const OrdersView = ({ phoneNbr, setModal }) => {
         <div className="p-4">
             <h1 className="text-2xl font-bold text-white mb-4">All Orders for this Business</h1>
             
-            
+            <div className="flex space-x-2 mb-4">
+                <button onClick={() => setFilter('active')} className={classNames(filter === 'active' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Active</button>
+                <button onClick={() => setFilter('Prepared')} className={classNames(filter === 'Prepared' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Prepared</button>
+                <button onClick={() => setFilter('all')} className={classNames(filter === 'all' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>All Orders</button>
+            </div>
             <div className="space-y-3">
-                {orders.length > 0 ? (
-                    orders.map(order => (
+                {filteredOrders.length > 0 ? (
+                    filteredOrders.map(order => (
                         <div key={order.sk} onClick={() => setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
                             <div>
                                 <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
