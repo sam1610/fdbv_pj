@@ -9,7 +9,7 @@ import { useEntityList } from '../DataHook/useEntityList';
  * @param {string | null} props.phoneNbr - The phone number of the business owner.
  * @param {number} [props.filterDays=1] - The number of days to look back for orders.
  */
-const DashboardView = ({ phoneNbr, filterDays = 1 }) => {
+const DashboardView = ({ phoneNbr, filterDays = 1 , setModal}) => {
     // --- Data Fetching Logic ---
     const queryName = 'list';
 
@@ -33,7 +33,6 @@ const DashboardView = ({ phoneNbr, filterDays = 1 }) => {
     // Call the generic hook with the stable query method and parameters.
     const { data: orders, loading, error } = useEntityList(queryParam, queryName);
 
-    console.log("Dashboard Orders:", orders);
 
     // --- Client-Side Calculations for the Dashboard (unchanged) ---
     const kpis = useMemo(() => {
@@ -61,6 +60,11 @@ const DashboardView = ({ phoneNbr, filterDays = 1 }) => {
         }));
     }, [orders]);
 
+    const readyForDeliveryOrders = useMemo(() => {
+    return orders.filter((o) => o.orderStatus === 'PREPARED');
+  }, [orders]);
+    // console.log("Kpis Data:", readyForDeliveryOrders);
+
     if (loading) return <div className="p-4 text-center text-slate-400">Loading Dashboard Data...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
@@ -76,7 +80,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1 }) => {
                 <div className="bg-slate-800 p-4 rounded-lg shadow-md text-center"><p className="text-slate-400 text-sm">Total Orders</p><p className="text-3xl font-bold text-white">{kpis.totalOrders}</p></div>
                 <div className="bg-slate-800 p-4 rounded-lg shadow-md text-center"><p className="text-slate-400 text-sm">Revenue Today</p><p className="text-3xl font-bold text-white">${kpis.revenue.toFixed(2)}</p></div>
                 <div className="bg-yellow-800/50 p-4 rounded-lg shadow-md text-center"><p className="text-yellow-300 text-sm">In Progress</p><p className="text-3xl font-bold text-white">{kpis.inProgress}</p></div>
-                <button className="bg-green-800/50 p-4 rounded-lg shadow-md text-center transition hover:bg-green-700/50">
+                <button onClick={() => setModal({ type: 'assignDelivery' , PreparedOrders: readyForDeliveryOrders})} className="bg-green-800/50 p-4 rounded-lg shadow-md text-center transition hover:bg-green-700/50">
                     <p className="text-green-300 text-sm">Ready for Delivery</p>
                     <p className="text-3xl font-bold text-white">{kpis.readyForDelivery}</p>
                 </button>

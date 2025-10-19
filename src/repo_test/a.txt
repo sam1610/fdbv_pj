@@ -1,0 +1,63 @@
+curl --request GET \
+  --url 'https://7n5isqnjabao5jar6omwahvjeu.appsync-api.us-east-1.amazonaws.com/graphql' \
+  --header 'Content-Type: application/json' \
+  --header 'x-api-key: da2-w3iijhi7hfaphh34cadj5m4bxq' \
+  --data '{
+    "query": "query MyQuery { listBusinessData(pk: \"BUSINESS#+97333787388\", sk: {beginsWith: \"ITEM#\"}) { nextToken items { unitPrice } } }"
+  }'
+
+  # First get a Cognito token, then:
+curl --request POST \
+  --url 'https://7n5isqnjabao5jar6omwahvjeu.appsync-api.us-east-1.amazonaws.com/graphql' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer da2-w3iijhi7hfaphh34cadj5m4bxq' \
+  --data '{
+    "query": "query MyQuery { listBusinessData(pk: \"BUSINESS#+97333787388\", sk: {beginsWith: \"ITEM#\"}) { nextToken items { unitPrice name description } } }"
+  }'
+
+
+
+  aws appsync graphql  --api-id h2ngtixy75bhvi3k54d35v4tte --query-string file://query.json --region us-east-1 --output json
+
+
+
+  curl --request POST \
+  --url 'https://7n5isqnjabao5jar6omwahvjeu.appsync-api.us-east-1.amazonaws.com/graphql' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_COGNITO_ID_TOKEN' \
+  --data '{
+    "query": "query MyQuery { listBusinessData(pk: \"BUSINESS#+97333787388\", sk: {beginsWith: \"ITEM#\"}) { items { unitPrice name description } } }"
+  }'
+
+  curl --request POST \
+  --url 'https://7n5isqnjabao5jar6omwahvjeu.appsync-api.us-east-1.amazonaws.com/graphql' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_COGNITO_ID_TOKEN' \
+  --data '{
+    "query": "query { listBusinessData(pk: \"BUSINESS#+97333787388\", sk: {beginsWith: \"ITEM#\"}) { items { unitPrice name description } } }"
+  }'
+
+  aws cognito-idp initiate-auth \
+  --region us-east-1 \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id YOUR_APP_CLIENT_ID_HERE \
+  --auth-parameters USERNAME=math.hack2020@gmail.com,PASSWORD=New#@1235
+
+
+
+curl --request POST \
+  --url 'https://7n5isqnjabao5jar6omwahvjeu.appsync-api.us-east-1.amazonaws.com/graphql' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer da2-w3iijhi7hfaphh34cadj5m4bxq' \
+  --data '{
+    "query": "query { listBusinessData(pk: \"BUSINESS#+97333787388\", sk: {beginsWith: \"ITEM#\"}) { items { unitPrice name description } } }"
+  }'
+
+
+  curl --request POST \
+  --url 'https://7n5isqnjabao5jar6omwahvjeu.appsync-api.us-east-1.amazonaws.com/graphql' \
+  --header 'Content-Type: application/json' \
+  --header 'x-api-key: da2-w3iijhi7hfaphh34cadj5m4bxq' \
+  --data '{
+    "query": "query { listBusinessData(pk: \"BUSINESS#+97333787388\", sk: {beginsWith: \"ITEM#\"}) { items { unitPrice name description } } }"
+  }'

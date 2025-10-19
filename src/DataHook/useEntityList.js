@@ -96,8 +96,8 @@ useEffect(() => {
       try {
         const updatedOrder = await client.models.BusinessData.update({
           pk: 'BUSINESS#+97333787388',  // From your screenshot; adjust if needed
-          sk: 'ORDER#2025-10-12T15:30:00.000Z',  // Adjust to a valid order SK from your data
-          orderStatus: 'DELIVERING'  // Your new value
+          sk: 'ORDER#2025-10-12T01:00:00.000Z',  // Adjust to a valid order SK from your data
+          orderStatus: 'PREPARED'  // Your new value
         });
         console.log('Test mutation executed:', updatedOrder);
       } catch (mutationErr) {

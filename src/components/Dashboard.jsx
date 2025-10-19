@@ -7,6 +7,7 @@ import OrderDetailModal from './OrderDetailModal';
 import AssignDeliveryModal from './AssignDeliveryModal';    
 // import { useEntityList } from '../DataHook/useEntityList';
 import CustomersDetailModal from './CustomersDetailModal';
+import { useEntityList } from '../DataHook/useEntityList';
 // --- Mock Data ---
 // This data simulates the items you would fetch from your DynamoDB table.
 // It's structured to match your single-table design with different item types.
@@ -62,10 +63,12 @@ export default function Dashboard({phoneNbr}) {
     
     // console.log("Business Data:", useEntityList(`BUSINESS#${phoneNbr}`,  "ORDER#"));
 
-
+    
     const orders = useMemo(() => businessData.filter(item => item.SortKey.startsWith('ORDER#') && !item.SortKey.includes('#ITEM#')), [businessData]);
     // const customers = useMemo(() => businessData.filter(item => item.SortKey.startsWith('CUSTOMER#')), [businessData]);
-    
+    // list of delivery agents
+    const { data: deliveryAgents, loading, error } = useEntityList(
+             {filter: {pk:{ eq: `BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'AGENT#'}}}, "list");
     const handleAssignDelivery = (agentId, selectedOrders) => {
         console.log(`Assigning ${selectedOrders.length} orders to ${agentId}`);
         // Here you would typically update the state, but for now we just log it
@@ -76,13 +79,13 @@ export default function Dashboard({phoneNbr}) {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={4}/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={10}  setModal={setModal}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={2} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={10}  setModal={setModal} />;
         }
     };
 
@@ -95,7 +98,8 @@ export default function Dashboard({phoneNbr}) {
             return <CustomersDetailModal IdCustomer={modal.IdCustomer}  onClose={() => setModal(null)} />;
         }
         if (modal.type === 'assignDelivery') {
-            return <AssignDeliveryModal orders={orders} deliveryAgents={appData.deliveryAgents} onAssign={handleAssignDelivery} onClose={() => setModal(null)} />;
+            return <AssignDeliveryModal orders={modal.PreparedOrders} deliveryAgents={deliveryAgents} 
+            onAssign={handleAssignDelivery} onClose={() => setModal(null)} />;
         }
         return null;
     };

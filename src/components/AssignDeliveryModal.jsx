@@ -1,20 +1,31 @@
+import { ConsoleLogger } from 'aws-amplify/utils';
 import React, { useState, useMemo } from 'react';
+import { updateRec } from '../DataHook/UpdateRec';
 
 
 const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
-    const [selectedAgent, setSelectedAgent] = useState(deliveryAgents[0]?.id || '');
-    const preparedOrders = useMemo(() => orders.filter(o => o.Status === 'prepared'), [orders]);
-    const [selectedOrders, setSelectedOrders] = useState(() => preparedOrders.map(o => o.OrderID));
+    const [selectedAgent, setSelectedAgent] = useState(deliveryAgents[0]?.sk || '');
+    // const preparedOrders = useMemo(() => orders.filter(o => o.orderStatus === 'prepared'), [orders]);
+    const [selectedOrders, setSelectedOrders] = useState(() => orders.map(o => o.sk));
 
     const toggleOrderSelection = (orderId) => {
         setSelectedOrders(prev => 
             prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
         );
     };
-
-    const handleAssign = () => {
+    const updates = {
+      gsi1pk: selectedAgent , orderStatus: 'DELIVERING'
+    };
+    const handleAssign = async () => {
         if (!selectedAgent || selectedOrders.length === 0) return;
-        onAssign(selectedAgent, selectedOrders);
+        onAssign( selectedAgent, selectedOrders);
+        try {
+      const updatedRecord = await updateRec(deliveryAgents[0]?.pk, selectedOrders, updates);
+      console.log('Updated record details:', updatedRecord); // Use for UI refresh if needed
+    } catch (err) {
+      console.log(err.message);
+    }
+    console.log("pk  Orders",deliveryAgents[0]?.pk);
     };
 
     return (
@@ -28,22 +39,22 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
                     <div>
                         <label htmlFor="agent" className="block text-sm font-medium text-slate-300 mb-1">Select Delivery Agent</label>
                         <select id="agent" value={selectedAgent} onChange={e => setSelectedAgent(e.target.value)} className="w-full bg-slate-700 text-white rounded-md p-2 border border-slate-600 focus:ring-sky-500 focus:border-sky-500">
-                            {deliveryAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                            {deliveryAgents.map(agent => <option key={agent.sk} value={agent.sk}>{agent.name}:   ({agent.phone})</option>)}
                         </select>
                     </div>
                     <div>
                         <h3 className="font-semibold text-white">Select Orders to Assign</h3>
                         <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
-                            {preparedOrders.map(order => (
-                                <div key={order.OrderID} className="flex items-center bg-slate-700 p-2 rounded-md">
+                            {orders.map(order => (
+                                <div key={order.sk} className="flex items-center bg-slate-700 p-2 rounded-md">
                                     <input 
                                         type="checkbox" 
-                                        id={order.OrderID} 
-                                        checked={selectedOrders.includes(order.OrderID)}
-                                        onChange={() => toggleOrderSelection(order.OrderID)}
+                                        id={order.sk} 
+                                        checked={selectedOrders.includes(order.sk)}
+                                        onChange={() => toggleOrderSelection(order.sk)}
                                         className="h-4 w-4 rounded border-slate-500 text-sky-600 focus:ring-sky-500"
                                     />
-                                    <label htmlFor={order.OrderID} className="ml-3 text-sm text-slate-200">{order.OrderID} ({order.ItemsNumber} items)</label>
+                                    <label htmlFor={order.sk} className="ml-3 text-sm text-slate-200">{order.sk} ({order.itemsNbr} items)</label>
                                 </div>
                             ))}
                         </div>
