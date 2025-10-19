@@ -86,19 +86,23 @@ const DashboardView = ({ phoneNbr, filterDays = 1 , setModal}) => {
                 </button>
             </div>
 
-            <div className="bg-slate-800 p-4 rounded-lg shadow-md">
-                 <h2 className="text-lg font-semibold text-white mb-4">Today's Order Status</h2>
-                 <div style={{ width: '100%', height: 300 }}>
-                    <Recharts.ResponsiveContainer>
-                        <Recharts.BarChart data={chartData}>
-                            <Recharts.XAxis dataKey="name" stroke="#94a3b8" />
-                            <Recharts.YAxis stroke="#94a3b8" />
-                            <Recharts.Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none' }} />
-                            <Recharts.Bar dataKey="orders" fill="#38bdf8" />
-                        </Recharts.BarChart>
-                    </Recharts.ResponsiveContainer>
-                 </div>
-            </div>
+<div className="bg-slate-800 p-4 rounded-lg shadow-md">
+    <h2 className="text-lg font-semibold text-white mb-4">Today's Order Status</h2>
+    <div style={{ width: '100%', height: 300 }}>
+        <Recharts.ResponsiveContainer>
+            <Recharts.BarChart data={chartData}>
+                <Recharts.XAxis dataKey="name" stroke="#94a3b8" />
+                <Recharts.YAxis 
+                    stroke="#94a3b8"
+                    allowDecimals={false} 
+                    domain={[0, dataMax => dataMax + 2]}
+                />
+                <Recharts.Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none' }} />
+                <Recharts.Bar dataKey="orders" fill="#38bdf8" />
+            </Recharts.BarChart>
+        </Recharts.ResponsiveContainer>
+    </div>
+</div>
         </div>
     );
 };
