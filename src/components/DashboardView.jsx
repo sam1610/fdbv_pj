@@ -46,7 +46,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1 , setModal}) => {
             readyForDelivery: orders.filter(o => o.orderStatus === 'PREPARED').length,
         };
     }, [orders]);
-    
+    console.log("Orders :", orders);
     const chartData = useMemo(() => {
         if (!orders || orders.length === 0) return [];
         const statusCounts = orders.reduce((acc, o) => {

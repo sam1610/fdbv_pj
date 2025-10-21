@@ -67,39 +67,80 @@ export const useEntityList = (queryParam, queryName) => {
       })
     );
 
-    // 2. ✅ NEW: Subscription for CREATED items
-    subscriptions.push(
-      client.models.BusinessData.onCreate({
-        filter: { entityType: { eq: 'Order' } }
-      }).subscribe({
-        next: (newItem) => {
-          console.log('New order created:', newItem);
-          // Adds the new item to the top of the list.
-          // Note: This doesn't check if the new item matches the current filter.
-          // For maximum accuracy, you could trigger a full refetch instead.
-          setData(prevData => [newItem, ...prevData]);
-        }
-      })
-    );
+   // 2. Subscription for CREATED items
+subscriptions.push(
+  client.models.BusinessData.onCreate().subscribe({  // Removed filter
+    next: (newItem) => {
+      setData(prevData => [newItem, ...prevData]);
+    
+    },
+    error: (error) => console.error('Subscription error:', error),
+  })
+);
 
-    // 3. ✅ NEW: Subscription for DELETED items
-    subscriptions.push(
-      client.models.BusinessData.onDelete({
-        filter: { entityType: { eq: 'Order' } }
-      }).subscribe({
-        next: (deletedItem) => {
-          console.log('Order deleted:', deletedItem);
-          // Removes the deleted item from the list
-          setData(prevData => prevData.filter(item => item.sk !== deletedItem.sk));
-        }
-      })
-    );
+// 3. Subscription for DELETED items
+subscriptions.push(
+  client.models.BusinessData.onDelete().subscribe({  // Removed filter
+    next: (deletedItem) => {
+    setData(prevData => prevData.filter(item => item.sk !== deletedItem.sk));
+    },
+    error: (error) => console.error('Subscription error:', error),
+  })
+);
     
     // Cleanup all subscriptions on component unmount
     return () => {
       subscriptions.forEach(sub => sub.unsubscribe());
     };
   }, [serializedQueryParam]); // Re-subscribe if the query changes
+
+
+//  Test mutation: Update an orderStatus after 10 seconds (for demonstration)
+  // useEffect(() => {
+  //   const timer = setTimeout(async () => {
+  //     try {
+  //       const updatedOrder = await client.models.BusinessData.update({
+  //         pk: 'BUSINESS#+97333787388',  // From your screenshot; adjust if needed
+  //         sk: 'ORDER#2025-10-12T01:00:00.000Z',  // Adjust to a valid order SK from your data
+  //         orderStatus: 'PREPARED'  // Your new value
+  //       });
+  //       console.log('Test mutation executed:', updatedOrder);
+  //     } catch (mutationErr) {
+  //       console.error('Mutation error:', mutationErr);
+  //     }
+  //   }, 10000);  // 10 seconds delay
+
+  //   // Cleanup timer on unmount
+  //   return () => clearTimeout(timer);
+  // }, []);  // Empty dependency: Runs once on mount
+
+// Test mutation: Create a new order after 10 seconds (for demonstration)
+// useEffect(() => {
+//   const timer = setTimeout(async () => {
+//     try {
+//       // Generate a unique SK for the new order using current timestamp
+//       const timestamp = new Date().toISOString();
+//       const newOrder = await client.models.BusinessData.create({
+//         pk: 'BUSINESS#+97333787388',  // Business identifier
+//         sk: `ORDER#${timestamp}`,      // Unique order identifier with timestamp
+//         orderStatus: 'ORDERED',        // Initial status for new order
+//         gsi2pk: 'CUSTOMER#+97333787388#+97311122255',
+//         totalAmount: 29.99,
+//         orderDate: timestamp,
+//         entityType: 'Order',
+//         itemsNbr: 3,
+
+//         // ... other necessary fields
+//       });
+//       console.log('Test mutation executed - New order created:', newOrder);
+//     } catch (mutationErr) {
+//       console.error('Mutation error:', mutationErr);
+//     }
+//   }, 10000);  // 10 seconds delay
+
+//   // Cleanup timer on unmount
+//   return () => clearTimeout(timer);
+// }, []);  // Empty dependency: Runs once on mount
 
   return { data, loading, error, refetch: fetchData };
 };

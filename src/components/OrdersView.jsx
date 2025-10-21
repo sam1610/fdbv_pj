@@ -84,8 +84,8 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                 sk: order.sk,
                 orderStatus: newStatus
             });
-            // Let the real-time subscription handle the UI update.
-            // If subscriptions are not working, you can manually call `refetch()` here.
+            // Let the rel-time subscription handle the UI update.
+            // If subscriptions are not working, i can manually call `refetch()` here.
             // await refetch(); 
         } catch (err) {
             console.error("Failed to update order status:", err);
