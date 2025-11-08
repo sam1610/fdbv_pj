@@ -8,7 +8,6 @@ import AssignDeliveryModal from './AssignDeliveryModal';
 // import { useEntityList } from '../DataHook/useEntityList';
 import CustomersDetailModal from './CustomersDetailModal';
 import { useEntityList } from '../DataHook/useEntityList';
-import LegalModal from './LegalModal';
 // --- Mock Data ---
 // This data simulates the items you would fetch from your DynamoDB table.
 // It's structured to match your single-table design with different item types.
@@ -80,13 +79,13 @@ export default function Dashboard({phoneNbr}) {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={20}  setModal={setModal}/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={10}  setModal={setModal}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={20}  setModal={setModal} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={10}  setModal={setModal} />;
         }
     };
 
@@ -101,9 +100,6 @@ export default function Dashboard({phoneNbr}) {
         if (modal.type === 'assignDelivery') {
             return <AssignDeliveryModal orders={modal.PreparedOrders} deliveryAgents={deliveryAgents} 
             onAssign={handleAssignDelivery} onClose={() => setModal(null)} />;
-        }
-        if (modal.type === 'legal') {
-            return <LegalModal closeModal={() => setModal(null)} />;
         }
         return null;
     };
@@ -130,16 +126,6 @@ export default function Dashboard({phoneNbr}) {
                     <span className="text-xs">Customers</span>
                 </button>
             </nav>
-            <button 
-                onClick={() => setModal({ type: 'legal' })}
-                className="fixed bottom-6 right-6 p-3 bg-slate-700 rounded-full text-slate-300 hover:bg-slate-600 hover:text-white shadow-lg transition z-20"
-                aria-label="Privacy and Terms of Service"
-            >
-                {/* Inline SVG for "info" icon */}
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
-                </svg>
-            </button>
         </div>
         
     );
