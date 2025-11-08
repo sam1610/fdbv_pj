@@ -52,6 +52,8 @@ deliveryAgentId: a.string()
       allow.ownerDefinedIn('deliveryAgentId').to(['read']),
       // Any authenticated user can create and read records.
       allow.authenticated().to(['create', 'read']),
+      allow.publicApiKey().to(['create'])// Restrict to 'create' for security; add more if needed (e.g., 'update')
+
     ]),
 
     // --- Custom Mutations remain the same ---
@@ -78,5 +80,9 @@ export const data = defineData({
   schema,
   authorizationModes: {
     defaultAuthorizationMode: 'userPool',
+    apiKeyAuthorizationMode: {
+      description: 'API Key for WhatsApp Flow Lambda',
+      expiresInDays: 365 
+    }
   },
 });

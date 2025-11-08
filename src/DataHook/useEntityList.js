@@ -45,54 +45,90 @@ export const useEntityList = (queryParam, queryName) => {
     fetchData();
   }, [fetchData]);
 
+// ----
+useEffect(() => {
+  // Use observeQuery to get initial data AND subscribe to changes
+  const observer = client.models.BusinessData.observeQuery({
+    filter: {
+      entityType: { eq: 'Order' }
+    }
+  });
+
+  // This one subscription handles create, update, delete, and initial load
+  const sub = observer.subscribe({
+    next: ({ items }) => {
+      // 'items' is the full, real-time list of orders.
+      // Sort them by date to show the newest first.
+      const sortedItems = [...items].sort((a, b) => 
+        (b.orderDate || '').localeCompare(a.orderDate || '')
+      );
+      setData(sortedItems);
+      console.log('Real-time data synced:', sortedItems);
+    },
+    error: (err) => {
+      console.error('observeQuery subscription error:', err);
+    }
+  });
+
+  // Return a cleanup function to unsubscribe when the component unmounts
+  return () => {
+    sub.unsubscribe();
+  };
+
+}, []);
+// ----
+
+
+
+
   // ✅ MODIFIED: This useEffect now handles create, update, and delete events.
-  useEffect(() => {
-    const isOrderQuery = serializedQueryParam.includes('ORDER#');
-    if (!isOrderQuery) return;
+  // useEffect(() => {
+  //   const isOrderQuery = serializedQueryParam.includes('ORDER#');
+  //   if (!isOrderQuery) return;
 
-    const subscriptions = [];
+  //   const subscriptions = [];
 
-    // 1. Subscription for UPDATED items
-    subscriptions.push(
-      client.models.BusinessData.onUpdate({
-        filter: { entityType: { eq: 'Order' } }
-      }).subscribe({
-        next: (updatedItem) => {
-          console.log('Order updated:', updatedItem);
-          // Merges the update into the existing list
-          setData(prevData => prevData.map(item => 
-            item.sk === updatedItem.sk ? { ...item, ...updatedItem } : item
-          ));
-        }
-      })
-    );
+  //   // 1. Subscription for UPDATED items
+  //   subscriptions.push(
+  //     client.models.BusinessData.onUpdate({
+  //       filter: { entityType: { eq: 'Order' } }
+  //     }).subscribe({
+  //       next: (updatedItem) => {
+  //         console.log('Order updated:', updatedItem);
+  //         // Merges the update into the existing list
+  //         setData(prevData => prevData.map(item => 
+  //           item.sk === updatedItem.sk ? { ...item, ...updatedItem } : item
+  //         ));
+  //       }
+  //     })
+  //   );
 
    // 2. Subscription for CREATED items
-subscriptions.push(
-  client.models.BusinessData.onCreate().subscribe({  // Removed filter
-    next: (newItem) => {
-      setData(prevData => [newItem, ...prevData]);
+// subscriptions.push(
+//   client.models.BusinessData.onCreate().subscribe({  // Removed filter
+//     next: (newItem) => {
+//       setData(prevData => [newItem, ...prevData]);
     
-    },
-    error: (error) => console.error('Subscription error:', error),
-  })
-);
+//     },
+//     error: (error) => console.error('Subscription error:', error),
+//   })
+// );
 
-// 3. Subscription for DELETED items
-subscriptions.push(
-  client.models.BusinessData.onDelete().subscribe({  // Removed filter
-    next: (deletedItem) => {
-    setData(prevData => prevData.filter(item => item.sk !== deletedItem.sk));
-    },
-    error: (error) => console.error('Subscription error:', error),
-  })
-);
+// // 3. Subscription for DELETED items
+// subscriptions.push(
+//   client.models.BusinessData.onDelete().subscribe({  // Removed filter
+//     next: (deletedItem) => {
+//     setData(prevData => prevData.filter(item => item.sk !== deletedItem.sk));
+//     },
+//     error: (error) => console.error('Subscription error:', error),
+//   })
+// );
     
-    // Cleanup all subscriptions on component unmount
-    return () => {
-      subscriptions.forEach(sub => sub.unsubscribe());
-    };
-  }, [serializedQueryParam]); // Re-subscribe if the query changes
+//     // Cleanup all subscriptions on component unmount
+//     return () => {
+//       subscriptions.forEach(sub => sub.unsubscribe());
+//     };
+//   }, [serializedQueryParam]); // Re-subscribe if the query changes
 
 
 //  Test mutation: Update an orderStatus after 10 seconds (for demonstration)
@@ -101,8 +137,8 @@ subscriptions.push(
   //     try {
   //       const updatedOrder = await client.models.BusinessData.update({
   //         pk: 'BUSINESS#+97333787388',  // From your screenshot; adjust if needed
-  //         sk: 'ORDER#2025-10-12T01:00:00.000Z',  // Adjust to a valid order SK from your data
-  //         orderStatus: 'PREPARED'  // Your new value
+  //         sk: 'ORDER#2025-11-08T15:55:09.200Z',  // Adjust to a valid order SK from your data
+  //         orderStatus: 'IN_PREPARATION'  // Your new value
   //       });
   //       console.log('Test mutation executed:', updatedOrder);
   //     } catch (mutationErr) {
@@ -136,7 +172,7 @@ subscriptions.push(
 //     } catch (mutationErr) {
 //       console.error('Mutation error:', mutationErr);
 //     }
-//   }, 10000);  // 10 seconds delay
+//   }, 30000);  // 10 seconds delay
 
 //   // Cleanup timer on unmount
 //   return () => clearTimeout(timer);
