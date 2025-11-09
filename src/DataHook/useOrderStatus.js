@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 
 // This client can be initialized once here.
-const client = generateClient({ authMode: 'userPool' });
+const client = generateClient({ authMode: 'apiKey' });
 
 /**
  * A custom hook to fetch ALL orders for a specific business within the last 24 hours.
