@@ -8,7 +8,7 @@ export const useEntityList = (queryParam, queryName) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const dataRef = useRef([]);           // Live data
-  const [, forceUpdate] = useState({}); // Re-render only consumers
+  const [, forceKpiUpdate] = useState({}); // Only KPI re-render
 
   const serialized = JSON.stringify(queryParam);
 
@@ -32,7 +32,7 @@ export const useEntityList = (queryParam, queryName) => {
       } while (nt);
 
       dataRef.current = all;
-      forceUpdate({});
+      forceKpiUpdate({}); // Only KPIs
     } catch (e) {
       setError(e.message);
     } finally {
@@ -51,7 +51,7 @@ export const useEntityList = (queryParam, queryName) => {
         dataRef.current = [...items].sort((a, b) =>
           (b.orderDate || '').localeCompare(a.orderDate || '')
         );
-        forceUpdate({});
+        forceKpiUpdate({});
       },
       error: (err) => setError(err.message),
     });
@@ -75,6 +75,6 @@ export const useEntityList = (queryParam, queryName) => {
     loading,
     error,
     refetch: fetchData,
-    forceUpdate: () => forceUpdate({}), // ← Expose
+    forceKpiUpdate: () => forceKpiUpdate({}), // Expose for external use
   };
 };
