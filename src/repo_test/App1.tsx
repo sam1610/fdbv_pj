@@ -5,7 +5,7 @@ import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
 import './App.css';
 import Dashboard from './components/Dashboard';
 
-const client = generateClient<Schema>({ authMode: 'userPool' });
+const client = generateClient<Schema>({ authMode: 'apiKey' });
 
 // Custom hook to fetch user attributes like email and phone number
 function useUserAttributes() {

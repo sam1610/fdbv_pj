@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { generateClient } from 'aws-amplify/data';
 
 // Initialize the Amplify client once. It can be shared across all hooks and components.
-const client = generateClient({ authMode: 'userPool' });
+const client = generateClient({ authMode: 'apiKey' });
 
 /**
  * A reusable custom hook to fetch all records for a specific business (PK)

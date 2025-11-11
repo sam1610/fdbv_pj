@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 
-const client = generateClient({ authMode: 'userPool' });
+const client = generateClient({ authMode: 'apiKey' });
 
 const BusinessDataContext = createContext();
 
