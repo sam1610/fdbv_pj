@@ -8,7 +8,7 @@ const CustomersDetailModal = ({ IdCustomer, onClose }) => {
     const { data: lineItems, loading, error } = useEntityList(
         {gsi2pk: IdCustomer, sk: {beginsWith: 'ORDER#'}}, 
         "ByCustomer");
-    console.log("Customer Orders Props:", { lineItems });
+    console.log("Customer Orders Props:", IdCustomer , { lineItems });
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-lg w-full max-w-lg shadow-xl animate-fade-in-up">

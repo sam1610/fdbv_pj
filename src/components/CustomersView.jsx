@@ -27,26 +27,22 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     if (loading) return <div className="p-4 text-center">Loading Customers...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
-
-
-
 return (
         <div className="p-4">
             <h1 className="text-2xl font-bold text-orange-500 mb-4">Customers</h1>
             <div className="space-y-3">
                 {customers.map(customer => (
                     <div key={customer.sk} 
-                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk })} 
+                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.gsi2pk })} 
                     className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
                         <div>
                             <p className="font-bold text-white">{customer.name}</p>
-                            <p className="text-amber-400 text-sm ">{customer.sk.split('#')[2]}</p>
+                            <p className="text-amber-400 text-sm ">{customer.sk.split('#')[1]}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-slate-400 text-sm">Total Orders</p>
-                            {/* <p className="font-bold text-white">{customer.totalAmount}</p> */}
+                            <p className="font-bold text-white">{customer.totalAmount}</p>
                             <p className="font-bold text-white">${customer.totalAmount ? customer.totalAmount.toFixed(2) : '0.00'}</p>
-
                         </div>
                     </div>
                 ))}
