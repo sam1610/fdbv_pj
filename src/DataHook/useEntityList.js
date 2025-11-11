@@ -10,7 +10,7 @@ export const useEntityList = (queryParam, queryName) => {
   const [error, setError] = useState(null);
 
   const serializedQueryParam = JSON.stringify(queryParam);
-
+  console.log("useEntityList called with:", queryParam, queryName);
   const fetchData = useCallback(async () => {
     const params = JSON.parse(serializedQueryParam);
     let apiMethod;
@@ -39,43 +39,43 @@ export const useEntityList = (queryParam, queryName) => {
     } finally {
       setLoading(false);
     }
+
   }, [queryName, serializedQueryParam]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
 // ----
-useEffect(() => {
-  // Use observeQuery to get initial data AND subscribe to changes
-  const observer = client.models.BusinessData.observeQuery({
-    filter: {
-      entityType: { eq: 'Order' }
-    }
-  });
+// useEffect(() => {
+//   // Use observeQuery to get initial data AND subscribe to changes
+//   const observer = client.models.BusinessData.observeQuery({
+//     filter: {
+//       entityType: { eq: 'Order' }
+//     }
+//   });
 
-  // This one subscription handles create, update, delete, and initial load
-  const sub = observer.subscribe({
-    next: ({ items }) => {
-      // 'items' is the full, real-time list of orders.
-      // Sort them by date to show the newest first.
-      const sortedItems = [...items].sort((a, b) => 
-        (b.orderDate || '').localeCompare(a.orderDate || '')
-      );
-      setData(sortedItems);
-      console.log('Real-time data synced:', sortedItems);
-    },
-    error: (err) => {
-      console.error('observeQuery subscription error:', err);
-    }
-  });
+//   // This one subscription handles create, update, delete, and initial load
+//   const sub = observer.subscribe({
+//     next: ({ items }) => {
+//       // 'items' is the full, real-time list of orders.
+//       // Sort them by date to show the newest first.
+//       const sortedItems = [...items].sort((a, b) => 
+//         (b.orderDate || '').localeCompare(a.orderDate || '')
+//       );
+//       setData(sortedItems);
+//       console.log('Real-time data synced:', sortedItems);
+//     },
+//     error: (err) => {
+//       console.error('observeQuery subscription error:', err);
+//     }
+//   });
 
-  // Return a cleanup function to unsubscribe when the component unmounts
-  return () => {
-    sub.unsubscribe();
-  };
+//   // Return a cleanup function to unsubscribe when the component unmounts
+//   return () => {
+//     sub.unsubscribe();
+//   };
 
-}, []);
+// }, []);
 // ----
 
 

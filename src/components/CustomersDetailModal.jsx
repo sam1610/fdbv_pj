@@ -21,26 +21,23 @@ const CustomersDetailModal = ({ IdCustomer, onClose }) => {
                 <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
                     <div>
                         {/* ✅ FIX: Added distinct text colors to the headers */}
-                        <div className="flex justify-between font-semibold text-sm mb-2">
-                            <h3 className="text-sky-400">OrderID</h3>
-                            <h3 className="text-amber-400">#Items</h3>
-                            <h3 className="text-amber-400 ">Status</h3>
-                            <h3 className="text-amber-400">T.Amount</h3>
-                        </div>
+                        <div className="flex font-semibold text-sm mb-2">
+    <h3 className="w-1/4 text-sky-400">OrderID</h3>
+    <h3 className="w-1/4 text-amber-400 text-center">#Items</h3>
+    <h3 className="w-1/4 text-amber-400 text-center">Status</h3>
+    <h3 className="w-1/4 text-amber-400 text-right">T.Amount</h3>
+</div>
 
                         <ul className="space-y-1 mt-1 text-slate-300">
-                            {lineItems.map(item => (
-                                <li key={item.sk} className="flex justify-between text-sm">
-                                    {/* Added a check to prevent errors if unitPrice is null */}
-                                    
-                                    <span>{item.sk.split("T")[0]+".."} </span>
-                                
-                                    <span >{item.itemsNbr} </span>
-                                    <span>{item.orderStatus} </span>
-                                    <span>${item.totalAmount}</span>
-                                </li>
-                            ))}
-                        </ul>
+    {lineItems.map(item => (
+        <li key={item.sk} className="flex text-sm">
+            <span className="w-1/4 truncate">#{item.sk.split('#')[1]?.split('T')[0]}</span>
+            <span className="w-1/4 text-center">{item.itemsNbr} </span>
+            <span className="w-1/4 text-center">{item.orderStatus} </span>
+            <span className="w-1/4 text-right">${item.totalAmount}</span>
+        </li>
+    ))}
+</ul>
                     </div>
 
                     {/* ✅ FIX: Added opacity-75 class to the Total Amount container */}
