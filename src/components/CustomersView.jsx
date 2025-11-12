@@ -3,15 +3,15 @@ import { useEntityList } from '../DataHook/useEntityList';
 
 
 // --- Component Setup ---
-// const classNames = (...classes) => classes.filter(Boolean).join(' ');
+const classNames = (...classes) => classes.filter(Boolean).join(' ');
 // Updated to match the schema's enum values
-// const statusColors = { 
-//   ORDERED: 'bg-blue-500', 
-//   IN_PREPARATION: 'bg-yellow-500', 
-//   PREPARED: 'bg-green-500', 
-//   DELIVERED: 'bg-gray-500', 
-//   DELIVERING: 'bg-orange-500' 
-// };
+const statusColors = { 
+  ORDERED: 'bg-blue-500', 
+  IN_PREPARATION: 'bg-yellow-500', 
+  PREPARED: 'bg-green-500', 
+  DELIVERED: 'bg-gray-500', 
+  DELIVERING: 'bg-orange-500' 
+};
 
 /**
  * An Order Management component that fetches its own data from DynamoDB
@@ -28,14 +28,15 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
 
-console.log("Customers Data:", customers);
+
+
 return (
         <div className="p-4">
             <h1 className="text-2xl font-bold text-orange-500 mb-4">Customers</h1>
             <div className="space-y-3">
                 {customers.map(customer => (
                     <div key={customer.sk} 
-                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.gsi2pk })} 
+                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk })} 
                     className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
                         <div>
                             <p className="font-bold text-white">{customer.name}</p>
