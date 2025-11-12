@@ -70,4 +70,3 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
     );
 };
 export default AssignDeliveryModal;
-
