@@ -1,57 +1,57 @@
-import React, { useState, useMemo, useEffect } from 'react';
+// src/components/CustomersView.jsx
+import React, { useMemo } from 'react';
 import { useEntityList } from '../DataHook/useEntityList';
 
-
-// --- Component Setup ---
-// const classNames = (...classes) => classes.filter(Boolean).join(' ');
-// Updated to match the schema's enum values
-// const statusColors = { 
-//   ORDERED: 'bg-blue-500', 
-//   IN_PREPARATION: 'bg-yellow-500', 
-//   PREPARED: 'bg-green-500', 
-//   DELIVERED: 'bg-gray-500', 
-//   DELIVERING: 'bg-orange-500' 
-// };
-
-/**
- * An Order Management component that fetches its own data from DynamoDB
- * and displays a simple list of all orders for the business.
- * @param {object} props
- * @param {string | null} props.phoneNbr - The phone number of the business owner.
- * @param {Function} props.setModal - A function to open a modal window.
- */
 const CustomersView = ({ phoneNbr, setModal }) => {
-    const { data: customers, loading, error } = useEntityList(
-         {filter: {pk:{ eq: `BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'CUSTOMER#'}}}, "list");
+  // --------------------------------------------------------------
+  // Build a **stable** GSI-2 query: all customers for this business
+  // --------------------------------------------------------------
+  const queryParam = useMemo(() => {
+    if (!phoneNbr) return null;
+    return {
+      gsi2pk: { eq: `CUSTOMER#${phoneNbr}` }, // <-- GSI 2 PK
+    };
+  }, [phoneNbr]);
 
-    if (loading) return <div className="p-4 text-center">Loading Customers...</div>;
-    if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
+  const { data: customers, loading, error } = useEntityList(
+    queryParam,
+    'ByCustomer'               // <-- tells the hook to use the GSI method
+  );
 
+  if (loading) return <div className="p-4 text-center">Loading customers…</div>;
+  if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
-console.log("Customers Data:", customers);
-return (
-        <div className="p-4">
-            <h1 className="text-2xl font-bold text-orange-500 mb-4">Customers</h1>
-            <div className="space-y-3">
-                {customers.map(customer => (
-                    <div key={customer.sk} 
-                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.gsi2pk })} 
-                    className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
-                        <div>
-                            <p className="font-bold text-white">{customer.name}</p>
-                            <p className="text-amber-400 text-sm ">{customer.sk.split('#')[2]}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-slate-400 text-sm">Total Orders</p>
-                            {/* <p className="font-bold text-white">{customer.totalAmount}</p> */}
-                            <p className="font-bold text-white">${customer.totalAmount ? customer.totalAmount.toFixed(2) : '0.00'}</p>
+  return (
+    <div className="p-4 space-y-3">
+      <h2 className="text-xl font-semibold text-white">Customers</h2>
 
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+      {customers.length === 0 ? (
+        <p className="text-slate-400">No customers yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {customers.map((c) => (
+            <li
+              key={c.sk}
+              className="bg-slate-800 p-3 rounded flex justify-between items-center"
+            >
+              <div>
+                <p className="font-medium text-white">{c.name ?? '—'}</p>
+                <p className="text-sm text-slate-400">{c.phone ?? c.sk}</p>
+              </div>
+              <button
+                onClick={() =>
+                  setModal({ type: 'CustomerDetail', IdCustomer: c.sk })
+                }
+                className="text-sky-400 text-sm"
+              >
+                Details
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 };
-export default CustomersView;
 
+export default CustomersView;

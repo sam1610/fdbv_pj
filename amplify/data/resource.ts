@@ -47,12 +47,12 @@ deliveryAgentId: a.string()
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
 
-      allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
+      // allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
       // Delivery Agents can only read records they own.
-      allow.ownerDefinedIn('deliveryAgentId').to(['read']),
+      // allow.ownerDefinedIn('deliveryAgentId').to(['read']),
       // Any authenticated user can create and read records.
-      allow.authenticated().to(['create', 'read']),
-      allow.publicApiKey().to(['create', 'update', 'read', 'delete'])// Restrict to 'create' for security; add more if needed (e.g., 'update')
+      // allow.authenticated().to(['create', 'read']),
+      allow.publicApiKey().to(['read', 'create', 'update', 'delete']) // Restrict to 'create' for security; add more if needed (e.g., 'update')
 
     ]),
 
@@ -79,11 +79,9 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    // ✅ UPDATED: Changed default authorization mode to API Key
-    defaultAuthorizationMode: 'userPool',
+    defaultAuthorizationMode: 'apiKey',   // ← Keep
     apiKeyAuthorizationMode: {
-      description: 'API Key for WhatsApp Flow Lambda',
-      expiresInDays: 365 
-    }
+      expiresInDays: 365,
+    },
   },
 });
