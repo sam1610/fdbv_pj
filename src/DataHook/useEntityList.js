@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { generateClient } from 'aws-amplify/data';
 
 // Initialize the Amplify client once.
-const client = generateClient({ authMode: 'apiKey' });
+const client = generateClient({ authMode: 'userPool' });
 
 export const useEntityList = (queryParam, queryName) => {
   const [data, setData] = useState([]);

@@ -3,7 +3,7 @@ import { generateClient } from 'aws-amplify/data';
 import * as Recharts from 'recharts';
 
 // --- Component Setup ---
-const client = generateClient({ authMode: 'apiKey' });
+const client = generateClient({ authMode: 'userPool' });
 
 /**
  * A dashboard component that fetches all of today's orders for a business

@@ -3,7 +3,7 @@ import { generateClient } from 'aws-amplify/data';
 import { useEntityList } from '../DataHook/useEntityList';
 
 // --- Configuration ---
-const client = generateClient({ authMode: 'apiKey' });
+const client = generateClient({ authMode: 'userPool' });
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
 const ALL_STATUSES = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'];

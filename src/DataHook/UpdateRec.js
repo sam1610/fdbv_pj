@@ -1,6 +1,6 @@
 import { generateClient } from 'aws-amplify/api';
 
-const client = generateClient({ authMode: 'apiKey' });
+const client = generateClient({ authMode: 'userPool' });
 
 /**
  * Updates multiple records in the BusinessData model via AppSync/GraphQL mutations.
