@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useEntityList } from '../DataHook/useEntityList';
 
-
 // --- Component Setup ---
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 // Updated to match the schema's enum values
@@ -36,7 +35,7 @@ return (
             <div className="space-y-3">
                 {customers.map(customer => (
                     <div key={customer.sk} 
-                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk })} 
+                    onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk , customerName: customer.name })} 
                     className="bg-slate-800 p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-700">
                         <div>
                             <p className="font-bold text-white">{customer.name}</p>

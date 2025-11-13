@@ -1,9 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { generateClient } from 'aws-amplify/data';
 import { useEntityList } from '../DataHook/useEntityList';
-
+import { client } from '../DataHook/amplifyClient';
 // --- Configuration ---
-const client = generateClient({ authMode: 'apiKey' });
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
 const ALL_STATUSES = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'];

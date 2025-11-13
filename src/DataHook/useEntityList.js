@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { generateClient } from 'aws-amplify/data';
-
-// Initialize the Amplify client once.
-const client = generateClient({ authMode: 'apiKey' });
+import { client } from './amplifyClient';
 
 /**
  * A simple, non-real-time hook to fetch a list of entities.

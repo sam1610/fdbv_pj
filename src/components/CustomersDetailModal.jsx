@@ -3,7 +3,7 @@ import { useEntityList } from '../DataHook/useEntityList';
 
 
 
-const CustomersDetailModal = ({ IdCustomer, onClose }) => {
+const CustomersDetailModal = ({ IdCustomer,customerName, onClose }) => {
 
     const { data: lineItems, loading, error } = useEntityList(
         {gsi2pk: IdCustomer, sk: {beginsWith: 'ORDER#'}}, 
@@ -24,7 +24,7 @@ const CustomersDetailModal = ({ IdCustomer, onClose }) => {
     <div className="bg-slate-800 rounded-lg w-full max-w-lg shadow-xl animate-fade-in-up">
         <div className="p-4 border-b border-slate-700 flex justify-between items-center">
             <h2 className="text-lg font-bold  text-orange-400 bg-black/10">Customer Orders</h2>
-            <span className="text-amber-400 text-sm text-jusity-left">: ({IdCustomer.split('#')[2]})</span>
+            <span className="text-amber-400 text-sm text-jusity-left">{customerName} : ({IdCustomer.split('#')[2]})</span>
             <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
         </div>
 

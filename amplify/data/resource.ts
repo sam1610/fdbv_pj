@@ -80,7 +80,7 @@ export const data = defineData({
   schema,
   authorizationModes: {
     // ✅ UPDATED: Changed default authorization mode to API Key
-    defaultAuthorizationMode: 'userPool',
+    defaultAuthorizationMode: 'apiKey',
     apiKeyAuthorizationMode: {
       description: 'API Key for WhatsApp Flow Lambda',
       expiresInDays: 365 

@@ -1,6 +1,6 @@
-import { generateClient } from 'aws-amplify/api';
 
-const client = generateClient({ authMode: 'apiKey' });
+import { client } from './amplifyClient';
+
 
 export async function updateRec(pk, sks, updates) {
   if (!pk || !Array.isArray(sks) || sks.length === 0 || typeof updates !== 'object' || Object.keys(updates).length === 0) {

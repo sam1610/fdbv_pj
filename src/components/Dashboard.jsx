@@ -50,13 +50,13 @@ export default function Dashboard({phoneNbr}) {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={4}  setModal={setModal}/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={4}  setModal={setModal} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal} />;
         }
     };
 
@@ -66,11 +66,24 @@ export default function Dashboard({phoneNbr}) {
             return <OrderDetailModal orderId={modal.Id} orderTotal={modal.totalAmount} phoneNbr={phoneNbr}  onClose={() => setModal(null)} />;
         }
         if (modal.type === 'CustomerDetail') {
-            return <CustomersDetailModal IdCustomer={modal.IdCustomer}  onClose={() => setModal(null)} />;
+            return <CustomersDetailModal IdCustomer={modal.IdCustomer} customerName={modal.customerName}  onClose={() => setModal(null)} />;
         }
         if (modal.type === 'assignDelivery') {
-            return <AssignDeliveryModal orders={modal.PreparedOrders} deliveryAgents={deliveryAgents} 
-            onAssign={handleAssignDelivery} onClose={() => setModal(null)} />;
+            return <AssignDeliveryModal 
+            orders={modal.PreparedOrders} 
+            deliveryAgents={deliveryAgents} 
+            onAssign={(agentId, orders) => {
+            // This is just for logging, as set in your file
+            console.log('Assigning:', agentId, orders);
+            
+          }}
+          
+          // ✅ FIX 6: This is what makes the '×' button work
+          onClose={() => setModal(null)}
+          
+          // ✅ FIX 7: This passes the 'refetch' function to the modal
+          onSuccess={modal.onSuccess}
+             />;
         }
         return null;
     };

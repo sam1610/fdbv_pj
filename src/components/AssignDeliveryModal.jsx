@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { updateRec } from '../DataHook/UpdateRec';
 
 
-const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
+const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose, onSuccess }) => {
     const [selectedAgent, setSelectedAgent] = useState(deliveryAgents[0]?.sk || '');
     // const preparedOrders = useMemo(() => orders.filter(o => o.orderStatus === 'prepared'), [orders]);
     const [selectedOrders, setSelectedOrders] = useState(() => orders.map(o => o.sk));
@@ -16,12 +16,16 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
       gsi1pk: selectedAgent , orderStatus: 'DELIVERING'
     };
     console.log("Selected delivery Agent:", deliveryAgents);
+
     const handleAssign = async () => {
         if (!selectedAgent || selectedOrders.length === 0) return;
         onAssign( selectedAgent, selectedOrders);
         try {
-      const updatedRecord = await updateRec(deliveryAgents[0]?.pk, selectedOrders, updates);
-      console.log('Updated record details:', updatedRecord); // Use for UI refresh if needed
+      await updateRec(deliveryAgents[0]?.pk, selectedOrders, updates);
+      if (onSuccess) {
+            onSuccess();
+          }
+        onClose();
     } catch (err) {
       console.log(err.message);
     }
