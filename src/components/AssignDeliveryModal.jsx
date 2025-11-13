@@ -7,7 +7,6 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
     const [selectedAgent, setSelectedAgent] = useState(deliveryAgents[0]?.sk || '');
     // const preparedOrders = useMemo(() => orders.filter(o => o.orderStatus === 'prepared'), [orders]);
     const [selectedOrders, setSelectedOrders] = useState(() => orders.map(o => o.sk));
-    console.log("  Orders",orders);
     const toggleOrderSelection = (orderId) => {
         setSelectedOrders(prev => 
             prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
@@ -16,6 +15,7 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
     const updates = {
       gsi1pk: selectedAgent , orderStatus: 'DELIVERING'
     };
+    console.log("Selected delivery Agent:", deliveryAgents);
     const handleAssign = async () => {
         if (!selectedAgent || selectedOrders.length === 0) return;
         onAssign( selectedAgent, selectedOrders);
@@ -39,7 +39,7 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose }) => {
                     <div>
                         <label htmlFor="agent" className="block text-sm font-medium text-slate-300 mb-1">Select Delivery Agent</label>
                         <select id="agent" value={selectedAgent} onChange={e => setSelectedAgent(e.target.value)} className="w-full bg-slate-700 text-white rounded-md p-2 border border-slate-600 focus:ring-sky-500 focus:border-sky-500">
-                            {deliveryAgents.map(agent => <option key={agent.sk} value={agent.sk}>{agent.name}:   ({agent.phone})</option>)}
+                            {deliveryAgents.map(agent => <option key={agent.sk} value={agent.sk}>{agent.name}:   ({agent.sk.split('#')[1]})</option>)}
                         </select>
                     </div>
                     <div>

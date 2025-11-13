@@ -11,11 +11,6 @@ import { useEntityList } from '../DataHook/useEntityList';
  */
 const DashboardView = ({ phoneNbr, filterDays = 1 , setModal}) => {
     // --- Data Fetching Logic ---
-    const queryName = 'list';
-
-    // ✅ FIX: The queryParam object is now memoized with useMemo.
-    // This object will only be re-created if phoneNbr or filterDays changes,
-    // which breaks the infinite loop in the useEntityList hook.
     const queryParam = useMemo(() => {
         if (!phoneNbr) return null; // Don't create params if phoneNbr isn't ready
 
@@ -28,10 +23,10 @@ const DashboardView = ({ phoneNbr, filterDays = 1 , setModal}) => {
             filter : {pk: { eq: `BUSINESS#${phoneNbr}` }, 
             sk: { between: [`ORDER#${startDate.toISOString()}`, `ORDER#${now.toISOString()}`] }}
         };
+        // later try to use a query that limits the scrope of the current day only 
     }, [phoneNbr, filterDays]);
 
-    // Call the generic hook with the stable query method and parameters.
-    const { data: orders, loading, error } = useEntityList(queryParam, queryName);
+    const { data: orders, loading, error } = useEntityList(queryParam, "list");
 
 
     // --- Client-Side Calculations for the Dashboard (unchanged) ---
