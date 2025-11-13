@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { useEntityList } from '../DataHook/useEntityList';
-import { client } from '../DataHook/amplifyClient';
+import React, { useState, useMemo, useEffect } from 'react';
+import { client } from '../DataHook/amplifyClient'; // Use shared client
+
 // --- Configuration ---
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -13,7 +13,7 @@ const statusColors = {
     DELIVERING: 'bg-orange-500'
 };
 
-// --- Sub-components ---
+// --- Sub-components (Expanded) ---
 
 // A dedicated component for filter buttons
 const OrderFilters = ({ currentFilter, setFilter }) => (
@@ -49,7 +49,7 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
                 e.stopPropagation(); // Prevent modal from opening
                 onEdit(order.sk);
             }}
-            className={classNames(statusColors[order.orderStatus], 'text-xs font-semibold px-2 py-0.5 rounded-full text-white cursor-pointer')}
+            className={classNames(statusColors[order.orderStatus] || 'bg-gray-400', 'text-xs font-semibold px-2 py-0.5 rounded-full text-white cursor-pointer')}
         >
             {order.orderStatus ? order.orderStatus.replace('_', ' ').toLowerCase() : 'unknown'}
         </span>
@@ -59,22 +59,59 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 
 // Main OrdersView Component
 const OrdersView = ({ phoneNbr, setModal }) => {
-    const { data: orders, loading, error, refetch } = useEntityList(
-        { filter: { pk: { eq: `BUSINESS#${phoneNbr}` }, sk: { beginsWith: 'ORDER#' } } }, "list"
-    );
+    
+    // --- 1. State for Real-Time Data ---
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
+    // --- 2. Simple queryParam for the subscription ---
+    const queryParam = useMemo(() => {
+        if (!phoneNbr) return null;
+        return {
+            filter: { 
+                pk: { eq: `BUSINESS#${phoneNbr}` }, 
+                sk: { beginsWith: 'ORDER#' } 
+            }
+        };
+    }, [phoneNbr]);
+
+    // --- 3. observeQuery subscription logic ---
+    useEffect(() => {
+        if (!queryParam) return;
+
+        setLoading(true);
+        const observer = client.models.BusinessData.observeQuery(queryParam);
+
+        const subscription = observer.subscribe({
+            next: (snapshot) => {
+                setOrders([...snapshot.items]); // Use spread to force re-render
+                setError(null);
+                setLoading(false);
+            },
+            error: (err) => {
+                setError(err.message || 'Subscription error');
+                setLoading(false);
+                console.error('OrdersView observeQuery error:', err);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, [queryParam]);
+
+    // --- State for filters and editing ---
     const [filter, setFilter] = useState('active');
-    const [editingId, setEditingId] = useState(null); // Tracks which order is in edit mode
-    const [updatingId, setUpdatingId] = useState(null); // Tracks which order is currently saving
+    const [editingId, setEditingId] = useState(null);
+    const [updatingId, setUpdatingId] = useState(null);
 
+    // --- handleStatusChange ---
     const handleStatusChange = async (order, newStatus) => {
         if (order.orderStatus === newStatus) {
             setEditingId(null);
             return;
         }
-
-        setUpdatingId(order.sk); // Set loading state for this specific order
-        setEditingId(null);      // Close the dropdown
+        setUpdatingId(order.sk);
+        setEditingId(null);
 
         try {
             await client.models.BusinessData.update({
@@ -82,26 +119,40 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                 sk: order.sk,
                 orderStatus: newStatus
             });
-            // Let the rel-time subscription handle the UI update.
-            // If subscriptions are not working, i can manually call `refetch()` here.
-            // await refetch(); 
+            // No refetch() needed!
         } catch (err) {
             console.error("Failed to update order status:", err);
             alert(`Failed to update status for Order ${order.sk.replace('ORDER#', '')}. Please try again.`);
         } finally {
-            setUpdatingId(null); // Clear loading state for this order
+            setUpdatingId(null);
         }
     };
     
-const filteredOrders = useMemo(() => {
-    if (!orders) return [];
-    if (filter === 'active') return orders.filter(o => o.orderStatus === 'ORDERED' || o.orderStatus === 'IN_PREPARATION');
-    if (filter === 'Prepared') return orders.filter(o => o.orderStatus === 'PREPARED');
-    if (filter === 'all') return orders;
-    return [];
-}, [orders, filter]);
+    // --- 4. Filter for Today's Orders ---
+    const todayOrders = useMemo(() => {
+        if (!orders || orders.length === 0) return [];
 
+        const now = new Date();
+        const startDate = new Date();
+        startDate.setHours(0, 0, 0, 0); // Start of today
 
+        return orders.filter(o => {
+            if (!o.orderDate) return false;
+            const orderDate = new Date(o.orderDate);
+            return orderDate >= startDate && orderDate <= now;
+        });
+    }, [orders]);
+
+    // --- 5. Modified: filteredOrders now uses 'todayOrders' ---
+    const filteredOrders = useMemo(() => {
+        if (!todayOrders) return [];
+        if (filter === 'active') return todayOrders.filter(o => o.orderStatus === 'ORDERED' || o.orderStatus === 'IN_PREPARATION');
+        if (filter === 'Prepared') return todayOrders.filter(o => o.orderStatus === 'PREPARED');
+        if (filter === 'all') return todayOrders;
+        return [];
+    }, [todayOrders, filter]); // Now depends on 'todayOrders'
+
+    // --- Render Logic ---
     if (loading) return <div className="p-4 text-center text-slate-400">Loading Orders...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 

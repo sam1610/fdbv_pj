@@ -1,14 +1,10 @@
 import React, {useEffect, useState} from 'react';
-import BusinessByStatus from './components/BusinessByStatus';
-import B from './components/B';
-import CustomerOrders from './components/CustomerOrders';
 import { FetchUserAttributesOutput, fetchUserAttributes } from 'aws-amplify/auth';
-import { generateClient } from 'aws-amplify/data';
+import { client } from './DataHook/amplifyClient'; // Use shared client
 import type { Schema } from '../amplify/data/resource'; // Adjust path if needed
 import './App.css';
 import Dashboard from './components/Dashboard';
 
-const client = generateClient({ authMode: 'apiKey' });
 
 // Custom hook to fetch user attributes like email and phone number
 function useUserAttributes() {

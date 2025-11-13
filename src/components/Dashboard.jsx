@@ -5,12 +5,8 @@ import  OrdersView  from "./OrdersView";
 import  CustomersView  from "./CustomersView";
 import OrderDetailModal from './OrderDetailModal';
 import AssignDeliveryModal from './AssignDeliveryModal';    
-// import { useEntityList } from '../DataHook/useEntityList';
 import CustomersDetailModal from './CustomersDetailModal';
 import { useEntityList } from '../DataHook/useEntityList';
-// --- Mock Data ---
-// This data simulates the items you would fetch from your DynamoDB table.
-// It's structured to match your single-table design with different item types.
 
 
 // --- Helper Functions & Static Components ---
@@ -26,27 +22,13 @@ const UsersIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" wid
 export default function Dashboard({phoneNbr}) {
     const [activeView, setActiveView] = useState('dashboard');
     const [modal, setModal] = useState(null);
-    // const [appData, setAppData] = useState(mockData);
 
-    // Filter data for a specific business, simulating a logged-in user.
-    // const businessPhone = "+15551112222";
-    // const businessData = useMemo(() => appData.items.filter(item => item.BusinessPhone === businessPhone), [appData, businessPhone]);
-    
-    // console.log("Business Data:", useEntityList(`BUSINESS#${phoneNbr}`,  "ORDER#"));
-
-    
-    // const orders = useMemo(() => businessData.filter(item => item.SortKey.startsWith('ORDER#') && !item.SortKey.includes('#ITEM#')), [businessData]);
-    // const customers = useMemo(() => businessData.filter(item => item.SortKey.startsWith('CUSTOMER#')), [businessData]);
-    // list of delivery agents
     const { data: deliveryAgents, loading, error } = useEntityList(
              {filter: {pk:{ eq: `BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'AGENT#'}}}, "list");
 
 
   console.log("Delivery Agents:", deliveryAgents);
-    const handleAssignDelivery = (agentId, selectedOrders) => {
-        console.log(`Assigning ${selectedOrders.length} orders to ${agentId}`);
-        setModal(null);
-    };    
+   
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
@@ -114,13 +96,3 @@ export default function Dashboard({phoneNbr}) {
         
     );
 }
-
-// --- View Components ---
-
-
-
-
-// --- Modal Components ---
-
-
-
