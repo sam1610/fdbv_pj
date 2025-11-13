@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { client } from '../DataHook/amplifyClient';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import React, { useState, useMemo, useEffect } from 'react';
+import { client } from '../DataHook/amplifyClient'; // Use shared client
 
 // --- Configuration ---
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
@@ -131,7 +130,7 @@ const OrdersView = ({ phoneNbr, setModal }) => {
     
     // --- 4. Filter for Today's Orders ---
     const todayOrders = useMemo(() => {
-        if (!orders || orders.length === 0) return []; // Always return an array
+        if (!orders || orders.length === 0) return [];
 
         const now = new Date();
         const startDate = new Date();
@@ -146,26 +145,12 @@ const OrdersView = ({ phoneNbr, setModal }) => {
 
     // --- 5. Modified: filteredOrders now uses 'todayOrders' ---
     const filteredOrders = useMemo(() => {
-        if (!todayOrders) return []; // Always return an array
-        
+        if (!todayOrders) return [];
         if (filter === 'active') return todayOrders.filter(o => o.orderStatus === 'ORDERED' || o.orderStatus === 'IN_PREPARATION');
         if (filter === 'Prepared') return todayOrders.filter(o => o.orderStatus === 'PREPARED');
         if (filter === 'all') return todayOrders;
-        
-        return []; // Fallback to an empty array
-    }, [todayOrders, filter]);
-
-    // --- 6. Setup for Virtualization ---
-    const parentRef = useRef();
-
-    const rowVirtualizer = useVirtualizer({
-        count: filteredOrders.length,
-        getScrollElement: () => parentRef.current,
-        estimateSize: () => 92, // The pixel height of one order item
-        overscan: 5,
-    });
-
-    const virtualItems = rowVirtualizer.getVirtualItems();
+        return [];
+    }, [todayOrders, filter]); // Now depends on 'todayOrders'
 
     // --- Render Logic ---
     if (loading) return <div className="p-4 text-center text-slate-400">Loading Orders...</div>;
@@ -176,63 +161,33 @@ const OrdersView = ({ phoneNbr, setModal }) => {
             <h1 className="text-2xl font-bold text-white mb-4">Orders Dashboard</h1>
             <OrderFilters currentFilter={filter} setFilter={setFilter} />
 
-            {/* Scrolling container with a fixed height */}
-            <div 
-                ref={parentRef} 
-                className="overflow-y-auto h-[600px] pr-2" // Adjust h-[600px] as needed
-            >
+            <div className="space-y-3">
                 {filteredOrders.length > 0 ? (
-                    // Sizer div for the scrollbar
-                    <div 
-                        style={{ 
-                            height: `${rowVirtualizer.getTotalSize()}px`, 
-                            position: 'relative', 
-                            width: '100%' 
-                        }}
-                    >
-                        {/* Map over virtual items */}
-                        {virtualItems.map(virtualItem => {
-                            const order = filteredOrders[virtualItem.index];
-
-                            return (
-                                <div 
-                                    key={order.sk} 
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: '100%',
-                                        height: `${virtualItem.size}px`,
-                                        transform: `translateY(${virtualItem.start}px)`,
-                                    }}
-                                >
-                                    {/* Your Original Order Component */}
-                                    <div 
-                                        onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} 
-                                        className={classNames(
-                                            "bg-slate-800 p-3 rounded-lg flex justify-between items-center transition h-full",
-                                            updatingId === order.sk ? 'opacity-50' : 'hover:bg-slate-700',
-                                            !editingId && 'cursor-pointer'
-                                        )}
-                                    >
-                                        <div>
-                                            <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
-                                            <p className="text-sm text-slate-400">Customer: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.00'}</p>
-                                            <OrderStatusEditor 
-                                                order={order}
-                                                isEditing={editingId === order.sk}
-                                                onEdit={setEditingId}
-                                                onStatusChange={handleStatusChange}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    filteredOrders.map(order => (
+                        <div 
+                            key={order.sk} 
+                            onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} 
+                            className={classNames(
+                                "bg-slate-800 p-3 rounded-lg flex justify-between items-center transition",
+                                updatingId === order.sk ? 'opacity-50' : 'hover:bg-slate-700',
+                                !editingId && 'cursor-pointer'
+                            )}
+                        >
+                            <div>
+                                <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
+                                <p className="text-sm text-slate-400">Customer: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.00'}</p>
+                                <OrderStatusEditor 
+                                    order={order}
+                                    isEditing={editingId === order.sk}
+                                    onEdit={setEditingId}
+                                    onStatusChange={handleStatusChange}
+                                />
+                            </div>
+                        </div>
+                    ))
                 ) : (
                     <p className="text-slate-400 text-center mt-8">No {filter} orders found.</p>
                 )}
