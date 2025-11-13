@@ -129,7 +129,7 @@ const filteredOrders = useMemo(() => {
                                 <p className="text-sm text-slate-400">Customer: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
                             </div>
                             <div className="text-right">
-                                <p className="font-bold text-white">${order.totalAmount?.toFixed(2) || '0.00'}</p>
+                                <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.00'}</p>
                                 <OrderStatusEditor 
                                     order={order}
                                     isEditing={editingId === order.sk}

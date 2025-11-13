@@ -9,50 +9,62 @@ const CustomersDetailModal = ({ IdCustomer, onClose }) => {
         {gsi2pk: IdCustomer, sk: {beginsWith: 'ORDER#'}}, 
         "ByCustomer");
     console.log("Customer Orders Props:", { lineItems });
+    const orderTotal = useMemo(() => {
+    // Return 0 if lineItems is empty or not yet loaded
+    if (!lineItems) return 0;
+
+    // Sum all totalAmount fields, ensuring they are treated as numbers
+    return lineItems.reduce((acc, item) => {
+        // (Number(item.totalAmount) || 0) safely handles null/undefined values
+        return acc + (Number(item.totalAmount) || 0);
+    }, 0);
+}, [lineItems]);
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 rounded-lg w-full max-w-lg shadow-xl animate-fade-in-up">
-                <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-                    <h2 className="text-lg font-bold  text-orange-400 bg-black/10">Customer Orders</h2>
-                     <span className="text-amber-400 text-sm text-jusity-left">: ({IdCustomer.split('#')[2]})</span>
-                    <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+    <div className="bg-slate-800 rounded-lg w-full max-w-lg shadow-xl animate-fade-in-up">
+        <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+            <h2 className="text-lg font-bold  text-orange-400 bg-black/10">Customer Orders</h2>
+            <span className="text-amber-400 text-sm text-jusity-left">: ({IdCustomer.split('#')[2]})</span>
+            <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+        </div>
+
+        <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
+            <div>
+                {/* ✅ FIX 1: Switched from 'flex' to 'grid' for proper column alignment */}
+                <div className="grid grid-cols-4 font-semibold text-sm mb-2">
+                    {/* ✅ FIX 2: Added 'text-center' to all headers */}
+                    <h3 className="text-sky-400 text-center">Order Date</h3>
+                    <h3 className="text-amber-400 text-center">#Items</h3>
+                    <h3 className="text-amber-400 text-center">Status</h3>
+                    <h3 className="text-amber-400 text-center">T.Amount(BD)</h3>
                 </div>
 
-                <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
-                    <div>
-                        {/* ✅ FIX: Added distinct text colors to the headers */}
-                        <div className="flex justify-between font-semibold text-sm mb-2">
-                            <h3 className="text-sky-400">OrderID</h3>
-                            <h3 className="text-amber-400">#Items</h3>
-                            <h3 className="text-amber-400 ">Status</h3>
-                            <h3 className="text-amber-400">T.Amount</h3>
-                        </div>
+                <ul className="space-y-1 mt-1 text-slate-300">
+                    {lineItems.map(item => (
+                        // ✅ FIX 3: Switched list items to 'grid' as well
+                        <li key={item.sk} className="grid grid-cols-4 text-sm">
+                            
+                            {/* ✅ FIX 4: Correctly parsed date and centered text */}
+                            {/* This assumes sk is like "ORDER#2025-11-08T..." */}
+                            <span className="text-center">{item.sk.split('#')[1]?.split('T')[0] || item.sk}</span>
+                        
+                            {/* ✅ FIX 5: Centered all data cells */}
+                            <span className="text-center">{item.itemsNbr}</span>
+                            <span className="text-left">{item.orderStatus}</span>
+                            <span className="text-right"> {item.totalAmount}</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
 
-                        <ul className="space-y-1 mt-1 text-slate-300">
-                            {lineItems.map(item => (
-                                <li key={item.sk} className="flex justify-between text-sm">
-                                    {/* Added a check to prevent errors if unitPrice is null */}
-                                    
-                                    <span>{item.sk.split("T")[0]+".."} </span>
-                                
-                                    <span >{item.itemsNbr} </span>
-                                    <span>{item.orderStatus} </span>
-                                    <span>${item.totalAmount}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    {/* ✅ FIX: Added opacity-75 class to the Total Amount container */}
-                    <div className="border-t border-slate-400 pt-2 flex justify-between font-bold text-white  opacity-80">
-                        <span>Total Amount</span>
-                        {/* Added a check to prevent errors if orderTotal is null */}
-                        {/* <span>${orderTotal ? orderTotal.toFixed(2) : '0.00'}</span> */}
-                    </div>
-                </div>
-
+            <div className="border-t border-slate-400 pt-2 flex justify-between font-bold text-white  opacity-80">
+                <span>Total Amount</span>
+                <span>BD {orderTotal.toFixed(3)}</span>
             </div>
         </div>
+
+    </div>
+</div>
     );
 };
 export default CustomersDetailModal;

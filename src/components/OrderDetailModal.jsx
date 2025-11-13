@@ -22,7 +22,7 @@ const OrderDetailModal = ({ orderId, orderTotal, phoneNbr, onClose }) => {
                         {/* ✅ FIX: Added distinct text colors to the headers */}
                         <div className="flex justify-between font-semibold text-sm mb-2">
                             <h3 className="text-sky-400">Items</h3>
-                            <h3 className="text-amber-400">Unit Price</h3>
+                            <h3 className="text-amber-400">Unit Price (BD)</h3>
                         </div>
 
                         <ul className="space-y-1 mt-1 text-slate-300">
@@ -30,7 +30,7 @@ const OrderDetailModal = ({ orderId, orderTotal, phoneNbr, onClose }) => {
                                 <li key={item.sk} className="flex justify-between text-sm">
                                     <span>{item.quantity} x {item.name}</span>
                                     {/* Added a check to prevent errors if unitPrice is null */}
-                                    <span>${item.unitPrice ? item.unitPrice.toFixed(2) : '0.00'}</span>
+                                    <span> {item.unitPrice ? item.unitPrice.toFixed(2) : '0.00'}</span>
                                 </li>
                             ))}
                         </ul>
@@ -40,7 +40,7 @@ const OrderDetailModal = ({ orderId, orderTotal, phoneNbr, onClose }) => {
                     <div className="border-t border-slate-400 pt-2 flex justify-between font-bold text-white  opacity-80">
                         <span>Total Amount</span>
                         {/* Added a check to prevent errors if orderTotal is null */}
-                        <span>${orderTotal ? orderTotal.toFixed(2) : '0.00'}</span>
+                        <span>BD {orderTotal ? orderTotal.toFixed(3) : '0.000'}</span>
                     </div>
                 </div>
 
