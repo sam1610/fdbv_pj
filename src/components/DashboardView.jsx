@@ -52,7 +52,8 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         const now = new Date();
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - (filterDays - 1));
-        startDate.setHours(0, 0, 0, 0);
+        startDate.setHours(startDate.getHours() - 24);
+        // startDate.setHours(0, 0, 0, 0);
 
         return orders.filter(o => {
             if (!o.orderDate) return false;
@@ -105,8 +106,12 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
             </header>
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-800 p-4 rounded-lg shadow-md text-center"><p className="text-slate-400 text-sm">Total Orders</p><p className="text-3xl font-bold text-white">{kpis.totalOrders}</p></div>
-                <div className="bg-slate-800 p-4 rounded-lg shadow-md text-center"><p className="text-slate-400 text-sm">Revenue Today</p><p className="text-3xl font-bold text-white">${kpis.revenue.toFixed(2)}</p></div>
-                <div className="bg-yellow-800/50 p-4 rounded-lg shadow-md text-center"><p className="text-yellow-300 text-sm">In Progress</p><p className="text-3xl font-bold text-white">{kpis.inProgress}</p></div>
+<div className="bg-slate-800 p-4 rounded-lg shadow-md text-center">
+  <p className="text-slate-400 text-sm">Today's Revenue</p>
+  <p className="text-3xl font-bold text-white">
+    <span className="text-slate-400 text-sm">BD</span> {kpis.revenue.toFixed(3)}
+  </p>
+</div>                <div className="bg-yellow-800/50 p-4 rounded-lg shadow-md text-center"><p className="text-yellow-300 text-sm">In Progress</p><p className="text-3xl font-bold text-white">{kpis.inProgress}</p></div>
                 <button onClick={() => setModal({ 
                     type: 'assignDelivery' , 
                     PreparedOrders: readyForDeliveryOrders,

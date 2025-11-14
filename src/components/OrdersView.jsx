@@ -14,9 +14,7 @@ const statusColors = {
     DELIVERING: 'bg-orange-500'
 };
 
-// --- Sub-components (Expanded) ---
-
-// A dedicated component for filter buttons
+// --- Sub-components ---
 const OrderFilters = ({ currentFilter, setFilter }) => (
     <div className="flex space-x-2 mb-4">
         <button onClick={() => setFilter('active')} className={classNames(currentFilter === 'active' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Active</button>
@@ -25,17 +23,16 @@ const OrderFilters = ({ currentFilter, setFilter }) => (
     </div>
 );
 
-// A component to render the status dropdown or badge
 const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
     if (isEditing) {
         return (
             <select
                 value={order.orderStatus}
                 onChange={(e) => onStatusChange(order, e.target.value)}
-                onBlur={() => onEdit(null)} // Close dropdown if user clicks away
-                onClick={(e) => e.stopPropagation()} // Prevent modal from opening
+                onBlur={() => onEdit(null)}
+                onClick={(e) => e.stopPropagation()}
                 className="bg-slate-600 text-white text-xs rounded p-1"
-                autoFocus // Automatically focus the dropdown
+                autoFocus
             >
                 {ALL_STATUSES.map(status => (
                     <option key={status} value={status}>{status.replace('_', ' ').toLowerCase()}</option>
@@ -47,7 +44,7 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
     return (
         <span
             onClick={(e) => {
-                e.stopPropagation(); // Prevent modal from opening
+                e.stopPropagation();
                 onEdit(order.sk);
             }}
             className={classNames(statusColors[order.orderStatus] || 'bg-gray-400', 'text-xs font-semibold px-2 py-0.5 rounded-full text-white cursor-pointer')}
@@ -61,7 +58,7 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 // Main OrdersView Component
 const OrdersView = ({ phoneNbr, setModal }) => {
     
-    // --- 1. State for Real-Time Data ---
+    // --- 1. State for Real-Time Data (Fetches ALL orders) ---
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -86,7 +83,7 @@ const OrdersView = ({ phoneNbr, setModal }) => {
 
         const subscription = observer.subscribe({
             next: (snapshot) => {
-                setOrders([...snapshot.items]); // Use spread to force re-render
+                setOrders([...snapshot.items]);
                 setError(null);
                 setLoading(false);
             },
@@ -120,7 +117,6 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                 sk: order.sk,
                 orderStatus: newStatus
             });
-            // No refetch() needed!
         } catch (err) {
             console.error("Failed to update order status:", err);
             alert(`Failed to update status for Order ${order.sk.replace('ORDER#', '')}. Please try again.`);
@@ -129,39 +125,35 @@ const OrdersView = ({ phoneNbr, setModal }) => {
         }
     };
     
-    // --- 4. Filter for Today's Orders ---
-    const todayOrders = useMemo(() => {
-        if (!orders || orders.length === 0) return []; // Always return an array
+    // --- 4. ✅ Sort ALL Orders ---
+    // Renamed from 'todayOrders'. This now sorts all orders by SK descending.
+    const sortedOrders = useMemo(() => {
+        if (!orders || orders.length === 0) return [];
+        
+        // Sort all orders by SK (newest first)
+        return [...orders].sort((a, b) => b.sk.localeCompare(a.sk));
 
-        const now = new Date();
-        const startDate = new Date();
-        startDate.setHours(0, 0, 0, 0); // Start of today
-
-        return orders.filter(o => {
-            if (!o.orderDate) return false;
-            const orderDate = new Date(o.orderDate);
-            return orderDate >= startDate && orderDate <= now;
-        });
     }, [orders]);
 
-    // --- 5. Modified: filteredOrders now uses 'todayOrders' ---
+    // --- 5. ✅ Filters now use 'sortedOrders' ---
+    // This hook filters the *entire* list based on your buttons.
     const filteredOrders = useMemo(() => {
-        if (!todayOrders) return []; // Always return an array
+        if (!sortedOrders) return [];
         
-        if (filter === 'active') return todayOrders.filter(o => o.orderStatus === 'ORDERED' || o.orderStatus === 'IN_PREPARATION');
-        if (filter === 'Prepared') return todayOrders.filter(o => o.orderStatus === 'PREPARED');
-        if (filter === 'all') return todayOrders;
+        if (filter === 'active') return sortedOrders.filter(o => o.orderStatus === 'ORDERED' || o.orderStatus === 'IN_PREPARATION');
+        if (filter === 'Prepared') return sortedOrders.filter(o => o.orderStatus === 'PREPARED');
+        if (filter === 'all') return sortedOrders; // This is now ALL orders
         
-        return []; // Fallback to an empty array
-    }, [todayOrders, filter]);
+        return [];
+    }, [sortedOrders, filter]);
 
     // --- 6. Setup for Virtualization ---
     const parentRef = useRef();
 
     const rowVirtualizer = useVirtualizer({
-        count: filteredOrders.length,
+        count: filteredOrders.length, // Virtualizer will use the filtered list
         getScrollElement: () => parentRef.current,
-        estimateSize: () => 92, // The pixel height of one order item
+        estimateSize: () => 92,
         overscan: 5,
     });
 
@@ -173,16 +165,14 @@ const OrdersView = ({ phoneNbr, setModal }) => {
 
     return (
         <div className="p-4">
-            <h1 className="text-2xl font-bold text-white mb-4">Orders Dashboard</h1>
+            <h1 className="text-2xl font-bold text-yellow-500 mb-4">Orders Dashboard</h1>
             <OrderFilters currentFilter={filter} setFilter={setFilter} />
 
-            {/* Scrolling container with a fixed height */}
             <div 
                 ref={parentRef} 
-                className="overflow-y-auto h-[600px] pr-2" // Adjust h-[600px] as needed
+                className="overflow-y-auto h-[600px] pr-2" // Fixed height scrolling window
             >
                 {filteredOrders.length > 0 ? (
-                    // Sizer div for the scrollbar
                     <div 
                         style={{ 
                             height: `${rowVirtualizer.getTotalSize()}px`, 
@@ -190,7 +180,6 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                             width: '100%' 
                         }}
                     >
-                        {/* Map over virtual items */}
                         {virtualItems.map(virtualItem => {
                             const order = filteredOrders[virtualItem.index];
 
@@ -220,7 +209,7 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                                             <p className="text-sm text-slate-400">Customer: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.00'}</p>
+                                            <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.S.00'}</p>
                                             <OrderStatusEditor 
                                                 order={order}
                                                 isEditing={editingId === order.sk}
