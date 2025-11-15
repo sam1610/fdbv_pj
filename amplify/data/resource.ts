@@ -47,10 +47,8 @@ deliveryAgentId: a.string()
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
 
-allow.groups(['Admins']).to(['create', 'read', 'update']),
-  allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update']),
-  allow.authenticated().to(['create', 'read']),
-  allow.publicApiKey().to(['create', 'update', 'read'])
+    allow.groups(['Admins']).to(['create', 'read', 'update']),
+    allow.publicApiKey().to(['create', 'update', 'read'])
     ]),
 
     // --- Custom Mutations remain the same ---
