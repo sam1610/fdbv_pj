@@ -49,7 +49,6 @@ deliveryAgentId: a.string()
 
 allow.groups(['Admins']).to(['create', 'read', 'update']),
   allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update']),
-  allow.ownerDefinedIn('deliveryAgentId').to(['read']),
   allow.authenticated().to(['create', 'read']),
   allow.publicApiKey().to(['create', 'update', 'read'])
     ]),
