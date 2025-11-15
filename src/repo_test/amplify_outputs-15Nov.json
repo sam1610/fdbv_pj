@@ -1,0 +1,366 @@
+{
+  "auth": {
+    "user_pool_id": "us-east-1_d06UWqFfg",
+    "aws_region": "us-east-1",
+    "user_pool_client_id": "3hmv6v9h42s2or2ahc9sbo9en3",
+    "identity_pool_id": "us-east-1:d681feb7-fb73-457e-964b-0da128931737",
+    "mfa_methods": [],
+    "standard_required_attributes": [
+      "email",
+      "phone_number"
+    ],
+    "username_attributes": [
+      "email"
+    ],
+    "user_verification_types": [
+      "email"
+    ],
+    "groups": [
+      {
+        "Admins": {
+          "precedence": 0
+        }
+      },
+      {
+        "DeliveryAgents": {
+          "precedence": 1
+        }
+      }
+    ],
+    "mfa_configuration": "NONE",
+    "password_policy": {
+      "min_length": 8,
+      "require_lowercase": true,
+      "require_numbers": true,
+      "require_symbols": true,
+      "require_uppercase": true
+    },
+    "unauthenticated_identities_enabled": true
+  },
+  "data": {
+    "url": "https://ukgmeoxyrvg5bbfwawi3yl67ay.appsync-api.us-east-1.amazonaws.com/graphql",
+    "aws_region": "us-east-1",
+    "api_key": "da2-4dz4ffqygbarfebs7qxp7n6wiq",
+    "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+    "authorization_types": [
+      "API_KEY",
+      "AWS_IAM"
+    ],
+    "model_introspection": {
+      "version": 1,
+      "models": {
+        "BusinessData": {
+          "name": "BusinessData",
+          "fields": {
+            "pk": {
+              "name": "pk",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "sk": {
+              "name": "sk",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "entityType": {
+              "name": "entityType",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "gsi1pk": {
+              "name": "gsi1pk",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "gsi2pk": {
+              "name": "gsi2pk",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "phone": {
+              "name": "phone",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "orderDate": {
+              "name": "orderDate",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "totalAmount": {
+              "name": "totalAmount",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": false,
+              "attributes": []
+            },
+            "orderStatus": {
+              "name": "orderStatus",
+              "isArray": false,
+              "type": {
+                "enum": "OrderStatus"
+              },
+              "isRequired": false,
+              "attributes": []
+            },
+            "deliveryDate": {
+              "name": "deliveryDate",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": []
+            },
+            "location": {
+              "name": "location",
+              "isArray": false,
+              "type": "AWSJSON",
+              "isRequired": false,
+              "attributes": []
+            },
+            "itemsNbr": {
+              "name": "itemsNbr",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "quantity": {
+              "name": "quantity",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": false,
+              "attributes": []
+            },
+            "unitPrice": {
+              "name": "unitPrice",
+              "isArray": false,
+              "type": "Float",
+              "isRequired": false,
+              "attributes": []
+            },
+            "imageUrl": {
+              "name": "imageUrl",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "description": {
+              "name": "description",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "stockStatus": {
+              "name": "stockStatus",
+              "isArray": false,
+              "type": {
+                "enum": "StockStatus"
+              },
+              "isRequired": false,
+              "attributes": []
+            },
+            "businessOwnerId": {
+              "name": "businessOwnerId",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "deliveryAgentId": {
+              "name": "deliveryAgentId",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "createdAt": {
+              "name": "createdAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            },
+            "updatedAt": {
+              "name": "updatedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            }
+          },
+          "syncable": true,
+          "pluralName": "BusinessData",
+          "attributes": [
+            {
+              "type": "model",
+              "properties": {}
+            },
+            {
+              "type": "key",
+              "properties": {
+                "fields": [
+                  "pk",
+                  "sk"
+                ]
+              }
+            },
+            {
+              "type": "key",
+              "properties": {
+                "name": "ByAgentByStatus",
+                "queryField": "listBusinessDataByGsi1pkAndSk",
+                "fields": [
+                  "gsi1pk",
+                  "sk"
+                ]
+              }
+            },
+            {
+              "type": "key",
+              "properties": {
+                "name": "ByCustomer",
+                "queryField": "listBusinessDataByGsi2pkAndSk",
+                "fields": [
+                  "gsi2pk",
+                  "sk"
+                ]
+              }
+            },
+            {
+              "type": "auth",
+              "properties": {
+                "rules": [
+                  {
+                    "groupClaim": "cognito:groups",
+                    "provider": "userPools",
+                    "allow": "groups",
+                    "operations": [
+                      "create",
+                      "read",
+                      "update"
+                    ],
+                    "groups": [
+                      "Admins"
+                    ]
+                  },
+                  {
+                    "allow": "public",
+                    "provider": "apiKey",
+                    "operations": [
+                      "create",
+                      "update",
+                      "read"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "primaryKeyInfo": {
+            "isCustomPrimaryKey": true,
+            "primaryKeyFieldName": "pk",
+            "sortKeyFieldNames": [
+              "sk"
+            ]
+          }
+        }
+      },
+      "enums": {
+        "OrderStatus": {
+          "name": "OrderStatus",
+          "values": [
+            "ORDERED",
+            "IN_PREPARATION",
+            "PREPARED",
+            "DELIVERING",
+            "DELIVERED"
+          ]
+        },
+        "StockStatus": {
+          "name": "StockStatus",
+          "values": [
+            "IN_STOCK",
+            "OUT_OF_STOCK"
+          ]
+        }
+      },
+      "nonModels": {},
+      "mutations": {
+        "createDeliveryAgent": {
+          "name": "createDeliveryAgent",
+          "isArray": false,
+          "type": "String",
+          "isRequired": false,
+          "arguments": {
+            "username": {
+              "name": "username",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            },
+            "email": {
+              "name": "email",
+              "isArray": false,
+              "type": "AWSEmail",
+              "isRequired": true
+            },
+            "phoneNumber": {
+              "name": "phoneNumber",
+              "isArray": false,
+              "type": "AWSPhone",
+              "isRequired": true
+            }
+          }
+        },
+        "deliverOrder": {
+          "name": "deliverOrder",
+          "isArray": false,
+          "type": {
+            "model": "BusinessData"
+          },
+          "isRequired": false,
+          "arguments": {
+            "orderPk": {
+              "name": "orderPk",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            },
+            "orderSk": {
+              "name": "orderSk",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "version": "1.4"
+}
