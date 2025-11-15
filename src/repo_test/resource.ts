@@ -47,11 +47,13 @@ deliveryAgentId: a.string()
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
 
-allow.groups(['Admins']).to(['create', 'read', 'update']),
-  allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update']),
-  allow.ownerDefinedIn('deliveryAgentId').to(['read']),
-  allow.authenticated().to(['create', 'read']),
-  allow.publicApiKey().to(['create', 'update', 'read'])
+      allow.ownerDefinedIn('businessOwnerId').to(['create', 'read', 'update', 'delete']),
+      // Delivery Agents can only read records they own.
+      allow.ownerDefinedIn('deliveryAgentId').to(['read']),
+      // Any authenticated user can create and read records.
+      allow.authenticated().to(['create', 'read']),
+      allow.publicApiKey().to(['create', 'update', 'read'])// Restrict to 'create' for security; add more if needed (e.g., 'update')
+
     ]),
 
     // --- Custom Mutations remain the same ---
