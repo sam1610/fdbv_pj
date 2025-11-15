@@ -14,8 +14,8 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         if (!phoneNbr) return null;
         return {
             filter: {
-                pk: { eq: `BUSINESS#${phoneNbr}` },
-                sk: { beginsWith: 'ORDER#' }
+                pk: { eq: `BUSINESS#${phoneNbr}` }
+                // sk: { beginsWith: 'ORDER#' }
             }
         };
     }, [phoneNbr]);
