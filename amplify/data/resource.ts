@@ -46,7 +46,6 @@ deliveryAgentId: a.string()
     ])
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
-
     allow.groups(['Admins']).to(['create', 'read', 'update']),
     allow.publicApiKey().to(['create', 'update', 'read'])
     ]),
