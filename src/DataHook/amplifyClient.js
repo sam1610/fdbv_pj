@@ -1,5 +1,7 @@
 import { generateClient } from 'aws-amplify/data';
+import outputs from '../../amplify_outputs.json'; 
 
-// 1. Generate the client a single time.
-export const client = generateClient({ authMode: 'userPool' });
-// 2. Export it so all other components can import it.
+export const client = generateClient({
+  ...outputs.data, // ← Use generated AppSync URL + auth
+  authMode: 'userPool'
+});

@@ -16,6 +16,7 @@ frontend:
     build:
       commands:
         - npm run build
+        - cp amplify_outputs.json dist/
   artifacts:
     baseDirectory: dist
     files:
