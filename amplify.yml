@@ -3,7 +3,7 @@ backend:
   phases:
     preBuild:
       commands:
-        - npm ci  # Installs @aws-amplify/backend-cli for ampx
+        - npm ci
     build:
       commands:
         - npx ampx generate outputs --branch $AWS_BRANCH --app-id $AWS_APP_ID
@@ -12,12 +12,12 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci  # Frontend deps
+        - npm ci
     build:
       commands:
         - npm run build
   artifacts:
-    baseDirectory: build
+    baseDirectory: dist
     files:
       - '**/*'
   cache:
