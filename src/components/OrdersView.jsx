@@ -195,20 +195,23 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                                         transform: `translateY(${virtualItem.start}px)`,
                                     }}
                                 >
-                                    {/* Your Original Order Component */}
-                                    <div 
+                                <div 
                                         onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} 
                                         className={classNames(
-                                            "bg-slate-800 p-3 rounded-lg flex justify-between items-center transition h-full",
+                                            // 1. Removed 'justify-between'
+                                            "bg-slate-800 p-3 rounded-lg flex items-center transition h-full", 
                                             updatingId === order.sk ? 'opacity-50' : 'hover:bg-slate-700',
                                             !editingId && 'cursor-pointer'
                                         )}
                                     >
-                                        <div>
-                                            <p className="font-bold text-white">Order ID: {order.sk.replace('ORDER#', '')}</p>
-                                            <p className="text-sm text-slate-400">Customer: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
+                                         
+                                        <div className="flex-grow min-w-0">
+                                            <p className="font-bold text-white truncate">ORD: {order.sk.replace('ORDER#', '').split(".")[0]}</p>
+                                            <p className="text-sm text-slate-400 truncate">Customer: {order.gsi2pk ? order.gsi2pk.split('#')[2] : 'N/A'}</p>
                                         </div>
-                                        <div className="text-right">
+
+                                        {/* 3. Column 2: Never shrinks, has fixed left margin */}
+                                        <div className="text-right flex-shrink-0 ml-4">
                                             <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.S.00'}</p>
                                             <OrderStatusEditor 
                                                 order={order}

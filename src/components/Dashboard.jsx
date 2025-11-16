@@ -32,13 +32,13 @@ export default function Dashboard({phoneNbr}) {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal}/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={6}  setModal={setModal}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={6}  setModal={setModal} />;
         }
     };
 

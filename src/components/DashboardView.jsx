@@ -14,8 +14,8 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         if (!phoneNbr) return null;
         return {
             filter: {
-                pk: { eq: `BUSINESS#${phoneNbr}` }
-                // sk: { beginsWith: 'ORDER#' }
+                pk: { eq: `BUSINESS#${phoneNbr}` },
+                sk: { beginsWith: 'ORDER#' }
             }
         };
     }, [phoneNbr]);
@@ -101,7 +101,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         <div className="p-4 space-y-6">
             <header>
                 {/* As businessName is not passed, you might want to fetch it or pass it as a prop */}
-                <h1 className="text-2xl font-bold text-white">Good Morning!</h1>
+                <h1 className="text-2xl font-bold text-white">Cloud Order</h1>
                 <p className="text-slate-400">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </header>
             <div className="grid grid-cols-2 gap-4">
