@@ -6,6 +6,8 @@ import  CustomersView  from "./CustomersView";
 import OrderDetailModal from './OrderDetailModal';
 import AssignDeliveryModal from './AssignDeliveryModal';    
 import CustomersDetailModal from './CustomersDetailModal';
+import AgentsDetailModal from './AgentsDetailModal';
+import AgentsView from './AgentsView';
 import { useEntityList } from '../DataHook/useEntityList';
 
 
@@ -37,6 +39,8 @@ export default function Dashboard({phoneNbr}) {
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
+            case 'agents':
+                return <AgentsView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
                 return <DashboardView phoneNbr={phoneNbr}  filterDays={6}  setModal={setModal} />;
         }
@@ -49,6 +53,9 @@ export default function Dashboard({phoneNbr}) {
         }
         if (modal.type === 'CustomerDetail') {
             return <CustomersDetailModal IdCustomer={modal.IdCustomer} customerName={modal.customerName}  onClose={() => setModal(null)} />;
+        }
+        if (modal.type === 'AgentDetail') {
+            return <AgentsDetailModal IdAgent={modal.IdAgent} agentName={modal.agentName}  onClose={() => setModal(null)} />;
         }
         if (modal.type === 'assignDelivery') {
             return <AssignDeliveryModal 
@@ -90,6 +97,10 @@ export default function Dashboard({phoneNbr}) {
                 <button onClick={() => setActiveView('customers')} className={classNames('flex-1 flex flex-col items-center justify-center py-2', activeView === 'customers' ? 'text-sky-400' : 'text-slate-400')}>
                     <UsersIcon className="h-6 w-6 mb-1" />
                     <span className="text-xs">Customers</span>
+                </button>
+                <button onClick={() => setActiveView('agents')} className={classNames('flex-1 flex flex-col items-center justify-center py-2', activeView === 'agents' ? 'text-sky-400' : 'text-slate-400')}>
+                    <UsersIcon className="h-6 w-6 mb-1" />
+                    <span className="text-xs">Delivery</span>
                 </button>
             </nav>
         </div>

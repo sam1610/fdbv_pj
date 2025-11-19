@@ -25,6 +25,8 @@ export const useEntityList = (queryParam, queryName) => {
     // Determine which API method to call (primary index or GSI)
     if (queryName === "ByCustomer") {
       apiMethod = client.models.BusinessData.listBusinessDataByGsi2pkAndSk;
+    } else if (queryName === "ByAgent") {
+      apiMethod = client.models.BusinessData.listBusinessDataByGsi1pkAndSk;
     } else {
       // Assumes queryName is a valid key like "list"
       apiMethod = client.models.BusinessData[queryName];

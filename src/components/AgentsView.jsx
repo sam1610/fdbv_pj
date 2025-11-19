@@ -11,10 +11,10 @@ const classNames = (...classes) => classes.filter(Boolean).join(' ');
  * @param {string | null} props.phoneNbr - The phone number of the business owner.
  * @param {Function} props.setModal - A function to open a modal window.
  */
-const CustomersView = ({ phoneNbr, setModal }) => {
+const AgentsView = ({ phoneNbr, setModal }) => {
     
     // --- 1. State for Real-Time Data ---
-    const [customers, setCustomers] = useState([]);
+    const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -24,7 +24,7 @@ const CustomersView = ({ phoneNbr, setModal }) => {
         return {
             filter: { 
                 pk: { eq: `BUSINESS#${phoneNbr}` }, 
-                sk: { beginsWith: 'CUSTOMER#' } 
+                sk: { beginsWith: 'AGENT#' } 
             }
         };
     }, [phoneNbr]);
@@ -38,14 +38,14 @@ const CustomersView = ({ phoneNbr, setModal }) => {
 
         const subscription = observer.subscribe({
             next: (snapshot) => {
-                setCustomers([...snapshot.items]); // Use spread to force re-render
+                setAgents([...snapshot.items]); // Use spread to force re-render
                 setError(null);
                 setLoading(false);
             },
             error: (err) => {
                 setError(err.message || 'Subscription error');
                 setLoading(false);
-                console.error('CustomersView observeQuery error:', err);
+                console.error('AgentsView observeQuery error:', err);
             }
         });
 
@@ -54,14 +54,14 @@ const CustomersView = ({ phoneNbr, setModal }) => {
 
     // --- 4. Sort Customers by Name ---
     const sortedCustomers = useMemo(() => {
-        if (!customers || customers.length === 0) return [];
+        if (!agents || agents.length === 0) return [];
         
-        // Sort all customers by name (alphabetical)
-        return [...customers].sort((a, b) => 
+        // Sort all agents by name (alphabetical)
+        return [...agents].sort((a, b) => 
             (a.name || '').localeCompare(b.name || '')
         );
 
-    }, [customers]);
+    }, [agents]);
 
     // --- 5. Setup for Virtualization ---
     const parentRef = useRef();
@@ -99,11 +99,11 @@ const CustomersView = ({ phoneNbr, setModal }) => {
                     >
                         {/* Map over virtual items */}
                         {virtualItems.map(virtualItem => {
-                            const customer = sortedCustomers[virtualItem.index];
+                            const agent = sortedCustomers[virtualItem.index];
 
                             return (
                                 <div 
-                                    key={customer.sk} 
+                                    key={agent.sk} 
                                     style={{
                                         position: 'absolute',
                                         top: 0,
@@ -115,7 +115,7 @@ const CustomersView = ({ phoneNbr, setModal }) => {
                                 >
                                     {/* Your Original Customer Component */}
                                     <div 
-                                        onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk , customerName: customer.name })} 
+                                        onClick={() => setModal({ type: 'AgentDetail', IdAgent: agent.sk , agentName: agent.name })} 
                                         className={classNames(
         // ✅ TERNARY OPERATOR FOR ZEBRA STRIPING:
         virtualItem.index % 2 === 0 ? 'bg-slate-800' : 'bg-slate-700', // Even rows
@@ -123,13 +123,12 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     )}
 >
                                         <div>
-                                            <p className="font-bold text-white">{customer.name}</p>
-                                            <p className="text-amber-400 text-sm ">{customer.sk.split('#')[2]}</p>
+                                            <p className="font-bold text-white">{agent.name}</p>
+                                            <p className="text-amber-400 text-sm ">{agent.sk.split('#')[2]}</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-slate-400 text-sm">Total Orders</p>
-                                            {/* <p className="font-bold text-white"> {sortedCustomers.length}</p> */}
-                                            <p className="font-bold text-white">BD {customer.totalAmount ? customer.totalAmount.toFixed(2) : '0.00'}</p>
+                                            <p className="text-slate-400 text-sm">Total Deliveries</p>
+                                            <p className="font-bold text-white"> {agent.length}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -143,4 +142,4 @@ const CustomersView = ({ phoneNbr, setModal }) => {
         </div>
     );
 };
-export default CustomersView;
+export default AgentsView;
