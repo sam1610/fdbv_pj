@@ -180,7 +180,7 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                             width: '100%' 
                         }}
                     >
-                        {virtualItems.map(virtualItem => {
+                        {virtualItems.map((virtualItem , index) => {
                             const order = filteredOrders[virtualItem.index];
 
                             return (
@@ -195,8 +195,12 @@ const OrdersView = ({ phoneNbr, setModal }) => {
                                         transform: `translateY(${virtualItem.start}px)`,
                                     }}
                                 >
+                                    {index > 0 && (
+                                <div className=" mb-1"></div>
+                            )}
+
                                 <div 
-                                        onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk , totalAmount: order.totalAmount })} 
+                                        onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk ,orderStatus: order.orderStatus, totalAmount: order.totalAmount })} 
                                         className={classNames(
                                             // 1. Removed 'justify-between'
                                             "bg-slate-800 p-3 rounded-lg flex items-center transition h-full", 

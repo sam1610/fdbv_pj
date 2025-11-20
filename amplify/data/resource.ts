@@ -27,6 +27,7 @@ orderDate: a.datetime(),
 totalAmount: a.float(),
 orderStatus: a.ref('OrderStatus'),
 deliveryDate: a.datetime(),
+isPickUp: a.boolean(),
 location: a.json(),
 itemsNbr: a.integer(), // For order's number of items
 // --- Product-specific fields can be added here if needed ---

@@ -49,7 +49,7 @@ export default function Dashboard({phoneNbr}) {
     const renderModal = () => {
         if (!modal) return null;
         if (modal.type === 'orderDetail') {
-            return <OrderDetailModal orderId={modal.Id} orderTotal={modal.totalAmount} phoneNbr={phoneNbr}  onClose={() => setModal(null)} />;
+            return <OrderDetailModal orderId={modal.Id} orderStatus={modal.orderStatus} orderTotal={modal.totalAmount} phoneNbr={phoneNbr}  onClose={() => setModal(null)} />;
         }
         if (modal.type === 'CustomerDetail') {
             return <CustomersDetailModal IdCustomer={modal.IdCustomer} customerName={modal.customerName}  onClose={() => setModal(null)} />;
