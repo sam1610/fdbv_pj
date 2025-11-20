@@ -124,7 +124,7 @@ const AgentsView = ({ phoneNbr, setModal }) => {
 >
                                         <div>
                                             <p className="font-bold text-white">{agent.name}</p>
-                                            <p className="text-amber-400 text-sm ">{agent.sk.split('#')[2]}</p>
+                                            <p className="text-amber-400 text-sm ">{agent.sk.split('#')[1]}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-slate-400 text-sm">Total Deliveries</p>
