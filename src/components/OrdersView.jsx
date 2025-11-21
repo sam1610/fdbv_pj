@@ -20,6 +20,7 @@ const OrderFilters = ({ currentFilter, setFilter }) => (
         <button onClick={() => setFilter('active')} className={classNames(currentFilter === 'active' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Active</button>
         <button onClick={() => setFilter('Prepared')} className={classNames(currentFilter === 'Prepared' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>Prepared</button>
         <button onClick={() => setFilter('all')} className={classNames(currentFilter === 'all' ? 'bg-sky-500 text-white' : 'bg-slate-700', 'px-3 py-1 text-sm rounded-full')}>All Orders</button>
+   
     </div>
 );
 
@@ -146,6 +147,9 @@ const OrdersView = ({ phoneNbr, setModal }) => {
         
         return [];
     }, [sortedOrders, filter]);
+
+    // Delivery Added
+    
 
     // --- 6. Setup for Virtualization ---
     const parentRef = useRef();

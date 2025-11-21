@@ -23,8 +23,8 @@ const AgentsDetailModal = ({ IdAgent,agentName, onClose }) => {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
     <div className="bg-slate-800 rounded-lg w-full max-w-lg shadow-xl animate-fade-in-up">
         <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-            <h2 className="text-lg font-bold  text-orange-400 bg-black/10">Customer Orders</h2>
-            <span className="text-amber-400 text-sm text-jusity-left">{agentName} : ({IdAgent.split('#')[2]})</span>
+            <h2 className="text-lg font-bold  text-orange-400 bg-black/10">Orders Deliveries</h2>
+            <span className="text-amber-400 text-sm text-jusity-left">{agentName} : ({IdAgent.split('#')[1]})</span>
             <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
         </div>
 
