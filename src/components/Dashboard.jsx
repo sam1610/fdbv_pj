@@ -34,7 +34,7 @@ export default function Dashboard({phoneNbr}) {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={6}  setModal={setModal}/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={10}  setModal={setModal}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'customers':
@@ -42,7 +42,7 @@ export default function Dashboard({phoneNbr}) {
             case 'agents':
                 return <AgentsView phoneNbr={phoneNbr} setModal={setModal} />;
             default:
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={6}  setModal={setModal} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={10}  setModal={setModal} />;
         }
     };
 

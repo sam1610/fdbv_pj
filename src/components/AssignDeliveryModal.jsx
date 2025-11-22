@@ -7,6 +7,28 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose, onSucc
     const [selectedAgent, setSelectedAgent] = useState(deliveryAgents[0]?.sk || '');
     // const preparedOrders = useMemo(() => orders.filter(o => o.orderStatus === 'prepared'), [orders]);
     const [selectedOrders, setSelectedOrders] = useState(() => orders.map(o => o.sk));
+    const PickUpBadge = () => (
+    <div className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-indigo-900 text-indigo-200 border border-indigo-500/30 shadow-sm">
+        {/* SVG: Hand holding a box */}
+        <svg 
+            className="mr-1.5 w-4 h-4 text-indigo-300" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+        >
+            {/* The Box */}
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+            <line x1="12" y1="22.08" x2="12" y2="12" />
+            {/* The "Hand" metaphor (Small arc under the box indicating holding) */}
+            <path d="M16 21c0-1.1-2-2-4-2s-4 .9-4 2" />
+        </svg>
+        Pick-Up
+    </div>
+);
     const toggleOrderSelection = (orderId) => {
         setSelectedOrders(prev => 
             prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
@@ -58,7 +80,12 @@ const AssignDeliveryModal = ({ orders, deliveryAgents, onAssign, onClose, onSucc
                                         onChange={() => toggleOrderSelection(order.sk)}
                                         className="h-4 w-4 rounded border-slate-500 text-sky-600 focus:ring-sky-500"
                                     />
-                                    <label htmlFor={order.sk} className="ml-3 text-sm text-slate-200">{order.sk} ({order.itemsNbr} items)</label>
+                                    <label htmlFor={order.sk} className="ml-3 text-sm text-slate-200">{order.sk.split('#')[1].split('.')[0]}- [{order.itemsNbr} item(s)]</label>
+                                    {order.isPickUp === true && (
+                <div className="ml-auto"> 
+                    <PickUpBadge />
+                </div>
+            )}
                                 </div>
                             ))}
                         </div>
