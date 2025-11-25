@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useEntityList } from '../DataHook/useEntityList';
 
 
-const OrderDetailModal = ({ orderId, orderStatus, orderTotal, phoneNbr, onClose }) => {
+const OrderDetailModal = ({ orderId, orderStatus, orderTotal,customerId ,   phoneNbr, onClose }) => {
     console.log("OrderDetailModal Props:", { orderId, orderStatus, orderTotal, phoneNbr });
     // const lineItems = useMemo(() => allItems.filter(item => item.SortKey.startsWith(`ORDER#${order.OrderID}#ITEM#`)), [allItems, order.OrderID]);
     const { data: lineItems, loading, error } = useEntityList(
@@ -15,12 +15,16 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal, phoneNbr, onClose 
     DELIVERED: 'bg-gray-500',
     DELIVERING: 'bg-orange-500'
 };
+console.log("Line Items:", lineItems);
 const badgeColor = statusColors[orderStatus] || 'bg-slate-600';
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-lg w-full max-w-md shadow-xl animate-fade-in-up">
                 <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                    <div className="flex flex-col gap-2">
                     <h2 className="text-sm font-bold  text-orange-400 bg-black/10">{orderId.split('#')[1]}</h2>
+                    <h2 className="text-sm font-medium text-slate-300">({customerId.substring(0, 3)})-{customerId.substring(3, 5)} {customerId.substring(5, 11)}</h2>
+                    </div>
                     <div className="flex flex-col items-start gap-1">    
                         <span className={`
                             px-2 py-0.5 

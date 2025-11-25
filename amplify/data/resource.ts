@@ -1,5 +1,5 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
-
+import { optimizeDelivery } from '../functions/optimizeDelivery/resource';
 // Define all necessary status enums for data consistency
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
 const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
@@ -51,23 +51,34 @@ deliveryAgentId: a.string()
     allow.groups(['Admins']).to(['create', 'read', 'update']),
     allow.publicApiKey().to(['create', 'update', 'read']),
     ]),
-
-    // --- Custom Mutations remain the same ---
-    createDeliveryAgent: a.mutation()
-      .arguments({ 
-        username: a.string().required(), 
-        email: a.email().required(),
-        phoneNumber: a.phone().required()
+    calculateRoutePlan: a.query()
+      .arguments({
+        orders: a.json(),            // Array of orders passed from React
+        agents: a.json(),            // Array of agents passed from React
+        restaurantLocation: a.json() // {lat, long} passed from React
       })
-      .returns(a.string())
-      .authorization((allow) => [allow.groups(['Admins'])])
-      .handler(a.handler.function('addDeliveryAgentHandler')),
+      .returns(a.json())             // Returns { proposal: [...] }
+      .authorization(allow => [
+         allow.authenticated(),      // Logged in users (Admins/Managers)
+         allow.publicApiKey()        // Optional: if you test without login
+      ])
+      .handler(a.handler.function(optimizeDelivery)),
+    // --- Custom Mutations remain the same ---
+    // createDeliveryAgent: a.mutation()
+    //   .arguments({ 
+    //     username: a.string().required(), 
+    //     email: a.email().required(),
+    //     phoneNumber: a.phone().required()
+    //   })
+    //   .returns(a.string())
+    //   .authorization((allow) => [allow.groups(['Admins'])])
+    //   .handler(a.handler.function('addDeliveryAgentHandler')),
 
-    deliverOrder: a.mutation()
-      .arguments({ orderPk: a.string().required(), orderSk: a.string().required() })
-      .returns(a.ref('BusinessData'))
-      .authorization((allow) => [allow.groups(['DeliveryAgents'])])
-      .handler(a.handler.function('deliverOrderHandler')),
+    // deliverOrder: a.mutation()
+    //   .arguments({ orderPk: a.string().required(), orderSk: a.string().required() })
+    //   .returns(a.ref('BusinessData'))
+    //   .authorization((allow) => [allow.groups(['DeliveryAgents'])])
+      // .handler(a.handler.function('deliverOrderHandler')),
 });
 
 export type Schema = ClientSchema<typeof schema>;

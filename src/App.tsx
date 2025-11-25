@@ -188,6 +188,7 @@ function App({ signOut, user }: AppProps) {
   return (
     <div className="App">
       <header>
+        <button onClick={signOut}>Sign Out</button> 
         {/* <p className="user-sub">Cognito User ID (sub): {user.userId}</p>
         <button onClick={signOut}>Sign Out</button> */}
       </header>

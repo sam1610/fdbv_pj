@@ -81,7 +81,7 @@ const AgentsView = ({ phoneNbr, setModal }) => {
 
     return (
         <div className="p-4">
-            <h1 className="text-2xl font-bold text-orange-500 mb-4">Customers</h1>
+            <h1 className="text-2xl font-bold text-orange-500 mb-4">Delivery Agents</h1>
             
             {/* Scrolling container with a fixed height */}
             <div 
