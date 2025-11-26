@@ -283,14 +283,14 @@ const AgentsView = ({ phoneNbr, setModal }) => {
             await client.models.BusinessData.create({
                 pk: `BUSINESS#${phoneNbr}`,
                 sk: `AGENT#${data.phone}`,
-                entityType: 'AGENT',
+                entityType: 'Agent',
                 name: data.name,
                 phone: data.phone,
                 // Initialize other fields if needed
                 itemsNbr: 0 // Used for tracking deliveries maybe?
             });
 
-            alert(`Agent ${data.name} created successfully!\nTemp Password: Welcome123!`);
+            // alert(`Agent ${data.name} created successfully!\nTemp Password: Welcome123!`);
             setShowCreateModal(false);
 
         } catch (err) {

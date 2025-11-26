@@ -1,5 +1,7 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { optimizeDelivery } from '../functions/optimizeDelivery/resource';
+import { createAgentUser } from '../functions/createAgentUser/resource'; // 1. Import the create function
+
 // Define all necessary status enums for data consistency
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
 const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
@@ -49,7 +51,9 @@ deliveryAgentId: a.string()
     .authorization((allow) => [
 
     allow.groups(['Admins']).to(['create', 'read', 'update']),
+    allow.groups(['DeliveryAgents']).to(['read', 'update']),
     allow.publicApiKey().to(['create', 'update', 'read']),
+
     ]),
     calculateRoutePlan: a.query()
       .arguments({
@@ -63,22 +67,18 @@ deliveryAgentId: a.string()
          allow.publicApiKey()        // Optional: if you test without login
       ])
       .handler(a.handler.function(optimizeDelivery)),
-    // --- Custom Mutations remain the same ---
-    // createDeliveryAgent: a.mutation()
-    //   .arguments({ 
-    //     username: a.string().required(), 
-    //     email: a.email().required(),
-    //     phoneNumber: a.phone().required()
-    //   })
-    //   .returns(a.string())
-    //   .authorization((allow) => [allow.groups(['Admins'])])
-    //   .handler(a.handler.function('addDeliveryAgentHandler')),
-
-    // deliverOrder: a.mutation()
-    //   .arguments({ orderPk: a.string().required(), orderSk: a.string().required() })
-    //   .returns(a.ref('BusinessData'))
-    //   .authorization((allow) => [allow.groups(['DeliveryAgents'])])
-      // .handler(a.handler.function('deliverOrderHandler')),
+      createAgentUser: a.mutation()
+      .arguments({
+        name: a.string().required(),
+        phone: a.string().required(),
+        email: a.string()
+      })
+      .returns(a.json())
+      .authorization(allow => [
+        allow.groups(['Admins']), // Only Admins can create new agents
+      ])
+      .handler(a.handler.function(createAgentUser))
+ 
 });
 
 export type Schema = ClientSchema<typeof schema>;
