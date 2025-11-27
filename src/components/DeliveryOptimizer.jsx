@@ -959,7 +959,7 @@ const DeliveryOptimizer = ({
                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all h-12 flex-1 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Confirm & Save"
             >
-                {saving ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <span className="text-xl">💾</span>}
+                {saving ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <span className="text-xl">📦</span>}
             </button>
           </div>
         </div>

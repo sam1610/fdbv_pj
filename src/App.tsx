@@ -172,7 +172,7 @@ function App({ signOut, user }: AppProps) {
   const { userAttributes, loading: attributesLoading } = useUserAttributes();
   const [businessLoading, setBusinessLoading] = useState(true);
   const [userGroup, setUserGroup] = useState<string | null>(null); // Track group: 'ADMIN' or 'AGENT'
-
+  const userEmail = userAttributes?.email || user?.signInDetails?.loginId;
   // --- 1. Check User Group ---
   useEffect(() => {
     const checkGroup = async () => {
@@ -267,7 +267,7 @@ function App({ signOut, user }: AppProps) {
       {/* Route based on Group */}
       {userGroup === 'AGENT' ? (
         // Agents see their specific dashboard
-        <AgentDashboard agentPhone={userAttributes?.phone_number} />
+        <AgentDashboard agentPhone={userAttributes?.phone_number}  agentEmail={userAttributes?.email } />
       ) : (
         // Admins see the main dashboard
         <Dashboard phoneNbr={userAttributes?.phone_number} />

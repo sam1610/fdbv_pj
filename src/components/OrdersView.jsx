@@ -849,8 +849,8 @@ const agentColors = useMemo(() => {
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
           onAssignmentSaved={() => {
-            alert('All orders dispatched successfully!');
-            setFilter('Prepared');
+            // alert('All orders dispatched successfully!');
+            // setFilter('Prepared');
           }}
         />
       )}

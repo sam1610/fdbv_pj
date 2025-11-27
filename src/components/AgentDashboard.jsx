@@ -6,7 +6,7 @@ import 'maplibre-gl-js-amplify/dist/public/amplify-map.css';
 import { client } from '../DataHook/amplifyClient';
 import { getCurrentUser } from 'aws-amplify/auth';
 
-const AgentDashboard = ({ agentPhone }) => { 
+const AgentDashboard = ({ agentPhone , agentEmail}) => { 
   const mapContainerRef = useRef(null);
   const mapInstance = useRef(null);
   const markersRef = useRef({});
@@ -15,17 +15,15 @@ const AgentDashboard = ({ agentPhone }) => {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // --- 1. Subscribe to Assigned Orders ---
+  // --- 1. Subscribe to Assigned Orders (SIMPLIFIED) ---
+  // We filter ONLY by the Agent ID first to ensure we catch the 'Assign' event.
+  // We filter by Status inside the subscription callback.
   const queryParam = useMemo(() => {
     if (!agentPhone) return null;
+    console.log("AgentDashboard: Subscribing to orders for", agentPhone);
     return {
         filter: { 
-            gsi1pk: { eq: `AGENT#${agentPhone}` }, 
-            // We want to see BOTH delivering and delivered orders to show progress
-            or: [
-                { orderStatus: { eq: 'DELIVERING' } },
-                { orderStatus: { eq: 'DELIVERED' } }
-            ]
+            gsi1pk: { eq: `AGENT#${agentPhone}` } 
         }
     };
   }, [agentPhone]);
@@ -35,10 +33,17 @@ const AgentDashboard = ({ agentPhone }) => {
     
     const sub = client.models.BusinessData.observeQuery(queryParam).subscribe({
         next: ({ items }) => {
-            setOrders(items);
+            console.log("AgentDashboard: Received update!", items.length, "items");
+            
+            // ✅ Filter in memory for better reliability
+            const activeOrders = items.filter(o => 
+                o.orderStatus === 'DELIVERING' || o.orderStatus === 'DELIVERED'
+            );
+            
+            setOrders(activeOrders);
             setLoading(false);
         },
-        error: (err) => console.error(err)
+        error: (err) => console.error("AgentDashboard Subscription Error:", err)
     });
     return () => sub.unsubscribe();
   }, [queryParam]);
@@ -92,8 +97,6 @@ const AgentDashboard = ({ agentPhone }) => {
         el.className = isDelivered ? 'marker-delivered' : 'marker-delivering';
         
         // ✅ Change Icon based on status
-        // Delivered: Green Checkmark
-        // Delivering: Amber Box
         el.innerHTML = isDelivered 
             ? `<span style="font-size:20px; color:white;">✓</span>` 
             : `<span style="font-size:20px;">📦</span>`;
@@ -110,12 +113,35 @@ const AgentDashboard = ({ agentPhone }) => {
         el.style.cursor = 'pointer';
         el.style.transition = 'all 0.3s ease'; // Smooth transition for color changes
 
+        // Extract Clean Data for Tooltip
+        const cleanId = order.sk.split('#')[1] || order.sk;
+        const customerPhone = order.gsi2pk?.split('#')[2] || 'Unknown'; 
+        const displayContact = order.phone || customerPhone; 
+        const itemCount = order.itemsNbr || order.quantity || 0;
+
+        // Create Tooltip Content
+        const popupContent = `
+            <div style="font-family: sans-serif; padding: 5px; min-width: 140px;">
+                <h3 style="margin: 0 0 5px 0; color: #1e293b; font-size: 14px;">Order #${cleanId}</h3>
+                <div style="font-size: 12px; color: #475569; line-height: 1.4;">
+                    <div>👤 <strong>Customer:</strong> ${order.name || 'Guest'}</div>
+                    <div>📞 <strong>Phone:</strong> ${displayContact}</div>
+                    <div>📦 <strong>Items:</strong> ${itemCount}</div>
+                </div>
+            </div>
+        `;
+
         const marker = new maplibregl.Marker({ element: el })
             .setLngLat([lng, lat])
+            .setPopup(
+                new maplibregl.Popup({ offset: 25, closeButton: false }) 
+                    .setHTML(popupContent)
+            )
             .addTo(map);
 
         el.addEventListener('click', () => {
             setSelectedOrder(order);
+            marker.togglePopup(); 
             map.flyTo({ center: [lng, lat], zoom: 15 });
         });
 
@@ -125,7 +151,6 @@ const AgentDashboard = ({ agentPhone }) => {
 
   // --- 4. Deliver Action ---
   const markAsDelivered = async (order) => {
-    // No confirmation needed if already delivered
     if (order.orderStatus === 'DELIVERED') return;
 
     if (!window.confirm("Confirm delivery?")) return;
@@ -138,7 +163,6 @@ const AgentDashboard = ({ agentPhone }) => {
             deliveryAgentId: `AGENT#${agentPhone}` 
         });
         setSelectedOrder(null);
-        // alert("Order Delivered!"); // Removed alert for smoother flow
     } catch (e) {
         alert("Error updating order: " + e.message);
     }
@@ -157,8 +181,18 @@ const AgentDashboard = ({ agentPhone }) => {
   return (
     <div className="h-screen flex flex-col bg-slate-900">
         {/* Header */}
-        <div className="p-4 bg-slate-800 shadow-md z-10 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-white">🚀 My Deliveries</h1>
+        <div className="p-2 bg-slate-800 shadow-md z-10 flex justify-between items-center">
+            <h1 className="text-xl font-bold text-white">🚀 Deliveries</h1>
+            <div className="flex flex-col mt-1">
+                        <span className="text-xs text-slate-400 font-mono tracking-wide">
+                            {agentPhone || 'Unknown Phone'}
+                        </span>
+                        {agentEmail && (
+                            <span className="text-[10px] text-sky-400 italic">
+                                {agentEmail}
+                            </span>
+                        )}
+                    </div>
             <div className="flex gap-2">
                 <div className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
                     {orders.filter(o => o.orderStatus === 'DELIVERED').length} Done
@@ -180,7 +214,8 @@ const AgentDashboard = ({ agentPhone }) => {
                         <div>
                             <div className="flex items-center gap-2">
                                 <h2 className="text-lg font-bold text-slate-800">
-                                    Order {selectedOrder.sk.split('#')[1]}
+                                    Customer📞 {selectedOrder.gsi2pk.split('#')[2] || 'Customer'}
+
                                 </h2>
                                 {selectedOrder.orderStatus === 'DELIVERED' && (
                                     <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">
@@ -189,7 +224,7 @@ const AgentDashboard = ({ agentPhone }) => {
                                 )}
                             </div>
                             <p className="text-slate-500 text-sm">
-                                📞 {selectedOrder.name || 'Customer'}
+                            Order {selectedOrder.sk.split('#')[1]}- [{selectedOrder.itemsNbr || 0} items]
                             </p>
                         </div>
                         <button onClick={() => setSelectedOrder(null)} className="text-slate-400 text-2xl">&times;</button>

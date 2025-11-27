@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo , useCallback} from 'react';
 import * as Recharts from 'recharts';
 import  DashboardView  from "./DashboardView";
 import  OrdersView  from "./OrdersView";
@@ -27,7 +27,10 @@ export default function Dashboard({phoneNbr}) {
 
     const { data: deliveryAgents, loading, error } = useEntityList(
              {filter: {pk:{ eq: `BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'AGENT#'}}}, "list");
-
+const handleDataRefresh = useCallback(() => {
+        setRefreshTrigger(prev => prev + 1);
+        console.log("Refreshing Dashboard Data...");
+    }, []);
 
 //   console.log("Delivery Agents:", deliveryAgents);
    
@@ -40,7 +43,7 @@ export default function Dashboard({phoneNbr}) {
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'agents':
-                return <AgentsView phoneNbr={phoneNbr} setModal={setModal} />;
+                return <AgentsView phoneNbr={phoneNbr} setModal={setModal}  onAgentAdded={handleDataRefresh}/>;
             default:
                 return <DashboardView phoneNbr={phoneNbr}  filterDays={15}  setModal={setModal} />;
         }

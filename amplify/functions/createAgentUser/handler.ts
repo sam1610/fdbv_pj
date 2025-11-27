@@ -40,7 +40,7 @@ export const handler = async (event: any) => {
         { Name: "email_verified", Value: "true" },
         { Name: "phone_number_verified", Value: "true" }
       ],
-      TemporaryPassword: "Welcome123!", 
+      TemporaryPassword: "Pa$$w0rd!", 
       MessageAction: "SUPPRESS"
     });
 
