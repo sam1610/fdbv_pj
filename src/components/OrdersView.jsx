@@ -187,7 +187,7 @@ const agentColors = useMemo(() => {
       await client.models.BusinessData.update({
         pk: order.pk,
         sk: order.sk,
-        orderStatus: newStatus
+        orderStatus: newStatus 
       });
     } catch (err) {
       alert('Update failed');
