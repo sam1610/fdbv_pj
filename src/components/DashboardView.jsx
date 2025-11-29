@@ -46,22 +46,48 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
 
     // --- ✅ 4. Client-Side Filtering ---
     // This new hook filters the 'all orders' list by your 'filterDays' prop.
-    const filteredOrders = useMemo(() => {
-        if (!orders || orders.length === 0) return [];
+    // const filteredOrders = useMemo(() => {
+    //     if (!orders || orders.length === 0) return [];
 
-        const now = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - (filterDays - 1));
-        startDate.setHours(startDate.getHours() - 24);
-        // startDate.setHours(0, 0, 0, 0);
+    //     const now = new Date();
+    //     const startDate = new Date();
+    //     startDate.setDate(startDate.getDate() - (filterDays - 1));
+    //     startDate.setHours(startDate.getHours() - 24);
+    //     // startDate.setHours(0, 0, 0, 0);
 
-        return orders.filter(o => {
-            if (!o.orderDate) return false;
-            const orderDate = new Date(o.orderDate);
-            return orderDate >= startDate && orderDate <= now;
-        });
-    }, [orders, filterDays]);
+    //     return orders.filter(o => {
+    //         if (!o.orderDate) return false;
+    //         const orderDate = new Date(o.orderDate);
+    //         return orderDate >= startDate && orderDate <= now;
+    //     });
+    // }, [orders, filterDays]);
+const filteredOrders = useMemo(() => {
+  if (!orders || orders.length === 0) return [];
 
+  const now = new Date();
+
+  // Start: Midnight of (today - filterDays + 1)
+  // Example: filterDays = 1 → today at 00:00
+  //          filterDays = 7 → 7 days ago at 00:00
+  const startDate = new Date(now);
+  startDate.setDate(now.getDate() - (filterDays - 1));
+  startDate.setHours(0, 0, 0, 0); // Midnight of that day
+
+  // End: Right now (current moment)
+  const endDate = now;
+
+  return orders.filter(order => {
+    if (!order.orderDate) return false;
+
+    // Parse order date (supports ISO string or timestamp)
+    const orderDate = new Date(order.orderDate);
+
+    // Valid date check
+    if (isNaN(orderDate)) return false;
+
+    return orderDate >= startDate && orderDate <= endDate;
+  });
+}, [orders, filterDays]);
 
     // --- ✅ 5. All KPIs now use 'filteredOrders' ---
     const kpis = useMemo(() => {

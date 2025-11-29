@@ -15,41 +15,41 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // --- 1. Subscribe to Assigned Orders (SIMPLIFIED for Robustness) ---
-  // We filter ONLY by the Agent ID to ensure we catch the assignment event reliably.
-  // When Admin assigns order, 'gsi1pk' changes to this agent's ID.
-  // This simple filter is much more reliable for real-time "enter" events.
-  const queryParam = useMemo(() => {
-    if (!agentPhone) return null;
-    return {
-        filter: { 
-            gsi1pk: { eq: `AGENT#${agentPhone}` } 
-        }
-    };
-  }, [agentPhone]);
 
-  useEffect(() => {
-    if (!queryParam) return;
-    
-    console.log("AgentDashboard: Subscribing to orders for", agentPhone);
+const queryParam = useMemo(() => {
 
-    const sub = client.models.BusinessData.observeQuery(queryParam).subscribe({
-        next: ({ items }) => {
-            console.log("AgentDashboard: Received update!", items.length, "items found.");
-            
-            // ✅ Filter locally for status (More reliable for real-time transitions)
-            // We only want to show what the agent needs to work on or has finished today
-            const activeOrders = items.filter(o => 
-                o.orderStatus === 'DELIVERING' || o.orderStatus === 'DELIVERED'
-            );
-            
-            setOrders(activeOrders);
-            setLoading(false);
-        },
-        error: (err) => console.error("AgentDashboard Subscription Error:", err)
-    });
-    return () => sub.unsubscribe();
-  }, [queryParam]);
+  return {
+    filter: {
+      pk: { beginsWith: "BUSINESS#" } 
+    }
+  };
+}, []);  
+
+useEffect(() => {
+  if (!queryParam || !agentPhone) return;
+
+
+  const sub = client.models.BusinessData.observeQuery(queryParam).subscribe({
+    next: ({ items }) => {
+      console.log("AgentDashboard: Received update –", items.length, "total orders");
+
+      const myOrders = items.filter(o => 
+        o.gsi1pk === `AGENT#${agentPhone}` && 
+        (o.orderStatus === 'DELIVERING' || o.orderStatus === 'DELIVERED')
+      );
+
+      setOrders(myOrders);
+      setLoading(false);
+    },
+    error: (err) => {
+      console.error("AgentDashboard Subscription Error:", err);
+      setLoading(false);
+    }
+  });
+
+  return () => sub.unsubscribe();
+}, [queryParam, agentPhone]);
+
 
   // --- 2. Map Logic ---
   useEffect(() => {
@@ -97,7 +97,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
         const isDelivered = order.orderStatus === 'DELIVERED';
 
         const el = document.createElement('div');
-        el.className = isDelivered ? 'marker-delivered' : 'marker-delivering';
+        el.className = isDelivered ? 'Order-delivered' : 'Order-delivering';
         
         // Change Icon based on status
         el.innerHTML = isDelivered 
@@ -119,16 +119,14 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
         // Extract Clean Data for Tooltip
         const cleanId = order.sk.split('#')[1] || order.sk;
         const customerPhone = order.gsi2pk?.split('#')[2] || 'Unknown'; 
-        const displayContact = order.phone || customerPhone; 
-        const itemCount = order.itemsNbr || order.quantity || 0;
-
+        const itemCount = order.itemsNbr  || 0;
         // Create Tooltip Content
         const popupContent = `
             <div style="font-family: sans-serif; padding: 5px; min-width: 140px;">
                 <h3 style="margin: 0 0 5px 0; color: #1e293b; font-size: 14px;">Order #${cleanId}</h3>
                 <div style="font-size: 12px; color: #475569; line-height: 1.4;">
                     <div>👤 <strong>Customer:</strong> ${order.name || 'Guest'}</div>
-                    <div>📞 <strong>Phone:</strong> ${displayContact}</div>
+                    <div>📞 <strong>Phone:</strong> ${customerPhone}</div>
                     <div>📦 <strong>Items:</strong> ${itemCount}</div>
                 </div>
             </div>
@@ -156,7 +154,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
   const markAsDelivered = async (order) => {
     if (order.orderStatus === 'DELIVERED') return;
 
-    if (!window.confirm("Confirm delivery?")) return;
+    // if (!window.confirm("Confirm delivery?")) return;
     
     try {
         await client.models.BusinessData.update({
@@ -215,18 +213,51 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
                 <div className="absolute bottom-0 left-0 right-0 bg-white p-5 rounded-t-2xl shadow-2xl animate-slide-up z-20">
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                            <div className="flex items-center gap-2">
+                            {/* <div className="flex items-center gap-2">
                                 <h2 className="text-lg font-bold text-slate-800">
-                                    Order {selectedOrder.sk.split('#')[1]}
+                                    Customer:📞 {selectedOrder.gsi2pk.split('#')[2] || 'Customer'} -[{selectedOrder.itemsNbr} items]
+
+                                    
                                 </h2>
                                 {selectedOrder.orderStatus === 'DELIVERED' && (
                                     <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">
                                         COMPLETED
                                     </span>
                                 )}
-                            </div>
+                            </div> */}
+<div className="flex flex-col gap-2">
+  <div className="flex items-center gap-3 flex-wrap">
+    {/* <h2 className="text-xl font-bold text-slate-800">
+      {selectedOrder.gsi2pk?.split('#')[2] || 'Customer'}
+    </h2> */}
+
+    {/* Clickable Phone Number */}
+    <a
+      href={`tel:${selectedOrder.gsi2pk?.split('#')[2]}`}
+      className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full font-bold text-sm hover:bg-blue-200 transition shadow-sm"
+    >
+      Customer:📞  {selectedOrder.gsi2pk?.split('#')[2] || 'No Phone'}
+    </a>
+
+    {/* Items count */}
+    <span className="text-slate-600 font-medium">
+      [{selectedOrder.itemsNbr || 0} item(s)]
+    </span>
+  </div>
+
+  {/* Status badge */}
+  {selectedOrder.orderStatus === 'DELIVERED' && (
+    <span className="inline-block bg-green-100 text-green-700 text-xs px-3 py-1.5 rounded-full font-bold">
+      COMPLETED
+    </span>
+  )}
+</div>
+
+
+
+
                             <p className="text-slate-500 text-sm">
-                                📞 {selectedOrder.name || 'Customer'}
+                                Order {selectedOrder.sk.split('#')[1]}
                             </p>
                         </div>
                         <button onClick={() => setSelectedOrder(null)} className="text-slate-400 text-2xl">&times;</button>
@@ -245,7 +276,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
                                 onClick={() => markAsDelivered(selectedOrder)}
                                 className="bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-green-500 transition flex justify-center items-center"
                             >
-                                <span>📦 Mark Delivered</span>
+                                <span>📦 Order Delivered</span>
                             </button>
                         ) : (
                             <button 

@@ -37,7 +37,7 @@ const handleDataRefresh = useCallback(() => {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={15}  setModal={setModal}/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} deliveryAgents={deliveryAgents} businessLocation={businessLocation} />;
             case 'customers':
@@ -45,7 +45,7 @@ const handleDataRefresh = useCallback(() => {
             case 'agents':
                 return <AgentsView phoneNbr={phoneNbr} setModal={setModal}  onAgentAdded={handleDataRefresh}/>;
             default:
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={15}  setModal={setModal} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal} />;
         }
     };
 

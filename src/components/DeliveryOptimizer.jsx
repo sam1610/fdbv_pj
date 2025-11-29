@@ -29,6 +29,10 @@ const DeliveryOptimizer = ({
   // Helper to determine if we are in "Dispatch Mode" (Only Prepared visible)
   const isDispatchMode = !showDelivered && !showDelivering;
 
+  // ✅ Check if there are actually any PREPARED orders to work with
+  const hasPreparedOrders = orders.some(o => o.orderStatus === 'PREPARED');
+  console.log("Available  Agents :", agents);
+
   // --- Helper: Get Color for Agent ---
   const getAgentColor = (agentId) => {
     if (!agentId) return '#64748b'; // Slate-500 for Unassigned (Grey)
@@ -66,7 +70,7 @@ const DeliveryOptimizer = ({
         });
 
         mapInstance.current = map;
-        map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+        map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
 
         // Plot Restaurant
         if (restaurantLocation) {
@@ -280,7 +284,7 @@ const DeliveryOptimizer = ({
 
       await Promise.all(updatePromises);
 
-      alert("All orders dispatched successfully!");
+      // alert("All orders dispatched successfully!");
       if (onAssignmentSaved) onAssignmentSaved();
 
     } catch (error) {
@@ -301,15 +305,15 @@ const DeliveryOptimizer = ({
         {/* ✅ Updated Legend with Checkboxes */}
         <div 
           className="absolute bottom-6 left-4 bg-white/95 p-3 rounded-lg shadow-xl text-sm pointer-events-auto backdrop-blur-sm border border-gray-200"
-          onClick={(e) => e.stopPropagation()} // Stop click propagation to map
+          onClick={(e) => e.stopPropagation()} 
         >
            
-           <div className="flex items-center mb-2">
+           {/* <div className="flex items-center mb-2">
              <span className="w-3 h-3 bg-red-500 rounded-full mr-2 shadow-sm"></span> 
              <span className="font-semibold text-gray-700">HQ</span>
-           </div>
+           </div> */}
 
-           <div className="border-t border-gray-200 my-2"></div>
+           {/* <div className="border-t border-gray-200 my-2"></div> */}
 
            <label className="flex items-center mb-2 cursor-pointer hover:bg-gray-50 p-1 rounded transition">
              <input 
@@ -335,7 +339,7 @@ const DeliveryOptimizer = ({
 
         </div>
         
-        {/* ✅ CLOSE BUTTON FOR WHEN SIDEBAR IS HIDDEN */}
+        {/* Close button only when sidebar is hidden (Review Mode) */}
         {!isDispatchMode && (
           <button 
             onClick={onClose} 
@@ -349,7 +353,7 @@ const DeliveryOptimizer = ({
         )}
       </div>
 
-      {/* 2. SIDEBAR PANEL - Narrower & Conditionally Visible */}
+      {/* 2. SIDEBAR PANEL - Visible ONLY in Dispatch Mode */}
       {isDispatchMode && (
         <div className="h-full bg-slate-900 text-white shadow-2xl flex flex-col order-2 transition-all duration-300 w-[80px] md:w-64">
           
@@ -359,39 +363,44 @@ const DeliveryOptimizer = ({
               <button onClick={onClose} className="text-3xl text-slate-400 hover:text-white mx-auto md:mx-0">&times;</button>
             </div>
             
-            <div className="flex gap-2 w-full flex-col">
-              <button 
-                  onClick={runOptimization} 
-                  disabled={loading || saving}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg transition-all h-10 flex items-center justify-center text-sm"
-                  title="Run Auto-Assign"
-              >
-                  {loading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : 
-                    <><span className="text-lg mr-2">⚡️</span> <span className="hidden md:inline">Auto-Assign</span></>
-                  }
-              </button>
+            {/* ✅ Logic for Button Activation */}
+            {hasPreparedOrders ? (
+              <div className="flex gap-2 w-full flex-col">
+                <button 
+                    onClick={runOptimization} 
+                    disabled={loading || saving}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg transition-all h-10 flex items-center justify-center text-sm"
+                    title="Run Auto-Assign"
+                >
+                    {loading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : 
+                      <><span className="text-lg mr-2">⚡️</span> <span className="hidden md:inline">Auto-Assign</span></>
+                    }
+                </button>
 
-              <button 
-                  onClick={handleDispatch}
-                  disabled={loading || saving || Object.keys(assignments).length === 0}
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all h-10 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                  title="Confirm & Save"
-              >
-                  {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : 
-                    <><span className="text-lg mr-2">📦</span> <span className="hidden md:inline">Confirm</span></>
-                  }
-              </button>
-            </div>
+                <button 
+                    onClick={handleDispatch}
+                    // ✅ Only active if assignments exist AND are not saving/loading
+                    disabled={loading || saving || Object.keys(assignments).length === 0}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all h-10 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    title="Confirm & Save"
+                >
+                    {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : 
+                      <><span className="text-lg mr-2">📦</span> <span className="hidden md:inline">Confirm</span></>
+                    }
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-2 text-slate-400 text-sm bg-slate-800 rounded border border-slate-700">
+                No new orders to assign.
+              </div>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
               {orders.map((o, i) => {
-                  // Check filter for list too (optional, but good UX)
-                  const status = o.orderStatus || 'PREPARED';
-                  // Even in dispatch mode, we might only want to show PREPARED orders in the list to avoid clutter
-                  // since delivering/delivered are hidden from map anyway.
-                  if (status === 'DELIVERED') return null;
-                  if (status === 'DELIVERING') return null;
+                  // In Dispatch Mode, we ONLY show PREPARED orders in the list to avoid clutter
+                  // (since the others are hidden from map anyway via isDispatchMode logic)
+                  if (o.orderStatus === 'DELIVERED' || o.orderStatus === 'DELIVERING') return null;
 
                   const agentId = assignments[o.sk];
                   const color = getAgentColor(agentId);

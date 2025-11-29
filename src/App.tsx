@@ -213,7 +213,8 @@ function App({ signOut, user }: AppProps) {
       try {
         const { data: existingBusiness, errors } = await client.models.BusinessData.get({
           pk: businessPk,
-          sk: businessSk
+          sk: businessSk,
+      
         });
 
         if (errors) {
