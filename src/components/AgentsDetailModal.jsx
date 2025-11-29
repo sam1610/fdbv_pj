@@ -3,10 +3,10 @@ import { useEntityList } from '../DataHook/useEntityList';
 
 
 
-const AgentsDetailModal = ({ IdAgent,agentName, onClose }) => {
+const AgentsDetailModal = ({ IdAgent,agentName,phoneNbr,  onClose }) => {
 
     const { data: lineItems, loading, error } = useEntityList(
-        {gsi1pk: IdAgent, sk: {beginsWith: 'ORDER#'}}, 
+        {gsi1pk: IdAgent, sk: {beginsWith: `ORDER#`}}, 
         "ByAgent");
     console.log("Agent Orders Props:", { lineItems });
     const orderTotal = useMemo(() => {

@@ -58,7 +58,7 @@ const handleDataRefresh = useCallback(() => {
             return <CustomersDetailModal IdCustomer={modal.IdCustomer} customerName={modal.customerName}  onClose={() => setModal(null)} />;
         }
         if (modal.type === 'AgentDetail') {
-            return <AgentsDetailModal IdAgent={modal.IdAgent} agentName={modal.agentName}  onClose={() => setModal(null)} />;
+            return <AgentsDetailModal IdAgent={modal.IdAgent} agentName={modal.agentName} phoneNbr={phoneNbr} onClose={() => setModal(null)} />;
         }
         if (modal.type === 'assignDelivery') {
             return <AssignDeliveryModal 

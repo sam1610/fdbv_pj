@@ -1,5 +1,3 @@
-
-// OrdersView.jsx — FINAL CLEAN VERSION
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -57,14 +55,14 @@ const OrderFilters = ({ currentFilter, setFilter, hasPrepared , readyForDispatch
       All
     </button>
 
-    {hasPrepared > 0 && (
-      <button
-        onClick={() => setFilter('Auto-Assign')}
-        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg transform hover:scale-105 transition"
-      >
-        Auto-Assign Ready Orders ({readyForDispatch.length})
-      </button>
-    )}
+    {/* Allow opening map even if 0 prepared orders, so Admin can track delivering ones */}
+    <button
+      onClick={() => setFilter('Auto-Assign')}
+      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg transform hover:scale-105 transition"
+    >
+      {/* Show count of dispatchable orders, but text implies map view access */}
+      Dispatch Map ({readyForDispatch.length} Ready)
+    </button>
   </div>
 );
 
@@ -99,15 +97,12 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 const generateDistinctColors = (count) => {
   const colors = [];
   for (let i = 0; i < count; i++) {
-    // 1. Calculate hue: evenly spaced around the 360° color wheel
-    // e.g. if 3 agents: 0°, 120°, 240°
     const hue = Math.floor((360 / count) * i);
-    
-    // 2. Create CSS HSL string (70% Saturation, 50% Lightness is standard "bright")
     colors.push(`hsl(${hue}, 70%, 50%)`);
   }
   return colors;
 };
+
 // Main Component
 const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation }) => {
   const [orders, setOrders] = useState([]);
@@ -117,7 +112,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
   const [editingId, setEditingId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
     console.log(" deliveryAgents", deliveryAgents);
-  // Subscribe to all orders
+  
   const queryParam = useMemo(() => phoneNbr ? {
     filter: { pk: { eq: `BUSINESS#${phoneNbr}` }, sk: { beginsWith: 'ORDER#' } }
   } : null, [phoneNbr]);
@@ -138,7 +133,6 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     return () => sub.unsubscribe();
   }, [queryParam]);
 
-  // Sorted & filtered
   const sortedOrders = useMemo(() =>
     [...orders].sort((a, b) => b.sk.localeCompare(a.sk)), [orders]
   );
@@ -150,23 +144,41 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     if (filter === 'all') return sortedOrders;
     return [];
   }, [sortedOrders, filter]);
-  console.log("Filtered Orders:", filteredOrders);
-  // Ready for dispatch — stable & correct
+  
+  // 1. Ready for Dispatch (Only PREPARED) - Used for button count & auto-assign logic
   const readyForDispatch = useMemo(() => {
     return sortedOrders
-      .filter(o => o.orderStatus === 'PREPARED' && !o.isPickUp )
+      .filter(o => o.orderStatus === 'PREPARED')// && !o.isPickUp )
       .map(order => ({
         sk: order.sk,
         pk: order.pk,
         location: parseLocation(order.location),
-        customer: order.gsi2pk?.split('#')[2] || 'Unknown'
+        customer: order.gsi2pk?.split('#')[2] || 'Unknown',
+        orderStatus: order.orderStatus // Keep status for logic downstream
       }))
       .filter(o => o.location !== null);
   }, [sortedOrders]);
 
-  const preparedCount = sortedOrders.filter(o => o.orderStatus === 'PREPARED').length;
+  // ✅ 2. All Map Orders (PREPARED + DELIVERING + DELIVERED) - Used for Map Display
+  const allMapOrders = useMemo(() => {
+    return sortedOrders
+      .filter(o => 
+          ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus) && 
+          !o.isPickUp
+      )
+      .map(order => ({
+        sk: order.sk,
+        pk: order.pk,
+        location: parseLocation(order.location),
+        customer: order.gsi2pk?.split('#')[2] || 'Unknown',
+        orderStatus: order.orderStatus, // Critical for filtering in DeliveryOptimizer
+        gsi1pk: order.gsi1pk // Critical for agent assignment lookup
+      }))
+      .filter(o => o.location !== null);
+  }, [sortedOrders]);
 
-  // Virtualization
+  const preparedCount = readyForDispatch.length;
+
   const parentRef = useRef();
   const rowVirtualizer = useVirtualizer({
     count: filteredOrders.length,
@@ -174,10 +186,11 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     estimateSize: () => 92,
     overscan: 5,
   });
-//   Colour generation for delivery agents
-const agentColors = useMemo(() => {
-  return generateDistinctColors(deliveryAgents.length);
-}, [deliveryAgents.length]);
+
+  const agentColors = useMemo(() => {
+    return generateDistinctColors(deliveryAgents.length);
+  }, [deliveryAgents.length]);
+  
   const virtualItems = rowVirtualizer.getVirtualItems();
 
   const handleStatusChange = async (order, newStatus) => {
@@ -187,7 +200,7 @@ const agentColors = useMemo(() => {
       await client.models.BusinessData.update({
         pk: order.pk,
         sk: order.sk,
-        orderStatus: newStatus 
+        orderStatus: newStatus
       });
     } catch (err) {
       alert('Update failed');
@@ -197,12 +210,13 @@ const agentColors = useMemo(() => {
       setEditingId(null);
     }
   };
-   const getAgentName = (gsi1pk) => {
+
+  const getAgentName = (gsi1pk) => {
       if (!gsi1pk) return 'Unknown';
-      // gsi1pk is like "AGENT#+123456789"
       const agent = deliveryAgents.find(a => a.sk === gsi1pk);
       return agent ? agent.name : 'Unknown Agent';
   };
+
   if (loading) return <div className="p-8 text-center text-slate-400">Loading orders...</div>;
   if (error) return <div className="p-8 text-center text-red-400">{error}</div>;
 
@@ -254,6 +268,7 @@ const agentColors = useMemo(() => {
                         Customer: {order.gsi2pk?.split('#')[2] || 'N/A'}
                       </p>
                     </div>
+
                     {order.orderStatus === 'DELIVERING' && (
                         <div className="flex flex-col items-center justify-center mx-4 min-w-[120px]">
                             <span className="text-xs text-orange-400 font-bold uppercase tracking-wider mb-0.5">
@@ -269,6 +284,7 @@ const agentColors = useMemo(() => {
                             </div>
                         </div>
                     )}
+
                     <div className="text-right flex-shrink-0 ml-4">
                       <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.00'}</p>
                       <OrderStatusEditor
@@ -288,10 +304,10 @@ const agentColors = useMemo(() => {
         )}
       </div>
 
-      {/* AUTO-ASSIGN MODAL — 100% stable */}
-      {filter === 'Auto-Assign' && readyForDispatch.length > 0 && (
+      {/* ✅ PASS 'allMapOrders' so map sees Delivered/Delivering too */}
+      {filter === 'Auto-Assign' && (
         <DeliveryOptimizer
-          orders={readyForDispatch}
+          orders={allMapOrders} 
           agents={deliveryAgents
             .map(agent => ({
               id: agent.sk ,
@@ -304,8 +320,7 @@ const agentColors = useMemo(() => {
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
           onAssignmentSaved={() => {
-            // alert('All orders dispatched successfully!');
-            // setFilter('Prepared');
+            alert('Orders updated!');
           }}
         />
       )}

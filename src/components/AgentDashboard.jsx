@@ -15,12 +15,12 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // --- 1. Subscribe to Assigned Orders (SIMPLIFIED) ---
-  // We filter ONLY by the Agent ID first to ensure we catch the 'Assign' event.
-  // We filter by Status inside the subscription callback.
+  // --- 1. Subscribe to Assigned Orders (SIMPLIFIED for Robustness) ---
+  // We filter ONLY by the Agent ID to ensure we catch the assignment event reliably.
+  // When Admin assigns order, 'gsi1pk' changes to this agent's ID.
+  // This simple filter is much more reliable for real-time "enter" events.
   const queryParam = useMemo(() => {
     if (!agentPhone) return null;
-    console.log("AgentDashboard: Subscribing to orders for", agentPhone);
     return {
         filter: { 
             gsi1pk: { eq: `AGENT#${agentPhone}` } 
@@ -31,11 +31,14 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
   useEffect(() => {
     if (!queryParam) return;
     
+    console.log("AgentDashboard: Subscribing to orders for", agentPhone);
+
     const sub = client.models.BusinessData.observeQuery(queryParam).subscribe({
         next: ({ items }) => {
-            console.log("AgentDashboard: Received update!", items.length, "items");
+            console.log("AgentDashboard: Received update!", items.length, "items found.");
             
-            // ✅ Filter in memory for better reliability
+            // ✅ Filter locally for status (More reliable for real-time transitions)
+            // We only want to show what the agent needs to work on or has finished today
             const activeOrders = items.filter(o => 
                 o.orderStatus === 'DELIVERING' || o.orderStatus === 'DELIVERED'
             );
@@ -72,7 +75,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
     initMap();
   }, []);
 
-  // --- 3. Plot Orders (UPDATED WITH CHECKBOX LOGIC) ---
+  // --- 3. Plot Orders (UPDATED) ---
   useEffect(() => {
     if (!mapInstance.current || orders.length === 0) return;
     
@@ -90,28 +93,28 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
 
         if (!lat || !lng) return;
 
-        // ✅ Check Status
+        // Check Status
         const isDelivered = order.orderStatus === 'DELIVERED';
 
         const el = document.createElement('div');
         el.className = isDelivered ? 'marker-delivered' : 'marker-delivering';
         
-        // ✅ Change Icon based on status
+        // Change Icon based on status
         el.innerHTML = isDelivered 
             ? `<span style="font-size:20px; color:white;">✓</span>` 
             : `<span style="font-size:20px;">📦</span>`;
             
-        el.style.backgroundColor = isDelivered ? '#22c55e' : '#fbbf24'; // Green-500 vs Amber-400
+        el.style.backgroundColor = isDelivered ? '#22c55e' : '#fbbf24'; 
         el.style.width = '36px';
         el.style.height = '36px';
         el.style.borderRadius = '50%';
         el.style.display = 'flex';
         el.style.justifyContent = 'center';
         el.style.alignItems = 'center';
-        el.style.border = '3px solid white'; // Thicker border for contrast
+        el.style.border = '3px solid white';
         el.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
         el.style.cursor = 'pointer';
-        el.style.transition = 'all 0.3s ease'; // Smooth transition for color changes
+        el.style.transition = 'all 0.3s ease';
 
         // Extract Clean Data for Tooltip
         const cleanId = order.sk.split('#')[1] || order.sk;
@@ -214,8 +217,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
                         <div>
                             <div className="flex items-center gap-2">
                                 <h2 className="text-lg font-bold text-slate-800">
-                                    Customer📞 {selectedOrder.gsi2pk.split('#')[2] || 'Customer'}
-
+                                    Order {selectedOrder.sk.split('#')[1]}
                                 </h2>
                                 {selectedOrder.orderStatus === 'DELIVERED' && (
                                     <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">
@@ -224,7 +226,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
                                 )}
                             </div>
                             <p className="text-slate-500 text-sm">
-                            Order {selectedOrder.sk.split('#')[1]}- [{selectedOrder.itemsNbr || 0} items]
+                                📞 {selectedOrder.name || 'Customer'}
                             </p>
                         </div>
                         <button onClick={() => setSelectedOrder(null)} className="text-slate-400 text-2xl">&times;</button>
