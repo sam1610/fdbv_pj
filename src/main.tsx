@@ -87,7 +87,7 @@ const formFields: AuthenticatorProps['formFields'] = {
   },
 };
 
-// --- 2. Render the Authenticator with the hideSignUp prop ---
+// --- 2.  hideSignUp prop ---
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <>
     <Authenticator formFields={formFields} hideSignUp={true}>

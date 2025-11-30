@@ -16,39 +16,45 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
 
 
-const queryParam = useMemo(() => {
-
-  return {
-    filter: {
-      pk: { beginsWith: "BUSINESS#" } 
-    }
-  };
-}, []);  
+const queryParam = useMemo(() => ({
+  filter: {
+    gsi1pk: { eq: `AGENT#${agentPhone}` },
+    orderStatus: { in: ['DELIVERING', 'DELIVERED'] }
+  }
+}), [agentPhone]);
 
 useEffect(() => {
-  if (!queryParam || !agentPhone) return;
+  if (!agentPhone) return;
 
-
-  const sub = client.models.BusinessData.observeQuery(queryParam).subscribe({
+  const subscription = client.models.BusinessData.observeQuery(
+    client.models.BusinessData.ByAgentByStatus,      // 🔥 Uses GSI (no scans)
+    {
+      gsi1pk: `AGENT#${agentPhone}`                  // partition key ONLY
+      // DO NOT FILTER STATUS HERE → Dynamo adds a SCAN, trust me.
+    },
+    {
+      sort: s => s.sk(SortDirection.ASC)             // ORDER#timestamp
+    }
+  ).subscribe({
     next: ({ items }) => {
-      console.log("AgentDashboard: Received update –", items.length, "total orders");
-
-      const myOrders = items.filter(o => 
-        o.gsi1pk === `AGENT#${agentPhone}` && 
-        (o.orderStatus === 'DELIVERING' || o.orderStatus === 'DELIVERED')
+      // Filter locally — items list is small, cheap, consistent
+      const filtered = items.filter(o =>
+        o.orderStatus === 'DELIVERING' ||
+        o.orderStatus === 'DELIVERED'
       );
 
-      setOrders(myOrders);
+      setOrders(filtered);
       setLoading(false);
     },
-    error: (err) => {
-      console.error("AgentDashboard Subscription Error:", err);
+    error: (error) => {
+      console.error("observeQuery error:", error);
       setLoading(false);
     }
   });
 
-  return () => sub.unsubscribe();
-}, [queryParam, agentPhone]);
+  return () => subscription.unsubscribe();
+}, [agentPhone]);
+
 
 
   // --- 2. Map Logic ---
