@@ -46,6 +46,7 @@ deliveryAgentId: a.string()
       index('gsi1pk').sortKeys(['sk']).name('ByAgentByStatus'),
       // list of orders related to a specific customer
       index('gsi2pk').sortKeys(['sk']).name('ByCustomer'),
+      index('pk').sortKeys(['sk']).name('ByBusiness').queryField('listByBusiness')
     ])
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
@@ -71,7 +72,8 @@ deliveryAgentId: a.string()
       .arguments({
         name: a.string().required(),
         phone: a.string().required(),
-        email: a.string()
+        email: a.string(),
+        businessPhone: a.string().required()
       })
       .returns(a.json())
       .authorization(allow => [

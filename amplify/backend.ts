@@ -99,7 +99,10 @@ backend.createAgentUser.addEnvironment(
   "AMPLIFY_AUTH_USERPOOL_ID",
   backend.auth.resources.userPool.userPoolId
 );
-
+backend.createAgentUser.addEnvironment(
+  'AMPLIFY_DATA_TABLE_NAME', 
+  backend.data.resources.tables['BusinessData'].tableName
+);
 const cognitoPolicy = new PolicyStatement({
   actions: [
     "cognito-idp:AdminCreateUser",
@@ -110,7 +113,9 @@ const cognitoPolicy = new PolicyStatement({
 
 backend.createAgentUser.resources.lambda.addToRolePolicy(cognitoPolicy);
 
-
+backend.data.resources.tables['BusinessData'].grantWriteData(
+  backend.createAgentUser.resources.lambda
+);
 // --- 2. Create Unique Map Name ---
 const branchName = (process.env.AWS_BRANCH || 'sandbox').replace(/[^a-zA-Z0-9-]/g, '-');
 const uniqueMapName = `deliveryMap-${branchName}`;

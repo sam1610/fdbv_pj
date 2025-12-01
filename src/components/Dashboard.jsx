@@ -24,6 +24,7 @@ const businessLocation = { "latitude" : { "N" : "26.0935053" }, "longitude" : { 
 export default function Dashboard({phoneNbr}) {
     const [activeView, setActiveView] = useState('dashboard');
     const [modal, setModal] = useState(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     const { data: deliveryAgents, loading, error } = useEntityList(
              {filter: {pk:{ eq: `BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'AGENT#'}}}, "list");

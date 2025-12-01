@@ -3,38 +3,42 @@ import {
   AdminCreateUserCommand, 
   AdminAddUserToGroupCommand 
 } from "@aws-sdk/client-cognito-identity-provider";
+// ✅ Import DynamoDB Clients
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
-const client = new CognitoIdentityProviderClient();
+const cognitoClient = new CognitoIdentityProviderClient();
+const ddbClient = new DynamoDBClient();
+const docClient = DynamoDBDocumentClient.from(ddbClient);
 
 export const handler = async (event: any) => {
   console.log("EVENT RECEIVED:", JSON.stringify(event));
 
-  const { name, phone, email } = event.arguments;
+  // ✅ Extract 'businessPhone'
+  const { name, phone, email, businessPhone } = event.arguments;
+  
   const userPoolId = process.env.AMPLIFY_AUTH_USERPOOL_ID;
+  const tableName = process.env.AMPLIFY_DATA_TABLE_NAME;
 
-  if (!userPoolId) {
-    throw new Error("Missing User Pool ID environment variable");
+  if (!userPoolId || !tableName) {
+    throw new Error("Missing Env Vars: UserPoolId or TableName");
   }
 
-  // FIX: Cognito expects an email format for username if configured that way.
-  // If the user didn't provide an email, generate a placeholder based on phone.
-  // e.g. "+97333333333@no-email.com"
-  // Remove '+' to make it cleaner for the local part of email
+  // Sanitize phone
   const cleanPhone = phone.replace('+', '');
   const finalEmail = email || `${cleanPhone}@placeholder.com`;
-  
-  // We will use the EMAIL as the username to satisfy the "Username should be an email" constraint.
   const username = finalEmail; 
+  // Ensure we have a valid Agent SK format
+  const formattedPhone = phone.startsWith('+') ? phone : `+${phone}`;
 
   try {
-    // --- Step 1: Create User ---
-    console.log(`Creating user with username: ${username}`);
-    
+    // --- Step 1: Create Cognito User ---
+    console.log(`Creating Cognito Identity: ${username}`);
     const createUserCommand = new AdminCreateUserCommand({
       UserPoolId: userPoolId,
       Username: username, 
       UserAttributes: [
-        { Name: "phone_number", Value: phone }, // Store real phone here
+        { Name: "phone_number", Value: formattedPhone },
         { Name: "name", Value: name },
         { Name: "email", Value: finalEmail },
         { Name: "email_verified", Value: "true" },
@@ -45,39 +49,60 @@ export const handler = async (event: any) => {
     });
 
     try {
-        await client.send(createUserCommand);
-        console.log("✅ User created successfully");
+        await cognitoClient.send(createUserCommand);
     } catch (err: any) {
         if (err.name === 'UsernameExistsException') {
-            console.log("⚠️ User already exists, proceeding to add to group...");
+            console.log("⚠️ User exists, skipping creation.");
         } else {
-            console.error("❌ User creation failed:", err);
             throw err; 
         }
     }
 
     // --- Step 2: Add to Group ---
-    const groupName = "DeliveryAgents"; 
-    console.log(`Adding user ${username} to group: ${groupName}`);
-    
-    const addToGroupCommand = new AdminAddUserToGroupCommand({
+    await cognitoClient.send(new AdminAddUserToGroupCommand({
       UserPoolId: userPoolId,
       Username: username,
-      GroupName: groupName
-    });
+      GroupName: "DeliveryAgents"
+    }));
 
-    try {
-      await client.send(addToGroupCommand);
-      console.log("✅ User added to group successfully");
-    } catch (err: any) {
-      console.error("❌ Failed to add user to group:", err);
-      throw err;
+    // --- Step 3: Write to DynamoDB (THIS WAS MISSING) ---
+    console.log(`Writing to Table: ${tableName}`);
+    
+    if (!businessPhone) {
+      throw new Error("Business Phone is required to link Agent to Business");
     }
 
-    return { success: true, message: `Agent ${name} created. Login: ${username}` };
+    const now = new Date().toISOString();
+    const agentSk = `AGENT#${formattedPhone}`; 
+
+    await docClient.send(new PutCommand({
+        TableName: tableName,
+        Item: {
+            pk: `BUSINESS#${businessPhone}`,  // Links to the Business
+            sk: agentSk,                     // Unique Agent ID
+            __typename: 'BusinessData',      // Required for AppSync
+            entityType: 'Agent',
+            
+            // Attributes
+            name: name,
+            phone: formattedPhone,
+            email: finalEmail,
+            
+            // GSI Keys (For your 'ByAgentByStatus' index)
+            gsi1pk: agentSk, 
+
+            // Metadata
+            createdAt: now,
+            updatedAt: now,
+            itemsNbr: 0,
+            status: 'ACTIVE'
+        }
+    }));
+
+    return { success: true, message: `Agent ${name} created successfully.` };
 
   } catch (error: any) {
     console.error("❌ FATAL ERROR:", error);
-    throw new Error(error.message || "Failed to create Cognito user");
+    throw new Error(error.message || "Failed to create Agent");
   }
 };

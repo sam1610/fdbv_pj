@@ -30,7 +30,6 @@ useEffect(() => {
     client.models.BusinessData.ByAgentByStatus,      // 🔥 Uses GSI (no scans)
     {
       gsi1pk: `AGENT#${agentPhone}`                  // partition key ONLY
-      // DO NOT FILTER STATUS HERE → Dynamo adds a SCAN, trust me.
     },
     {
       sort: s => s.sk(SortDirection.ASC)             // ORDER#timestamp

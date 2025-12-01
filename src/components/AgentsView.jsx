@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { client } from '../DataHook/amplifyClient'; 
-import { useVirtualizer } from '@tanstack/react-virtual'; 
+import { client } from '../DataHook/amplifyClient';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
@@ -38,7 +38,6 @@ const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
               placeholder="e.g. Ahmed Ali"
             />
           </div>
-
           <div>
             <label className="block text-slate-400 text-sm mb-1">
               Phone Number <span className="text-red-500">*</span>
@@ -53,7 +52,6 @@ const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
             />
             <p className="text-xs text-slate-500 mt-1">Format: +97312345678.</p>
           </div>
-
           <div>
             <label className="block text-slate-400 text-sm mb-1">
               Email (Login ID) <span className="text-red-500">*</span>
@@ -67,7 +65,7 @@ const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
               placeholder="agent@example.com"
             />
           </div>
-
+          
           <div className="flex gap-3 mt-6">
             <button 
               type="button" 
@@ -77,8 +75,7 @@ const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
               Cancel
             </button>
             <button 
-              type="submit" 
-              // ✅ Disabled unless valid and not loading
+              type="submit"
               disabled={loading || !isValid}
               className={`flex-1 py-2 rounded font-bold transition-all ${
                 loading || !isValid 
@@ -98,73 +95,85 @@ const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
 const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
+    // eslint-disable-next-line no-unused-vars
     const [error, setError] = useState(null);
-    
+
     // Modal State
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [creating, setCreating] = useState(false);
 
     // --- 1. Subscription Logic ---
-    const queryParam = useMemo(() => {
-        if (!phoneNbr) return null;
-        return {
-            filter: { 
-                pk: { eq: `BUSINESS#${phoneNbr}` }, 
-                sk: { beginsWith: 'AGENT#' } 
-            }
-        };
-    }, [phoneNbr]);
+    // Use the index name from schema: index('pk').sortKeys(['sk']).name('ByBusiness')
+    const businessPk = `BUSINESS#${phoneNbr}`;
+    const agentPrefix = 'AGENT#';
 
     useEffect(() => {
-        if (!queryParam) return;
+        if (!phoneNbr) return;
         setLoading(true);
-        const sub = client.models.BusinessData.observeQuery(queryParam).subscribe({
-            next: (snapshot) => {
-                setAgents([...snapshot.items]);
+
+        const fetchAndSubscribe = async () => {
+            try {
+                // Initial Fetch using the Query Index (Zero Scan)
+                const { data } = await client.models.BusinessData.listByBusiness({
+                    pk: businessPk,
+                    sk: { beginsWith: agentPrefix }
+                });
+                setAgents(data);
                 setLoading(false);
-            },
-            error: (err) => {
-                console.error(err);
+            } catch (e) {
+                console.error("Fetch failed", e);
                 setLoading(false);
             }
-        });
-        return () => sub.unsubscribe();
-    }, [queryParam]);
 
-    // --- 2. Create Agent Logic ---
+            // Real-time Subscription
+            const sub = client.models.BusinessData.onCreate({
+                filter: { pk: { eq: businessPk }, sk: { beginsWith: agentPrefix } }
+            }).subscribe({
+                next: (item) => setAgents(prev => [...prev, item]),
+                error: (err) => console.error("Sub error:", err)
+            });
+
+            return () => sub.unsubscribe();
+        };
+
+        const cleanup = fetchAndSubscribe();
+        return () => cleanup && cleanup.then && cleanup.then(unsub => unsub && unsub()); 
+    }, [phoneNbr, businessPk]);
+
+    // --- 2. Create Agent Logic (FIXED) ---
     const handleCreateAgent = async (data) => {
         setCreating(true);
         try {
-            // Step A: Create Cognito User (The "System" Identity)
-            // This calls the Lambda function we created
-            const response = await client.mutations.createAgentUser({
+            // ✅ FIX 1: Pass 'businessPhone' (phoneNbr prop) to the mutation.
+            // The Lambda needs this to link the agent to your business (pk).
+            const mutationResult = await client.mutations.createAgentUser({
                 name: data.name,
                 phone: data.phone,
-                email: data.email
-            });
+                email: data.email,
+                businessPhone: phoneNbr // <--- THIS WAS MISSING
+            }, { authMode: 'userPool' });
 
-            // If Lambda fails, it throws an error caught by catch block
-            console.log("Cognito User Created:", response);
-
-            // Step B: Create DynamoDB Record (The "Business" Data)
-            // Using the structure you requested: pk=BUSINESS#..., sk=AGENT#...
-            await client.models.BusinessData.create({
-                pk: `BUSINESS#${phoneNbr}`,
-                sk: `AGENT#${data.phone}`,
-                entityType: 'Agent',
-                name: data.name,
-                phone: data.phone,
-                // Initialize other fields if needed
-                itemsNbr: 0 // Used for tracking deliveries maybe?
-            });
-            if (onAgentAdded) {
-                onAgentAdded(); // This tells Dashboard.jsx to re-run useEntityList
+            // Correct way to access result in Amplify Gen 2
+            const result = mutationResult?.data?.createAgentUser;
+            
+            if (!result?.success) {
+                throw new Error(result?.message || "Failed to create Cognito user");
             }
-            // alert(`Agent ${data.name} created successfully!\nTemp Password: Welcome123!`);
+
+            console.log("Success:", result.message);
+
+            // ❌ FIX 2: REMOVED "Step B" (Client-side DynamoDB write).
+            // The Lambda now handles the database write securely. 
+            // We rely on the subscription above to update the UI automatically.
+
+            alert(`Agent ${data.name} created successfully!\nLogin: ${data.email || data.phone}\nTemp Password: Pa$$w0rd!`);
             setShowCreateModal(false);
+            
+            // Optional: Trigger manual refresh if needed
+            onAgentAdded?.();
 
         } catch (err) {
-            console.error("Creation Failed:", err);
+            console.error("Agent creation failed:", err);
             alert("Failed to create agent: " + (err.message || JSON.stringify(err)));
         } finally {
             setCreating(false);
@@ -177,12 +186,14 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
     [agents]);
 
     const parentRef = useRef();
+
     const rowVirtualizer = useVirtualizer({
         count: sortedCustomers.length,
         getScrollElement: () => parentRef.current,
         estimateSize: () => 76,
         overscan: 5,
     });
+
     const virtualItems = rowVirtualizer.getVirtualItems();
 
     if (loading) return <div className="p-8 text-center text-slate-400">Loading Agents...</div>;
@@ -198,22 +209,26 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
                     <span className="text-xl mr-2">+</span> Add Agent
                 </button>
             </div>
-            
+
             <div ref={parentRef} className="overflow-y-auto flex-1 pr-2">
                 {sortedCustomers.length > 0 ? (
                     <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative', width: '100%' }}>
                         {virtualItems.map(virtualItem => {
                             const agent = sortedCustomers[virtualItem.index];
                             return (
-                                <div 
-                                    key={agent.sk} 
+                                <div
+                                    key={agent.sk}
                                     style={{
-                                        position: 'absolute', top: 0, left: 0, width: '100%',
-                                        height: `${virtualItem.size}px`, transform: `translateY(${virtualItem.start}px)`,
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: `${virtualItem.size}px`,
+                                        transform: `translateY(${virtualItem.start}px)`,
                                     }}
                                 >
                                     <div 
-                                        onClick={() => setModal({ type: 'AgentDetail', IdAgent: agent.sk , agentName: agent.name })} 
+                                        onClick={() => setModal({ type: 'AgentDetail', IdAgent: agent.sk , agentName: agent.name })}
                                         className={classNames(
                                             virtualItem.index % 2 === 0 ? 'bg-slate-800' : 'bg-slate-700',
                                             "p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-600 h-full mb-2"
@@ -235,7 +250,9 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
                 ) : (
                     <div className="text-center py-10 text-slate-500 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
                         <p className="mb-2">No agents found.</p>
-                        <button onClick={() => setShowCreateModal(true)} className="text-orange-400 hover:underline">Create your first agent</button>
+                        <button onClick={() => setShowCreateModal(true)} className="text-orange-400 hover:underline">
+                            Create your first agent
+                        </button>
                     </div>
                 )}
             </div>
