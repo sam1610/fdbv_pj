@@ -27,7 +27,11 @@ export default function Dashboard({phoneNbr}) {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     const { data: deliveryAgents, loading, error } = useEntityList(
-             {filter: {pk:{ eq: `BUSINESS#${phoneNbr}`} , sk: {beginsWith: 'AGENT#'}}}, "list");
+             {
+            pk:`BUSINESS#${phoneNbr}` , 
+            sk: {beginsWith: 'AGENT#'},
+            sortDirection: 'DESC'
+        }, "listByBusiness");
 const handleDataRefresh = useCallback(() => {
         setRefreshTrigger(prev => prev + 1);
         console.log("Refreshing Dashboard Data...");
@@ -38,7 +42,7 @@ const handleDataRefresh = useCallback(() => {
     const renderView = () => {
         switch (activeView) {
             case 'dashboard':
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal}/>;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={2}  setModal={setModal}/>;
             case 'orders':
                 return <OrdersView phoneNbr={phoneNbr} setModal={setModal} deliveryAgents={deliveryAgents} businessLocation={businessLocation} />;
             case 'customers':
@@ -46,7 +50,7 @@ const handleDataRefresh = useCallback(() => {
             case 'agents':
                 return <AgentsView phoneNbr={phoneNbr} setModal={setModal}  onAgentAdded={handleDataRefresh}/>;
             default:
-                return <DashboardView phoneNbr={phoneNbr}  filterDays={1}  setModal={setModal} />;
+                return <DashboardView phoneNbr={phoneNbr}  filterDays={2}  setModal={setModal} />;
         }
     };
 

@@ -612,7 +612,8 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
         // A. Initial Query (Zero Scan - uses Index)
         const { data } = await client.models.BusinessData.listByBusiness({
           pk: businessPk,
-          sk: { beginsWith: orderPrefix }
+          sk: { beginsWith: orderPrefix },
+          sortDirection: 'DESC'
         });
                                                                      
         setOrders(data);

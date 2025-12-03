@@ -10,39 +10,69 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
 
     // --- ✅ 2. The Simple Query for observeQuery ---
     // We fetch ALL orders, because 'between' is not supported by subscriptions.
-    const queryParam = useMemo(() => {
-        if (!phoneNbr) return null;
-        return {
-            filter: {
-                pk: { eq: `BUSINESS#${phoneNbr}` },
-                sk: { beginsWith: 'ORDER#' }
+// --- ✅ 2. Efficient Query + Real-time Subscription ---
+    useEffect(() => {
+        if (!phoneNbr) return;
+
+        // A. Define the filter for subscriptions
+        const subFilter = { pk: { eq: `BUSINESS#${phoneNbr}` } };
+        
+        let createSub;
+        let updateSub;
+        // Optional: Add deleteSub if you allow deleting orders
+
+        const fetchAndSubscribe = async () => {
+            setLoading(true);
+            try {
+                // 1. INITIAL FETCH: Uses 'listByBusiness' Index (No Scan)
+                const { data: initialOrders } = await client.models.BusinessData.listByBusiness({
+                    pk: `BUSINESS#${phoneNbr}`,
+                    sk: { beginsWith: 'ORDER#' },
+                    sortDirection: 'DESC'
+                });
+                
+                setOrders(initialOrders);
+                setLoading(false);
+
+                // 2. SUBSCRIBE: Listen for NEW orders
+                createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
+                    next: (event) => {
+                        // Double check it is an order
+                        if (event.sk?.startsWith('ORDER#')) {
+                            setOrders(prev => [event, ...prev]); 
+                        }
+                    },
+                    error: (err) => console.error("Create Sub Error:", err)
+                });
+
+                // 3. SUBSCRIBE: Listen for STATUS UPDATES
+                updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
+                    next: (event) => {
+                        if (event.sk?.startsWith('ORDER#')) {
+                            setOrders(prev => prev.map(order => 
+                                (order.pk === event.pk && order.sk === event.sk) ? event : order
+                            ));
+                        }
+                    },
+                    error: (err) => console.error("Update Sub Error:", err)
+                });
+
+            } catch (err) {
+                console.error("Fetch error:", err);
+                setError(err.message);
+                setLoading(false);
             }
         };
+
+        fetchAndSubscribe();
+
+        // Cleanup subscriptions on unmount or when phoneNbr changes
+        return () => {
+            if (createSub) createSub.unsubscribe();
+            if (updateSub) updateSub.unsubscribe();
+        };
+
     }, [phoneNbr]);
-
-    // --- ✅ 3. The observeQuery Subscription Logic ---
-    useEffect(() => {
-        if (!queryParam) return;
-
-        setLoading(true);
-        const observer = client.models.BusinessData.observeQuery(queryParam);
-
-        const subscription = observer.subscribe({
-            next: (snapshot) => {
-                // We use the spread operator to force a re-render
-                setOrders([...snapshot.items]);
-                setError(null);
-                setLoading(false);
-            },
-            error: (err) => {
-                setError(err.message || 'Subscription error');
-                setLoading(false);
-                console.error('observeQuery error:', err);
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }, [queryParam]);
 
     // --- ✅ 4. Client-Side Filtering ---
     // This new hook filters the 'all orders' list by your 'filterDays' prop.

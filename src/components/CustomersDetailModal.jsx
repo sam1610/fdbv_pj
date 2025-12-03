@@ -6,8 +6,11 @@ import { useEntityList } from '../DataHook/useEntityList';
 const CustomersDetailModal = ({ IdCustomer,customerName, onClose }) => {
 
     const { data: lineItems, loading, error } = useEntityList(
-        {gsi2pk: IdCustomer, sk: {beginsWith: 'ORDER#'}}, 
-        "ByCustomer");
+        {
+            gsi2pk: IdCustomer, 
+            sk: {beginsWith: 'ORDER#'},
+            sortDirection: 'DESC'},
+        "listBusinessDataByGsi2pkAndSk");
     console.log("Customer Orders Props:", { lineItems });
     const orderTotal = useMemo(() => {
     // Return 0 if lineItems is empty or not yet loaded

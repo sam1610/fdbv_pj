@@ -6,8 +6,13 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal,customerId ,   phon
     console.log("OrderDetailModal Props:", { orderId, orderStatus, orderTotal, phoneNbr });
     // const lineItems = useMemo(() => allItems.filter(item => item.SortKey.startsWith(`ORDER#${order.OrderID}#ITEM#`)), [allItems, order.OrderID]);
     const { data: lineItems, loading, error } = useEntityList(
-        {filter: {pk: {eq: `ORDER#${phoneNbr}#${orderId.split('#')[1]}`}, sk: {beginsWith: 'ITEM#'}}}
-        , "list");
+        {
+            pk: `ORDER#${phoneNbr}#${orderId.split('#')[1]}`, // Direct Partition Key
+            sk: { beginsWith: 'ITEM#' },                      // Direct Sort Key condition
+            sortDirection: 'DESC'                             // ✅ Get records in Descending Order
+        },
+        "listByBusiness" // Matches the queryField in your resource.ts
+    );
     const statusColors = {
     ORDERED: 'bg-blue-500',
     IN_PREPARATION: 'bg-yellow-500',

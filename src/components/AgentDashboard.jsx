@@ -16,47 +16,117 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
   const [selectedOrder, setSelectedOrder] = useState(null);
 
 
-const queryParam = useMemo(() => ({
-  filter: {
-    gsi1pk: { eq: `AGENT#${agentPhone}` },
-    orderStatus: { in: ['DELIVERING', 'DELIVERED'] }
-  }
-}), [agentPhone]);
+// const queryParam = useMemo(() => ({
+//   filter: {
+//     gsi1pk: { eq: `AGENT#${agentPhone}` },
+//     orderStatus: { in: ['DELIVERING', 'DELIVERED'] }
+//   }
+// }), [agentPhone]);
 
-useEffect(() => {
-  if (!agentPhone) return;
+// useEffect(() => {
+//   if (!agentPhone) return;
 
-  const subscription = client.models.BusinessData.observeQuery(
-    client.models.BusinessData.ByAgentByStatus,      // 🔥 Uses GSI (no scans)
-    {
-      gsi1pk: `AGENT#${agentPhone}`                  // partition key ONLY
-    },
-    {
-      sort: s => s.sk(SortDirection.ASC)             // ORDER#timestamp
-    }
-  ).subscribe({
-    next: ({ items }) => {
-      // Filter locally — items list is small, cheap, consistent
-      const filtered = items.filter(o =>
-        o.orderStatus === 'DELIVERING' ||
-        o.orderStatus === 'DELIVERED'
-      );
+//   const subscription = client.models.BusinessData.observeQuery(
+//     client.models.BusinessData.ByAgentByStatus,      // 🔥 Uses GSI (no scans)
+//     {
+//       gsi1pk: `AGENT#${agentPhone}`                  // partition key ONLY
+//     },
+//     {
+//       sort: s => s.sk(SortDirection.ASC)             // ORDER#timestamp
+//     }
+//   ).subscribe({
+//     next: ({ items }) => {
+//       // Filter locally — items list is small, cheap, consistent
+//       const filtered = items.filter(o =>
+//         o.orderStatus === 'DELIVERING' ||
+//         o.orderStatus === 'DELIVERED'
+//       );
 
-      setOrders(filtered);
-      setLoading(false);
-    },
-    error: (error) => {
-      console.error("observeQuery error:", error);
-      setLoading(false);
-    }
-  });
+//       setOrders(filtered);
+//       setLoading(false);
+//     },
+//     error: (error) => {
+//       console.error("observeQuery error:", error);
+//       setLoading(false);
+//     }
+//   });
 
-  return () => subscription.unsubscribe();
-}, [agentPhone]);
+//   return () => subscription.unsubscribe();
+// }, [agentPhone]);
 
 
 
   // --- 2. Map Logic ---
+  
+  useEffect(() => {
+    if (!agentPhone) return;
+
+    // Filter to listen only to events for THIS agent
+    const subFilter = { gsi1pk: { eq: `AGENT#${agentPhone}` } };
+
+    let createSub, updateSub;
+
+    const fetchAndSubscribe = async () => {
+      setLoading(true);
+      try {
+        // A. QUERY: Use the GSI directly
+        // Method name is generated from index('gsi1pk').sortKeys(['sk'])
+        const { data } = await client.models.BusinessData.listBusinessDataByGsi1pkAndSk({
+           gsi1pk: `AGENT#${agentPhone}`,
+           sk: { beginsWith: 'ORDER#' },
+           // sortDirection: 'DESC' // Optional: Load newest first
+        });
+
+        // B. FILTER: Keep only active/delivered orders
+        const activeOrders = data.filter(o => 
+            o.orderStatus === 'DELIVERING' || o.orderStatus === 'DELIVERED'
+        );
+
+        setOrders(activeOrders);
+        setLoading(false);
+
+        // C. SUBSCRIPTION: Handle real-time updates
+        const handleEvent = (item) => {
+            // We only care if it's an ORDER and matches our status criteria
+            if (!item.sk.startsWith('ORDER#')) return;
+
+            setOrders(prev => {
+                // 1. Remove the item if it exists (to avoid duplicates)
+                const others = prev.filter(o => !(o.pk === item.pk && o.sk === item.sk));
+                
+                // 2. Add it back ONLY if it matches status
+                if (['DELIVERING', 'DELIVERED'].includes(item.orderStatus)) {
+                    return [...others, item];
+                }
+                return others; 
+            });
+        };
+
+        // Subscribe to Create (New assignments)
+        createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
+            next: handleEvent,
+            error: (e) => console.error("Create Sub Error", e)
+        });
+
+        // Subscribe to Update (Status changes)
+        updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
+            next: handleEvent,
+            error: (e) => console.error("Update Sub Error", e)
+        });
+
+      } catch (error) {
+        console.error("Agent Dashboard Error:", error);
+        setLoading(false);
+      }
+    };
+
+    fetchAndSubscribe();
+
+    return () => {
+        if (createSub) createSub.unsubscribe();
+        if (updateSub) updateSub.unsubscribe();
+    };
+  }, [agentPhone]);
   useEffect(() => {
     async function initMap() {
         if (mapInstance.current) return;

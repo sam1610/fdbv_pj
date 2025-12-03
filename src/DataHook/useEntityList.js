@@ -5,40 +5,47 @@ import { client } from './amplifyClient';
  * A simple, non-real-time hook to fetch a list of entities.
  * It handles pagination and fetches data only on load or when params change.
  */
-export const useEntityList = (queryParam, queryName) => {
+export const useEntityList = (queryParam, queryName= "list") => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Serialize the query parameters to create a stable dependency.
-  // This is a great solution to prevent infinite loops from the parent component.
+  // prevent infinite loops from the parent component.
   const serializedQueryParam = JSON.stringify(queryParam);
 
   const fetchData = useCallback(async () => {
     // We parse the params back inside the callback
     const params = JSON.parse(serializedQueryParam);
-    let apiMethod;
+    // let apiMethod;
     
     setLoading(true);
     setError(null);
-    
-    // Determine which API method to call (primary index or GSI)
-    if (queryName === "ByCustomer") {
-      apiMethod = client.models.BusinessData.listBusinessDataByGsi2pkAndSk;
-    } else if (queryName === "ByAgent") {
-      apiMethod = client.models.BusinessData.listBusinessDataByGsi1pkAndSk;
-    } else {
-      // Assumes queryName is a valid key like "list"
-      apiMethod = client.models.BusinessData[queryName];
-    }
-
-    // Check if the apiMethod is valid before proceeding
+    const apiMethod = client.models.BusinessData[queryName];
     if (!apiMethod || typeof apiMethod !== 'function') {
-      setError(`Failed to fetch data: Invalid queryName "${queryName}"`);
-      console.error(`Invalid queryName: ${queryName}`);
+      const msg = `Invalid queryName: "${queryName}" does not exist on BusinessData model.`;
+      console.error(msg);
+      setError(msg);
       setLoading(false);
       return;
     }
+
+    // Determine which API method to call (primary index or GSI)
+    // if (queryName === "ByCustomer") {
+    //   apiMethod = client.models.BusinessData.listBusinessDataByGsi2pkAndSk;
+    // } else if (queryName === "ByAgent") {
+    //   apiMethod = client.models.BusinessData.listBusinessDataByGsi1pkAndSk;
+    // } else {
+    //   // Assumes queryName is a valid key like "list"
+    //   apiMethod = client.models.BusinessData[queryName];
+    // }
+
+    // Check if the apiMethod is valid before proceeding
+    // if (!apiMethod || typeof apiMethod !== 'function') {
+    //   setError(`Failed to fetch data: Invalid queryName "${queryName}"`);
+    //   console.error(`Invalid queryName: ${queryName}`);
+    //   setLoading(false);
+    //   return;
+    // }
 
     try {
       const allRecords = [];

@@ -19,38 +19,96 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     const [error, setError] = useState(null);
 
     // --- 2. Simple queryParam for the subscription ---
-    const queryParam = useMemo(() => {
-        if (!phoneNbr) return null;
-        return {
-            filter: { 
-                pk: { eq: `BUSINESS#${phoneNbr}` }, 
-                sk: { beginsWith: 'CUSTOMER#' } 
+    // const queryParam = useMemo(() => {
+    //     if (!phoneNbr) return null;
+    //     return {
+    //         filter: { 
+    //             pk: { eq: `BUSINESS#${phoneNbr}` }, 
+    //             sk: { beginsWith: 'CUSTOMER#' } 
+    //         }
+    //     };
+    // }, [phoneNbr]);
+
+    // // --- 3. observeQuery subscription logic ---
+    // useEffect(() => {
+    //     if (!queryParam) return;
+
+    //     setLoading(true);
+    //     const observer = client.models.BusinessData.observeQuery(queryParam);
+
+    //     const subscription = observer.subscribe({
+    //         next: (snapshot) => {
+    //             setCustomers([...snapshot.items]); // Use spread to force re-render
+    //             setError(null);
+    //             setLoading(false);
+    //         },
+    //         error: (err) => {
+    //             setError(err.message || 'Subscription error');
+    //             setLoading(false);
+    //             console.error('CustomersView observeQuery error:', err);
+    //         }
+    //     });
+
+    //     return () => subscription.unsubscribe();
+    // }, [queryParam]);
+
+    useEffect(() => {
+        if (!phoneNbr) return;
+
+        // Define filter for subscriptions (Server-side)
+        const subFilter = { 
+            pk: { eq: `BUSINESS#${phoneNbr}` },
+            sk: { beginsWith: 'CUSTOMER#' }
+        };
+
+        let createSub;
+        let updateSub;
+
+        const fetchAndSubscribe = async () => {
+            setLoading(true);
+            try {
+                // A. INITIAL FETCH: Use the Index (Query)
+                const { data } = await client.models.BusinessData.listByBusiness({
+                    pk: `BUSINESS#${phoneNbr}`,
+                    sk: { beginsWith: 'CUSTOMER#' }
+                });
+                
+                setCustomers(data);
+                setLoading(false);
+
+                // B. SUBSCRIBE: Listen for NEW customers
+                createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
+                    next: (item) => {
+                        setCustomers(prev => [...prev, item]);
+                    },
+                    error: (err) => console.error("Customer Create Sub Error:", err)
+                });
+
+                // C. SUBSCRIBE: Listen for UPDATES (e.g., totalAmount changes)
+                updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
+                    next: (item) => {
+                        setCustomers(prev => prev.map(c => 
+                            (c.pk === item.pk && c.sk === item.sk) ? item : c
+                        ));
+                    },
+                    error: (err) => console.error("Customer Update Sub Error:", err)
+                });
+
+            } catch (err) {
+                console.error("Fetch customers failed:", err);
+                setError(err.message);
+                setLoading(false);
             }
         };
+
+        fetchAndSubscribe();
+
+        // Cleanup
+        return () => {
+            if (createSub) createSub.unsubscribe();
+            if (updateSub) updateSub.unsubscribe();
+        };
     }, [phoneNbr]);
-
-    // --- 3. observeQuery subscription logic ---
-    useEffect(() => {
-        if (!queryParam) return;
-
-        setLoading(true);
-        const observer = client.models.BusinessData.observeQuery(queryParam);
-
-        const subscription = observer.subscribe({
-            next: (snapshot) => {
-                setCustomers([...snapshot.items]); // Use spread to force re-render
-                setError(null);
-                setLoading(false);
-            },
-            error: (err) => {
-                setError(err.message || 'Subscription error');
-                setLoading(false);
-                console.error('CustomersView observeQuery error:', err);
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }, [queryParam]);
 
     // --- 4. Sort Customers by Name ---
     const sortedCustomers = useMemo(() => {

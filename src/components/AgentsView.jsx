@@ -109,36 +109,87 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
 
     useEffect(() => {
         if (!phoneNbr) return;
+        
         setLoading(true);
+        const businessPk = `BUSINESS#${phoneNbr}`;
+        const agentPrefix = 'AGENT#';
+        const subFilter = { pk: { eq: businessPk }, sk: { beginsWith: agentPrefix } };
+
+        let createSub, updateSub;
 
         const fetchAndSubscribe = async () => {
             try {
-                // Initial Fetch using the Query Index (Zero Scan)
+                // A. Initial Fetch (Query via Index)
                 const { data } = await client.models.BusinessData.listByBusiness({
                     pk: businessPk,
                     sk: { beginsWith: agentPrefix }
                 });
                 setAgents(data);
                 setLoading(false);
+
+                // B. Real-time Subscriptions
+                createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
+                    next: (item) => setAgents(prev => [...prev, item]),
+                    error: (err) => console.error("Agent Create Sub error:", err)
+                });
+                
+                updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
+                    next: (item) => {
+                        setAgents(prev => prev.map(a => 
+                            (a.pk === item.pk && a.sk === item.sk) ? item : a
+                        ));
+                    },
+                    error: (err) => console.error("Agent Update Sub error:", err)
+                });
+
             } catch (e) {
-                console.error("Fetch failed", e);
+                console.error("Agent Fetch failed", e);
+                setError(e.message);
                 setLoading(false);
             }
-
-            // Real-time Subscription
-            const sub = client.models.BusinessData.onCreate({
-                filter: { pk: { eq: businessPk }, sk: { beginsWith: agentPrefix } }
-            }).subscribe({
-                next: (item) => setAgents(prev => [...prev, item]),
-                error: (err) => console.error("Sub error:", err)
-            });
-
-            return () => sub.unsubscribe();
         };
 
-        const cleanup = fetchAndSubscribe();
-        return () => cleanup && cleanup.then && cleanup.then(unsub => unsub && unsub()); 
-    }, [phoneNbr, businessPk]);
+        fetchAndSubscribe();
+
+        // Safe Cleanup
+        return () => {
+            if (createSub) createSub.unsubscribe();
+            if (updateSub) updateSub.unsubscribe();
+        }; 
+    }, [phoneNbr]);
+
+    // useEffect(() => {
+    //     if (!phoneNbr) return;
+    //     setLoading(true);
+
+    //     const fetchAndSubscribe = async () => {
+    //         try {
+    //             // Initial Fetch using the Query Index (Zero Scan)
+    //             const { data } = await client.models.BusinessData.listByBusiness({
+    //                 pk: businessPk,
+    //                 sk: { beginsWith: agentPrefix }
+    //             });
+    //             setAgents(data);
+    //             setLoading(false);
+    //         } catch (e) {
+    //             console.error("Fetch failed", e);
+    //             setLoading(false);
+    //         }
+
+    //         // Real-time Subscription
+    //         const sub = client.models.BusinessData.onCreate({
+    //             filter: { pk: { eq: businessPk }, sk: { beginsWith: agentPrefix } }
+    //         }).subscribe({
+    //             next: (item) => setAgents(prev => [...prev, item]),
+    //             error: (err) => console.error("Sub error:", err)
+    //         });
+
+    //         return () => sub.unsubscribe();
+    //     };
+
+    //     const cleanup = fetchAndSubscribe();
+    //     return () => cleanup && cleanup.then && cleanup.then(unsub => unsub && unsub()); 
+    // }, [phoneNbr, businessPk]);
 
     // --- 2. Create Agent Logic (FIXED) ---
     const handleCreateAgent = async (data) => {
