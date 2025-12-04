@@ -165,7 +165,7 @@ const filteredOrders = useMemo(() => {
 <div className="bg-slate-800 p-4 rounded-lg shadow-md text-center">
   <p className="text-slate-400 text-sm">Today's Revenue</p>
   <p className="text-3xl font-bold text-white">
-    <span className="text-slate-400 text-sm">BD</span> {kpis.revenue.toFixed(3)}
+    <span className="text-slate-400 text-sm">BD</span> {kpis.revenue.toFixed(2)}
   </p>
 </div>                <div className="bg-yellow-800/50 p-4 rounded-lg shadow-md text-center"><p className="text-yellow-300 text-sm">In Progress</p><p className="text-3xl font-bold text-white">{kpis.inProgress}</p></div>
                 <button onClick={() => setModal({ 

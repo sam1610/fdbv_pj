@@ -5,9 +5,13 @@ import { useEntityList } from '../DataHook/useEntityList';
 
 const AgentsDetailModal = ({ IdAgent,agentName,phoneNbr,  onClose }) => {
 
-    const { data: lineItems, loading, error } = useEntityList(
-        {gsi1pk: IdAgent, sk: {beginsWith: `ORDER#`}}, 
+    const { data: lineItems, loading } = useEntityList(
+        {
+            gsi1pk: IdAgent, 
+            sk: {beginsWith: `ORDER#`},
+            sortDirection: 'DESC'}, 
         "ByAgent");
+
     console.log("Agent Orders Props:", { lineItems });
     const orderTotal = useMemo(() => {
     // Return 0 if lineItems is empty or not yet loaded
@@ -59,7 +63,7 @@ const AgentsDetailModal = ({ IdAgent,agentName,phoneNbr,  onClose }) => {
 
             <div className="border-t border-slate-400 pt-2 flex justify-between font-bold text-white  opacity-80">
                 <span>Total Amount</span>
-                <span>BD {orderTotal.toFixed(3)}</span>
+                <span>BD {orderTotal.toFixed(2)}</span>
             </div>
         </div>
 

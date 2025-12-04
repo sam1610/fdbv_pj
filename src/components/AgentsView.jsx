@@ -287,7 +287,8 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
                                     >
                                         <div>
                                             <p className="font-bold text-white">{agent.name}</p>
-                                            <p className="text-amber-400 text-sm ">{agent.sk.split('#')[1]}</p>
+                                            
+                                            <p className="text-amber-400 text-sm ">({agent.sk.split('#')[1].substring(0, 4)})-{agent.sk.split('#')[1].substring(4, 6)} {agent.sk.split('#')[1].substring(6, 12)}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-slate-400 text-xs">Deliveries</p>

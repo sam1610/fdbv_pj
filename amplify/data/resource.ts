@@ -43,7 +43,7 @@ deliveryAgentId: a.string()
     }).identifier(['pk', 'sk'])
     .secondaryIndexes((index) => [
       // list of orders assigned to a delivery agent, filtered by status
-      index('gsi1pk').sortKeys(['sk']).name('ByAgentByStatus'),
+      index('gsi1pk').sortKeys(['sk']).name('ByAgentByStatus').queryField('ByAgent'),
       // list of orders related to a specific customer
       index('gsi2pk').sortKeys(['sk']).name('ByCustomer'),
       index('pk').sortKeys(['sk']).name('ByBusiness').queryField('listByBusiness')

@@ -182,7 +182,7 @@ const CustomersView = ({ phoneNbr, setModal }) => {
 >
                                         <div>
                                             <p className="font-bold text-white">{customer.name}</p>
-                                            <p className="text-amber-400 text-sm ">{customer.sk.split('#')[2]}</p>
+                                            <p className="text-amber-400 text-sm ">+({customer.sk.split('#')[2].substring(0, 3)})-{customer.sk.split('#')[2].substring(3, 5)} {customer.sk.split('#')[2].substring(5, 11)}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-slate-400 text-sm">Total Orders</p>
