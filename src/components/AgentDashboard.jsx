@@ -15,7 +15,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
-
+console.log("Agent Phone:", agentPhone);
 // const queryParam = useMemo(() => ({
 //   filter: {
 //     gsi1pk: { eq: `AGENT#${agentPhone}` },
@@ -71,7 +71,7 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
       try {
         // A. QUERY: Use the GSI directly
         // Method name is generated from index('gsi1pk').sortKeys(['sk'])
-        const { data } = await client.models.BusinessData.listBusinessDataByGsi1pkAndSk({
+        const { data } = await client.models.BusinessData.ByAgent({
            gsi1pk: `AGENT#${agentPhone}`,
            sk: { beginsWith: 'ORDER#' },
            // sortDirection: 'DESC' // Optional: Load newest first
@@ -127,6 +127,9 @@ const AgentDashboard = ({ agentPhone , agentEmail}) => {
         if (updateSub) updateSub.unsubscribe();
     };
   }, [agentPhone]);
+
+
+  console.log("Orders:", orders);
   useEffect(() => {
     async function initMap() {
         if (mapInstance.current) return;
