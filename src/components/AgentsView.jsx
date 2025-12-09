@@ -4,7 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
-// --- Simple Modal Component ---
+// --- Simple Modal Component (Unchanged) ---
 const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
   const [formData, setFormData] = useState({ name: '', phone: '', email: '' });
 
@@ -102,11 +102,10 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [creating, setCreating] = useState(false);
 
-    // --- 1. Subscription Logic ---
-    // Use the index name from schema: index('pk').sortKeys(['sk']).name('ByBusiness')
-    const businessPk = `BUSINESS#${phoneNbr}`;
-    const agentPrefix = 'AGENT#';
+    // ✅ FIX 1: Add a Trigger State to force re-fetching
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+    // --- 1. Subscription Logic ---
     useEffect(() => {
         if (!phoneNbr) return;
         
@@ -156,76 +155,35 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
             if (createSub) createSub.unsubscribe();
             if (updateSub) updateSub.unsubscribe();
         }; 
-    }, [phoneNbr]);
+    }, [phoneNbr, refreshTrigger]); // ✅ FIX 2: Add refreshTrigger to dependencies
 
-    // useEffect(() => {
-    //     if (!phoneNbr) return;
-    //     setLoading(true);
-
-    //     const fetchAndSubscribe = async () => {
-    //         try {
-    //             // Initial Fetch using the Query Index (Zero Scan)
-    //             const { data } = await client.models.BusinessData.listByBusiness({
-    //                 pk: businessPk,
-    //                 sk: { beginsWith: agentPrefix }
-    //             });
-    //             setAgents(data);
-    //             setLoading(false);
-    //         } catch (e) {
-    //             console.error("Fetch failed", e);
-    //             setLoading(false);
-    //         }
-
-    //         // Real-time Subscription
-    //         const sub = client.models.BusinessData.onCreate({
-    //             filter: { pk: { eq: businessPk }, sk: { beginsWith: agentPrefix } }
-    //         }).subscribe({
-    //             next: (item) => setAgents(prev => [...prev, item]),
-    //             error: (err) => console.error("Sub error:", err)
-    //         });
-
-    //         return () => sub.unsubscribe();
-    //     };
-
-    //     const cleanup = fetchAndSubscribe();
-    //     return () => cleanup && cleanup.then && cleanup.then(unsub => unsub && unsub()); 
-    // }, [phoneNbr, businessPk]);
 
     // --- 2. Create Agent Logic (FIXED) ---
     const handleCreateAgent = async (data) => {
         setCreating(true);
         try {
-            // ✅ FIX 1: Pass 'businessPhone' (phoneNbr prop) to the mutation.
-            // The Lambda needs this to link the agent to your business (pk).
-            const mutationResult = await client.mutations.createAgentUser({
+            // 1. Fire the mutation
+            await client.mutations.createAgentUser({
                 name: data.name,
                 phone: data.phone,
                 email: data.email,
-                businessPhone: phoneNbr // <--- THIS WAS MISSING
+                businessPhone: phoneNbr 
             }, { authMode: 'userPool' });
 
-            // Correct way to access result in Amplify Gen 2
-            const result = mutationResult?.data?.createAgentUser;
-            
-            if (!result?.success) {
-                throw new Error(result?.message || "Failed to create Cognito user");
-            }
-
-            console.log("Success:", result.message);
-
-            // ❌ FIX 2: REMOVED "Step B" (Client-side DynamoDB write).
-            // The Lambda now handles the database write securely. 
-            // We rely on the subscription above to update the UI automatically.
-
-            alert(`Agent ${data.name} created successfully!\nLogin: ${data.email || data.phone}\nTemp Password: Pa$$w0rd!`);
+            // 2. Success!
+            console.log("Agent created successfully");
             setShowCreateModal(false);
             
-            // Optional: Trigger manual refresh if needed
-            onAgentAdded?.();
+            // ✅ FIX 3: Force the list to refresh immediately
+            setRefreshTrigger(prev => prev + 1);
+
+            // 4. Notify parent if needed
+            if (onAgentAdded) onAgentAdded();
 
         } catch (err) {
             console.error("Agent creation failed:", err);
-            alert("Failed to create agent: " + (err.message || JSON.stringify(err)));
+            const msg = err.errors?.[0]?.message || err.message || "Unknown Error";
+            alert("Failed: " + msg);
         } finally {
             setCreating(false);
         }
@@ -247,7 +205,7 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
 
     const virtualItems = rowVirtualizer.getVirtualItems();
 
-    if (loading) return <div className="p-8 text-center text-slate-400">Loading Agents...</div>;
+    if (loading && agents.length === 0) return <div className="p-8 text-center text-slate-400">Loading Agents...</div>;
 
     return (
         <div className="p-4 h-full flex flex-col">
