@@ -229,7 +229,7 @@ function App({ signOut, user }: AppProps) {
             sk: businessSk,
             entityType: 'Business',
             businessOwnerId: user.userId,
-            phone: phoneNbr,
+            businessPhone: phoneNbr,
             name: user.username,
           });
           console.log("Business created successfully.");

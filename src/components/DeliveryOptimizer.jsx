@@ -251,7 +251,7 @@ const DeliveryOptimizer = ({
 
     } catch (err) {
       console.error(err);
-      alert("Optimization failed: " + err.message);
+      // alert("Optimization failed: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -289,7 +289,7 @@ const DeliveryOptimizer = ({
 
     } catch (error) {
       console.error("Dispatch Error", error);
-      alert("Failed to save assignments: " + error.message);
+      // alert("Failed to save assignments: " + error.message);
     } finally {
       setSaving(false);
     }

@@ -53,6 +53,9 @@ const schema = a.schema({
 // --- All Possible Entity Attributes ---
 name: a.string(),
 phone: a.string(),
+accessToken: a.string(),
+phoneNumberId: a.string(),
+businessPhone: a.string(),
 orderDate: a.datetime(),
 totalAmount: a.float(),
 orderStatus: a.ref('OrderStatus'),
@@ -76,7 +79,7 @@ deliveryAgentId: a.string()
       // list of orders related to a specific customer
       index('gsi2pk').sortKeys(['sk']).name('ByCustomer'),
       index('pk').sortKeys(['sk']).name('ByBusiness').queryField('listByBusiness'),
-      index('itemCategory').sortKeys(['orderDate']).name('ByCategoryByDate').queryField('listByCategory')
+      // index('itemCategory').sortKeys(['orderDate']).name('ByCategoryByDate').queryField('listByCategory')
     ])
     // ✅ FIX: Updated to the correct syntax for owner-based authorization
     .authorization((allow) => [
@@ -117,9 +120,9 @@ deliveryAgentId: a.string()
       reasoning: a.string(),
       seasonalNote: a.string() // e.g., "Demand increased due to Summer weekend trends"
   }),
-predictInventory: a.generation({
-    aiModel: a.ai.model('Claude 3.5 Sonnet'),
-    systemPrompt: `You are an expert Restaurant Inventory Planner.
+      predictInventory: a.generation({
+      aiModel: a.ai.model('Claude 3.5 Sonnet'),
+      systemPrompt: `You are an expert Restaurant Inventory Planner.
       Analyze the provided JSON sales history.
       
       Variables to consider:

@@ -33,6 +33,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                 // Subscriptions...
                 createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
                     next: (event) => {
+                        if (!event || !event.sk) return;
                         if (event.sk?.startsWith('ORDER#')) setOrders(prev => [event, ...prev]); 
                     },
                     error: (err) => console.error("Create Sub Error:", err)
@@ -40,6 +41,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
 
                 updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
                     next: (event) => {
+                        if (!event || !event.sk) return;
                         if (event.sk?.startsWith('ORDER#')) {
                             setOrders(prev => prev.map(order => 
                                 (order.pk === event.pk && order.sk === event.sk) ? event : order
@@ -156,7 +158,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
             </div>
 
             {/* 2. ✅ Pass the FULL orders list to the AI (It needs history, not just today) */}
-            <InventoryIntelligence />
+            {/* <InventoryIntelligence /> */}
         </div>
     );
 };
