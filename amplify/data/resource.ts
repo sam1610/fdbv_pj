@@ -1,7 +1,7 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { optimizeDelivery } from '../functions/optimizeDelivery/resource';
 import { createAgentUser } from '../functions/createAgentUser/resource'; // 1. Import the create function
-
+import { generatePlanHandler } from '../functions/generate-plan/resource'; // We will create this next
 // Define all necessary status enums for data consistency
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
 const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
@@ -114,38 +114,25 @@ deliveryAgentId: a.string()
         allow.groups(['Admins']), // Only Admins can create new agents
       ])
       .handler(a.handler.function(createAgentUser)),
-      ForecastResult: a.customType({
+     ForecastResult: a.customType({
       predictedQuantity: a.integer(),
-      confidence: a.string(),
+      confidence: a.string(), 
       reasoning: a.string(),
-      seasonalNote: a.string() // e.g., "Demand increased due to Summer weekend trends"
+      seasonalNote: a.string(),
+      suggestedAction: a.string() 
   }),
-      predictInventory: a.generation({
-      aiModel: a.ai.model('Claude 3.5 Sonnet'),
-      systemPrompt: `You are an expert Restaurant Inventory Planner.
-      Analyze the provided JSON sales history.
-      
-      Variables to consider:
-      1. **Target Date:** Check the day of week and month (Seasonality).
-      2. **Time Segment:** If 'Lunch' vs 'Dinner' is specified, adjust predictions based on typical dining habits for the item category.
-      3. **Category:** Must be one of [${itemCategories.join(', ')}]. 
-         - Note that 'BUNDLES_DEALS' often spike on weekends.
-         - 'LUNCH_SPECIALS' spike on weekdays 11am-2pm.
-         - 'BREAKFAST' spikes 7am-11am.
 
-      Output a JSON response matching the ForecastResult type.
-      IMPORTANT OUTPUT RULES:
-      - 'predictedQuantity' must be an integer (no decimals).
-      - 'confidence' must be exactly one of: 'HIGH', 'MEDIUM', 'LOW'.`
-  })
-  .arguments({
-    targetDate: a.string(),       // "2025-12-08"
-    category: a.string(),         // "Burgers" or "Specific Item Name"
-    timeSegment: a.string(),      // "Lunch", "Dinner", or "All Day"
-    historySummary: a.json()      // Last 30 days of aggregated data
-  })
-  .returns(a.ref('ForecastResult'))
-  .authorization(allow => allow.authenticated())
+  // 2. NEW: The "Manager" Query
+  // Instead of a.generation(), we use a.handler()
+  generateKitchenPlan: a.query()
+    .arguments({
+      businessPhone: a.string().required(),
+      targetDate: a.string().required(), // e.g. "2025-12-12"
+      category: a.string().required()    // e.g. "SANDWICHES_WRAPS"
+    })
+    .returns(a.ref('ForecastResult'))
+    .handler(a.handler.function(generatePlanHandler)) 
+    .authorization(allow => allow.authenticated()),
 });
 
 export type Schema = ClientSchema<typeof schema>;

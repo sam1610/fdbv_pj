@@ -392,7 +392,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
           onAssignmentSaved={() => {
-            alert('Orders updated!');
+            // alert('Orders updated!');
           }}
         />
       )}
