@@ -150,7 +150,7 @@ backend.generatePlanHandler.resources.lambda.addToRolePolicy(
     actions: ['bedrock:InvokeModel'],
     resources: [
       // Check your region! This ARN is for us-east-1
-      'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
+      'arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-text-express-v1'
     ],
   })
 );

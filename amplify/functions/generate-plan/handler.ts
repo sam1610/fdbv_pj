@@ -5,16 +5,14 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 const ddb = new DynamoDBClient({});
 const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 
-// 1. Define the Expected Input Type (Fixes 'event has implicit any')
 interface HandlerEvent {
   arguments: {
-    businessPhone: string; // Added this just in case, though we rely on env vars mostly
     targetDate: string;
     category: string;
+    businessPhone: string;
   };
 }
 
-// 2. Define the Accumulator Type for the Reducer (Fixes 'operator += cannot be applied')
 interface SalesAccumulator {
   [date: string]: number;
 }
@@ -27,14 +25,18 @@ export const handler = async (event: HandlerEvent) => {
 
   if (!tableName) throw new Error("Missing Table Name environment variable");
 
+  let salesStats: SalesAccumulator = {};
+  let totalSold = 0;
+  let avgDaily = 0;
+
   try {
     // ====================================================
-    // 1. DATA FETCHING
+    // 1. DATA FETCHING (UPDATED TO 30 DAYS)
     // ====================================================
     
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const dateThreshold = sevenDaysAgo.toISOString();
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - 30); // Look back 30 days
+    const dateThreshold = pastDate.toISOString();
 
     const command = new QueryCommand({
       TableName: tableName,
@@ -48,103 +50,115 @@ export const handler = async (event: HandlerEvent) => {
 
     const response = await ddb.send(command);
     const items = response.Items || [];
-    console.log(`Fetched ${items.length} items for category ${category}`);
+    console.log(`Found ${items.length} items in last 30 days for ${category}`);
 
-    // ====================================================
-    // 2. DATA AGGREGATION (Type Safe Version)
-    // ====================================================
-
-    // We explicitly tell reduce that 'acc' is a SalesAccumulator object
-    const salesStats = items.reduce<SalesAccumulator>((acc, item) => {
-      
-      // Fix: Safely access Nested Properties (Fixes 'possibly undefined')
+    // --- CIRCUIT BREAKER: If 0 items, don't waste money on AI ---
+    if (items.length === 0) {
+        return {
+            predictedQuantity: 5, // Safe default starter prep
+            confidence: "LOW",
+            reasoning: "No sales history found in the last 30 days. Using default starter par.",
+            seasonalNote: "New Item / Low Data",
+            suggestedAction: "Prep 5 units as a trial"
+        };
+    }
+    
+    // 2. DATA AGGREGATION
+    salesStats = items.reduce<SalesAccumulator>((acc, item) => {
       const sk = item.sk?.S;
-      const qtyStr = item.quantity?.N;
-
-      if (!sk) return acc; // Skip corrupt records
-
-      // SK format: ITEM#2025-12-10T12:00...#001
+      const qty = parseInt(item.quantity?.N || "1");
+      if (!sk) return acc;
+      
       const timestampPart = sk.split("#")[1]; 
       if (!timestampPart) return acc;
 
-      const dateKey = timestampPart.split("T")[0]; // "2025-12-10"
-      const qty = parseInt(qtyStr || "1");
-
-      if (!acc[dateKey]) {
-        acc[dateKey] = 0;
-      }
-      
+      const dateKey = timestampPart.split("T")[0]; 
+      if (!acc[dateKey]) acc[dateKey] = 0;
       acc[dateKey] += qty;
       return acc;
     }, {});
 
-    // Fix: Explicit typing for the reducer sum
-    const totalSold = Object.values(salesStats).reduce((a: number, b: number) => a + b, 0);
-    console.log("Aggregated Stats:", salesStats);
+    totalSold = Object.values(salesStats).reduce((a: number, b: number) => a + b, 0);
+    avgDaily = Math.ceil(totalSold / 30) || 5; 
 
-    // ====================================================
-    // 3. AI PREDICTION
-    // ====================================================
+  } catch (dbError) {
+    console.error("DB Error:", dbError);
+    avgDaily = 5; 
+  }
 
-    const prompt = `
-      You are an expert Kitchen Manager AI.
-      
-      CONTEXT:
-      - Target Date: ${targetDate}
-      - Category: "${category}"
-      - Sales History (Last 7 Days): ${JSON.stringify(salesStats)}
-      - Total Units Sold: ${totalSold}
+  // ====================================================
+  // 3. AI PREDICTION (AMAZON TITAN)
+  // ====================================================
+  try {
+    const prompt = `User: You are a Kitchen Manager. Predict prep quantities based on 30-day sales history.
+    
+Example Input:
+Category: Burgers
+Target Date: 2025-12-12
+History: {"2025-12-08": 50, "2025-12-09": 55}
+Total Sold (30 days): 450
 
-      TASK:
-      Predict the prep quantity for "${targetDate}".
+Example Output:
+{
+  "predictedQuantity": 60,
+  "confidence": "HIGH",
+  "reasoning": "Upward trend detected.",
+  "seasonalNote": "Regular weekday.",
+  "suggestedAction": "Prep slightly more."
+}
 
-      RULES:
-      1. **Seasonality:** Check if Target Date is a weekend. If history shows weekend spikes, increase prediction.
-      2. **Trend Analysis:** If sales are trending up day-over-day, predict higher than the average.
-      3. **Category logic:** "SANDWICHES_WRAPS" are high turnover. Do not under-prep.
+Current Input:
+Category: ${category}
+Target Date: ${targetDate}
+History: ${JSON.stringify(salesStats)}
+Total Sold (30 days): ${totalSold}
 
-      OUTPUT:
-      Return strictly VALID JSON only.
-      {
-        "predictedQuantity": (integer),
-        "confidence": "HIGH" | "MEDIUM" | "LOW",
-        "reasoning": "(Explain the trend logic used)",
-        "seasonalNote": "(Mention day of week impact)",
-        "suggestedAction": "(e.g. 'Prep 20 units')"
+Task: Output valid JSON only.
+\nBot:`;
+
+    const titanPayload = {
+      inputText: prompt,
+      textGenerationConfig: {
+        maxTokenCount: 300,
+        temperature: 0.1, 
+        topP: 0.9,
+        stopSequences: ["User:"]
       }
-    `;
+    };
 
     const bedrockCommand = new InvokeModelCommand({
-      modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+      modelId: "amazon.titan-text-express-v1",
       contentType: "application/json",
       accept: "application/json",
-      body: JSON.stringify({
-        anthropic_version: "bedrock-2023-05-31",
-        max_tokens: 500,
-        messages: [
-          { role: "user", content: prompt }
-        ]
-      })
+      body: JSON.stringify(titanPayload)
     });
 
     const aiResponse = await bedrock.send(bedrockCommand);
     const responseBody = JSON.parse(new TextDecoder().decode(aiResponse.body));
-    const result = JSON.parse(responseBody.content[0].text);
+    const aiText = responseBody.results[0].outputText;
 
-    return result;
+    console.log("RAW AI:", aiText);
+
+    // 4. PARSING LOGIC
+    const jsonStart = aiText.indexOf('{');
+    const jsonEnd = aiText.lastIndexOf('}');
+    
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+        const jsonStr = aiText.substring(jsonStart, jsonEnd + 1);
+        return JSON.parse(jsonStr);
+    } 
+    
+    throw new Error("No JSON brackets found");
 
   } catch (error) {
-    console.error("Handler Error:", error);
+    console.error("AI Error (Using Fallback):", error);
     
-    // Fix: Cast error to Error type (Fixes 'error is of type unknown')
-    const errorMessage = error instanceof Error ? error.message : "Unknown System Error";
-
     return {
-      predictedQuantity: 0,
+      predictedQuantity: Math.ceil(avgDaily * 1.1), 
       confidence: "LOW",
-      reasoning: "System Error: " + errorMessage,
-      seasonalNote: "N/A",
-      suggestedAction: "Contact Admin"
+      reasoning: "AI analysis unavailable. Using 30-day average.",
+      seasonalNote: "Standard Prep",
+      suggestedAction: `Prep ${Math.ceil(avgDaily * 1.1)} units`
     };
   }
 };
