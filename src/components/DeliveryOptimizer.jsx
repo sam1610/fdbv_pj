@@ -224,8 +224,8 @@ const DeliveryOptimizer = ({
     try {
       const response = await client.graphql({
         query: `
-          query CalculateRoutePlan($orders: AWSJSON!, $agents: AWSJSON!, $restaurantLocation: AWSJSON!) {
-            calculateRoutePlan(orders: $orders, agents: $agents, restaurantLocation: $restaurantLocation)
+          query optimizeDelivery($orders: AWSJSON!, $agents: AWSJSON!, $restaurantLocation: AWSJSON!) {
+            optimizeDelivery(orders: $orders, agents: $agents, restaurantLocation: $restaurantLocation)
           }
         `,
         variables: {
@@ -235,7 +235,7 @@ const DeliveryOptimizer = ({
         }
       });
 
-      let raw = response.data?.calculateRoutePlan;
+      let raw = response.data?.optimizeDelivery;
       if (typeof raw === 'string') raw = JSON.parse(raw);
 
       const proposal = raw.proposal || [];

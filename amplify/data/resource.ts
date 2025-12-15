@@ -61,9 +61,13 @@ totalAmount: a.float(),
 orderStatus: a.ref('OrderStatus'),
 deliveryDate: a.datetime(),
 isPickUp: a.boolean(),
+pickupLocation: a.json(),
 location: a.json(),
 itemsNbr: a.integer(), // For order's number of items
 // --- Product-specific fields can be added here if needed ---
+
+deliveryDistance: a.float(),   // Distance in km
+deliveryDuration: a.integer(), // Duration in seconds
 quantity: a.integer(),
 unitPrice: a.float(),
 imageUrl:a.string(),
@@ -90,13 +94,18 @@ deliveryAgentId: a.string()
 
     ]),
  
-    calculateRoutePlan: a.query()
+    optimizeDelivery: a.query()
       .arguments({
         orders: a.json(),            // Array of orders passed from React
         agents: a.json(),            // Array of agents passed from React
         restaurantLocation: a.json() // {lat, long} passed from React
       })
-      .returns(a.json())             // Returns { proposal: [...] }
+      .returns(
+        a.customType({          // Defined return type for better client intellisense
+        proposal: a.json(),
+        routeMetrics: a.json()
+      })
+      )             // Returns { proposal: [...] }
       .authorization(allow => [
          allow.authenticated(),      // Logged in users (Admins/Managers)
          allow.publicApiKey()        // Optional: if you test without login

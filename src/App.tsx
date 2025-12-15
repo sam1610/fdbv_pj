@@ -1,16 +1,15 @@
 
 
 // import React, { useEffect, useState } from 'react';
-// import { FetchUserAttributesOutput, fetchUserAttributes } from 'aws-amplify/auth';
-// import { client } from './DataHook/amplifyClient'; // Use shared client
-// // No need to import Schema unless you use the type directly
-// // import type { Schema } from '../amplify/data/resource'; 
+// import { FetchUserAttributesOutput, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
+// import { client } from './DataHook/amplifyClient'; 
 // import './App.css';
 // import Dashboard from './components/Dashboard';
+// import AgentDashboard from './components/AgentDashboard'; // Import the new dashboard
 
-// // Custom hook to fetch user attributes like email and phone number
+// // Custom hook to fetch user attributes
 // function useUserAttributes() {
-//   const [userAttributes, setUserAttributes] = useState<FetchUserAttributesOutput | null>(null); // Added type
+//   const [userAttributes, setUserAttributes] = useState<FetchUserAttributesOutput | null>(null);
 //   const [loading, setLoading] = React.useState(true);
 
 //   React.useEffect(() => {
@@ -34,39 +33,57 @@
 //   signOut: () => void;
 //   user: {
 //     username: string;
-//     userId: string; // The 'userId' from the authenticator is the Cognito 'sub'
+//     userId: string; 
 //   } | null;
 // }
 
 // function App({ signOut, user }: AppProps) {
 //   const { userAttributes, loading: attributesLoading } = useUserAttributes();
-
-//   // --- ✅ 1. Add state for the business profile check ---
 //   const [businessLoading, setBusinessLoading] = useState(true);
-
-//   // --- ✅ 2. Add useEffect to check-and-create the business profile ---
+//   const [userGroup, setUserGroup] = useState<string | null>(null); // Track group: 'ADMIN' or 'AGENT'
+//   const userEmail = userAttributes?.email || user?.signInDetails?.loginId;
+//   // --- 1. Check User Group ---
 //   useEffect(() => {
-//     // Don't run if we don't have the user or attributes yet
-//     if (!user || !userAttributes?.phone_number) {
-//       // If attributes are loaded but there's no phone number, stop loading
-//       if (!attributesLoading) {
+//     const checkGroup = async () => {
+//       try {
+//         const session = await fetchAuthSession();
+//         const groups = (session.tokens?.accessToken?.payload['cognito:groups'] as string[]) || [];
+        
+//         if (groups.includes('DeliveryAgents')) {
+//           setUserGroup('AGENT');
+//         } else {
+//           // Default to Admin/Business Owner if not explicitly an Agent
+//           // You can add stricter checks here if needed (e.g., must be in 'Admins')
+//           setUserGroup('ADMIN');
+//         }
+//       } catch (e) {
+//         console.error("Error checking groups", e);
+//       }
+//     };
+//     checkGroup();
+//   }, []);
+
+//   // --- 2. Business Profile Logic (Only for Admins) ---
+//   useEffect(() => {
+//     // If we don't know the group yet, or if it's an Agent, skip this check
+//     if (!user || !userAttributes?.phone_number || userGroup === 'AGENT' || userGroup === null) {
+//       if (!attributesLoading && userGroup !== null) {
 //         setBusinessLoading(false);
-//         console.error("Cannot check business profile: User has no phone number.");
 //       }
 //       return;
 //     }
 
 //     const phoneNbr = userAttributes.phone_number;
 //     const businessPk = `BUSINESS#${phoneNbr}`;
-//     const businessSk = `BUSINESS#${phoneNbr}`; // The SK is the same as the PK
+//     const businessSk = "CONFIG";
 
 //     const checkAndCreateBusiness = async () => {
 //       setBusinessLoading(true);
 //       try {
-//         // 1. Try to GET the record (much faster than 'list')
 //         const { data: existingBusiness, errors } = await client.models.BusinessData.get({
 //           pk: businessPk,
-//           sk: businessSk
+//           sk: businessSk,
+      
 //         });
 
 //         if (errors) {
@@ -74,19 +91,15 @@
 //           return;
 //         }
 
-//         // 2. If 'data' is null, the record doesn't exist
 //         if (!existingBusiness) {
 //           console.log("Business not found, creating new one...");
-          
-//           // 3. Create the record
 //           await client.models.BusinessData.create({
 //             pk: businessPk,
 //             sk: businessSk,
-//             entityType: 'Business', // <-- You MUST provide this
-//             businessOwnerId: user.userId, // The Cognito 'sub' ID
-//             phone: phoneNbr,
-//             name: user.username, // A good default
-//             // Add any other default fields here
+//             entityType: 'Business',
+//             businessOwnerId: user.userId,
+//             businessPhone: phoneNbr,
+//             name: user.username,
 //           });
 //           console.log("Business created successfully.");
 //         } else {
@@ -102,29 +115,33 @@
 
 //     checkAndCreateBusiness();
 
-//   }, [user, userAttributes, attributesLoading]); // Runs when user and attributes are loaded
+//   }, [user, userAttributes, attributesLoading, userGroup]); 
 
 //   // --- Render Logic ---
 //   if (!user) {
 //     return <p>Please sign in to view data.</p>;
 //   }
 
-//   // Show a combined loading state
-//   if (attributesLoading || businessLoading) {
-//     return <p className="p-4 text-center text-slate-400">Loading user details...</p>;
+//   // Wait for all checks to finish
+//   if (attributesLoading || (userGroup === 'ADMIN' && businessLoading) || userGroup === null) {
+//     return <p className="p-4 text-center text-slate-400">Loading application...</p>;
 //   }
 
 //   return (
 //     <div className="App">
+//       {/* Header is shared, but you might want to simplify it for Agents */}
 //       <header>
 //         <button onClick={signOut}>Sign Out</button> 
-//         {/* <p className="user-sub">Cognito User ID (sub): {user.userId}</p>
-//         <button onClick={signOut}>Sign Out</button> */}
 //       </header>
       
-//       {/* Pass the phone number to the dashboard */}
-//       {/* It's safe to pass now because loading is complete */}
-//       <Dashboard phoneNbr={userAttributes?.phone_number} />
+//       {/* Route based on Group */}
+//       {userGroup === 'AGENT' ? (
+//         // Agents see their specific dashboard
+//         <AgentDashboard agentPhone={userAttributes?.phone_number}  agentEmail={userAttributes?.email } />
+//       ) : (
+//         // Admins see the main dashboard
+//         <Dashboard phoneNbr={userAttributes?.phone_number} />
+//       )}
 //     </div>
 //   );
 // }
@@ -136,9 +153,11 @@ import { FetchUserAttributesOutput, fetchUserAttributes, fetchAuthSession } from
 import { client } from './DataHook/amplifyClient'; 
 import './App.css';
 import Dashboard from './components/Dashboard';
-import AgentDashboard from './components/AgentDashboard'; // Import the new dashboard
+import AgentDashboard from './components/AgentDashboard'; 
 
-// Custom hook to fetch user attributes
+// Fallback Default (Bahrain)
+const DEFAULT_LOCATION = { latitude: 26.0935053, longitude: 50.48796 };
+
 function useUserAttributes() {
   const [userAttributes, setUserAttributes] = useState<FetchUserAttributesOutput | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -162,116 +181,111 @@ function useUserAttributes() {
 
 interface AppProps {
   signOut: () => void;
-  user: {
-    username: string;
-    userId: string; 
-  } | null;
+  user: { username: string; userId: string; } | null;
 }
 
 function App({ signOut, user }: AppProps) {
   const { userAttributes, loading: attributesLoading } = useUserAttributes();
-  const [businessLoading, setBusinessLoading] = useState(true);
-  const [userGroup, setUserGroup] = useState<string | null>(null); // Track group: 'ADMIN' or 'AGENT'
-  const userEmail = userAttributes?.email || user?.signInDetails?.loginId;
+  const [appLoading, setAppLoading] = useState(true);
+  const [userGroup, setUserGroup] = useState<string | null>(null); 
+  const [startLocation, setStartLocation] = useState<any>(null);
+
   // --- 1. Check User Group ---
   useEffect(() => {
     const checkGroup = async () => {
       try {
         const session = await fetchAuthSession();
         const groups = (session.tokens?.accessToken?.payload['cognito:groups'] as string[]) || [];
-        
-        if (groups.includes('DeliveryAgents')) {
-          setUserGroup('AGENT');
-        } else {
-          // Default to Admin/Business Owner if not explicitly an Agent
-          // You can add stricter checks here if needed (e.g., must be in 'Admins')
-          setUserGroup('ADMIN');
-        }
+        setUserGroup(groups.includes('DeliveryAgents') ? 'AGENT' : 'ADMIN');
       } catch (e) {
         console.error("Error checking groups", e);
+        setUserGroup('ADMIN'); 
       }
     };
     checkGroup();
   }, []);
 
-  // --- 2. Business Profile Logic (Only for Admins) ---
+  // --- 2. Fetch Location (ZERO SCAN LOGIC) ---
   useEffect(() => {
-    // If we don't know the group yet, or if it's an Agent, skip this check
-    if (!user || !userAttributes?.phone_number || userGroup === 'AGENT' || userGroup === null) {
-      if (!attributesLoading && userGroup !== null) {
-        setBusinessLoading(false);
-      }
+    if (!user || !userAttributes?.phone_number || userGroup === null) {
+      if (!attributesLoading && userGroup !== null) setAppLoading(false);
       return;
     }
 
-    const phoneNbr = userAttributes.phone_number;
-    const businessPk = `BUSINESS#${phoneNbr}`;
-    const businessSk = `BUSINESS#${phoneNbr}`;
+    const phone = userAttributes.phone_number;
 
-    const checkAndCreateBusiness = async () => {
-      setBusinessLoading(true);
+    const initData = async () => {
+      setAppLoading(true);
       try {
-        const { data: existingBusiness, errors } = await client.models.BusinessData.get({
-          pk: businessPk,
-          sk: businessSk,
-      
-        });
+        let locationFound = null;
 
-        if (errors) {
-          console.error("Error checking for business:", errors);
-          return;
+        if (userGroup === 'ADMIN') {
+          // 🅰️ ADMIN: Primary Key Lookup (Fastest)
+          // PK: BUSINESS#<phone>, SK: CONFIG
+          const { data: config } = await client.models.BusinessData.get({
+            pk: `BUSINESS#${phone}`,
+            sk: "CONFIG",
+          });
+          if (config?.location) locationFound = config.location;
+
+        } else if (userGroup === 'AGENT') {
+          // 🅱️ AGENT: GSI Query (Exact Match)
+          // Query "ByAgent" Index where:
+          // gsi1pk = AGENT#<phone> AND sk = AGENT#<phone>
+          // This avoids scanning the whole table.
+          const { data: agentRecords } = await client.models.BusinessData.ByAgent({
+             gsi1pk: `AGENT#${phone}`,
+             sk: { eq: `AGENT#${phone}` } // 🔥 EXACT MATCH on Sort Key
+          });
+
+          if (agentRecords.length > 0 && agentRecords[0].location) {
+            locationFound = agentRecords[0].location;
+            console.log("📍 Agent Profile Location Found:", locationFound);
+          }
         }
 
-        if (!existingBusiness) {
-          console.log("Business not found, creating new one...");
-          await client.models.BusinessData.create({
-            pk: businessPk,
-            sk: businessSk,
-            entityType: 'Business',
-            businessOwnerId: user.userId,
-            businessPhone: phoneNbr,
-            name: user.username,
-          });
-          console.log("Business created successfully.");
+        // Set Location State
+        if (locationFound) {
+            const loc = typeof locationFound === 'string' ? JSON.parse(locationFound) : locationFound;
+            setStartLocation(loc);
         } else {
-          console.log("Business profile already exists.");
+            // New businesses/agents might not have a record yet
+            console.log("ℹ️ No custom location found, using default.");
+            setStartLocation(DEFAULT_LOCATION);
         }
 
       } catch (err) {
-        console.error("Error in checkAndCreateBusiness:", err);
+        console.error("Error initializing app data:", err);
+        setStartLocation(DEFAULT_LOCATION);
       } finally {
-        setBusinessLoading(false);
+        setAppLoading(false);
       }
     };
 
-    checkAndCreateBusiness();
-
+    initData();
   }, [user, userAttributes, attributesLoading, userGroup]); 
 
-  // --- Render Logic ---
-  if (!user) {
-    return <p>Please sign in to view data.</p>;
-  }
 
-  // Wait for all checks to finish
-  if (attributesLoading || (userGroup === 'ADMIN' && businessLoading) || userGroup === null) {
-    return <p className="p-4 text-center text-slate-400">Loading application...</p>;
-  }
+  if (!user) return <p>Please sign in.</p>;
+  if (attributesLoading || appLoading) return <div className="flex h-screen items-center justify-center bg-slate-900 text-white">Loading App...</div>;
 
   return (
     <div className="App">
-      {/* Header is shared, but you might want to simplify it for Agents */}
       <header>
         <button onClick={signOut}>Sign Out</button> 
       </header>
       
-      {/* Route based on Group */}
       {userGroup === 'AGENT' ? (
-        // Agents see their specific dashboard
-        <AgentDashboard agentPhone={userAttributes?.phone_number}  agentEmail={userAttributes?.email } />
+        <AgentDashboard 
+          agentPhone={userAttributes?.phone_number}  
+          agentEmail={userAttributes?.email}
+          initialLocation={startLocation} 
+        />
       ) : (
-        // Admins see the main dashboard
-        <Dashboard phoneNbr={userAttributes?.phone_number} />
+        <Dashboard 
+          phoneNbr={userAttributes?.phone_number} 
+          restaurantLocation={startLocation} 
+        />
       )}
     </div>
   );
