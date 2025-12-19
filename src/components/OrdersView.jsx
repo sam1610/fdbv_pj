@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -15,17 +16,21 @@ const statusColors = {
   DELIVERED: 'bg-gray-500'
 };
 
-// Parse DynamoDB Number location format
+// ✅ Robust Location Parser (Handles Raw DynamoDB & Clean JSON)
 const parseLocation = (loc) => {
   if (!loc) return null;
   try {
-    if (typeof loc === 'string') loc = JSON.parse(loc);
-    return {
-      latitude: parseFloat(loc.latitude?.N || loc.lat?.N || loc.latitude || 0),
-      longitude: parseFloat(loc.longitude?.N || loc.long?.N || loc.longitude || 0)
-    };
+    let data = loc;
+    if (typeof data === 'string') data = JSON.parse(data);
+    if (data.M) data = data.M; // Handle DynamoDB format
+
+    const extract = (v) => (v && v.N ? parseFloat(v.N) : parseFloat(v));
+    const lat = extract(data.latitude || data.lat);
+    const lng = extract(data.longitude || data.lng || data.long);
+
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { latitude: lat, longitude: lng };
   } catch (e) {
-    console.warn("Invalid location:", loc);
     return null;
   }
 };
@@ -43,8 +48,8 @@ const PickUpBadge = () => (
   </div>
 );
 
-// Filters
-const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch }) => (
+// ✅ UPDATED FILTERS: Accepts 'onDispatch' and 'loadingMap'
+const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch, onDispatch, loadingMap }) => (
   <div className="flex flex-wrap gap-3 mb-6">
     <button onClick={() => setFilter('active')} className={classNames(currentFilter === 'active' ? 'bg-sky-600' : 'bg-slate-700', 'px-4 py-2 rounded-lg text-sm font-medium')}>
       Active
@@ -56,13 +61,13 @@ const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch 
       All
     </button>
 
-    {/* Allow opening map even if 0 prepared orders, so Admin can track delivering ones */}
+    {/* ✅ UPDATED DISPATCH BUTTON: Calls onDispatch instead of setting filter directly */}
     <button
-      onClick={() => setFilter('Auto-Assign')}
-      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg transform hover:scale-105 transition"
+      onClick={onDispatch}
+      disabled={loadingMap}
+      className={`bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg transform hover:scale-105 transition ${loadingMap ? 'opacity-70 cursor-wait' : ''}`}
     >
-      {/* Show count of dispatchable orders, but text implies map view access */}
-      Dispatch Map ({readyForDispatch.length} Ready)
+      {loadingMap ? 'Locating Agents...' : `Dispatch Map (${readyForDispatch.length} Ready)`}
     </button>
   </div>
 );
@@ -96,7 +101,7 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
   );
 };
 
-// ✅ MEMOIZED COMPONENT to prevent full re-renders
+// Memoized Order Card
 const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, onClick, getAgentName, updatingId }) => {
   return (
     <div
@@ -119,7 +124,6 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
         </p>
       </div>
 
-      {/* ✅ UPDATED: Show Agent Info for both DELIVERING and DELIVERED */}
       {['DELIVERING', 'DELIVERED'].includes(order.orderStatus) && (
         <div className="flex flex-col items-center justify-center mx-4 min-w-[120px]">
           <span className={classNames(
@@ -161,7 +165,7 @@ const generateDistinctColors = (count) => {
   return colors;
 };
 
-// Main Component
+// --- MAIN COMPONENT ---
 const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -170,79 +174,103 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
   const [editingId, setEditingId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   
-  // ✅ 1. ZERO SCAN LOGIC: Query Index + Subscribe
+  // ✅ New States for Map/Agents
+  const [liveAgents, setLiveAgents] = useState([]); 
+  const [loadingMap, setLoadingMap] = useState(false);
+
+  // 1. Fetch Orders
+ // 1. Fetch Orders & Subscribe
   useEffect(() => {
     if (!phoneNbr) return;
-
     setLoading(true);
-    let createSub, updateSub, deleteSub;
+
+    // ✅ Track mounting to prevent updates after unmount
+    let isMounted = true;
+    const subscriptions = []; // Store subs in an array for safe cleanup
+
     const businessPk = `BUSINESS#${phoneNbr}`;
     const orderPrefix = 'ORDER#';
+    const subFilter = { pk: { eq: businessPk }, sk: { beginsWith: orderPrefix } };
 
     const fetchAndSubscribe = async () => {
       try {
-        // A. Initial Query (Zero Scan - uses Index)
+        // A. Initial Fetch
         const { data } = await client.models.BusinessData.listByBusiness({
           pk: businessPk,
           sk: { beginsWith: orderPrefix },
           sortDirection: 'DESC'
         });
-                                                                     
-        setOrders(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+        
+        if (isMounted) {
+            setOrders(data);
+            setLoading(false);
+        }
 
-      // B. Real-time Subscription (Zero Scan - filtered by AppSync)
-      const subFilter = { 
-        pk: { eq: businessPk }, 
-        sk: { beginsWith: orderPrefix } 
-      };
+        // B. Start Subscriptions (Inside async, but safe now)
+        if (!isMounted) return;
 
-      createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
-        next: (newItem) => {
-            if (newItem) { // ✅ Added Null Check
-                setOrders(prev => [...prev, newItem])
+        // 1. On Create
+        const createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
+            next: (newItem) => { 
+                if (newItem && isMounted) {
+                    setOrders(prev => {
+                        // 🚨 CRITICAL FIX: DEDUPLICATION CHECK
+                        // If an order with this SK already exists, do not add it again.
+                        if (prev.some(order => order.sk === newItem.sk)) {
+                            console.warn("Duplicate prevented:", newItem.sk);
+                            return prev;
+                        }
+                        return [newItem, ...prev];
+                    }); 
+                }
             }
-        }
-      });
+        });
+        subscriptions.push(createSub);
 
-      updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
-        next: (updatedItem) => {
-          // ✅ CRITICAL FIX: Guard against null/undefined updatedItem
-          if (!updatedItem || !updatedItem.pk) return;
+        // 2. On Update
+        const updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
+            next: (updatedItem) => {
+                if (updatedItem && updatedItem.pk && isMounted) {
+                    setOrders(prev => prev.map(item => 
+                        (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item
+                    ));
+                }
+            }
+        });
+        subscriptions.push(updateSub);
 
-          setOrders(prev => prev.map(item => 
-            (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item
-          ));
-        }
-      });
+        // 3. On Delete
+        const deleteSub = client.models.BusinessData.onDelete({ filter: subFilter }).subscribe({
+            next: (deletedItem) => {
+                if (deletedItem && deletedItem.pk && isMounted) {
+                    setOrders(prev => prev.filter(item => 
+                        !(item.pk === deletedItem.pk && item.sk === deletedItem.sk)
+                    ));
+                }
+            }
+        });
+        subscriptions.push(deleteSub);
 
-      deleteSub = client.models.BusinessData.onDelete({ filter: subFilter }).subscribe({
-        next: (deletedItem) => {
-          if (!deletedItem || !deletedItem.pk) return; // ✅ Added Null Check
-          
-          setOrders(prev => prev.filter(item => 
-            !(item.pk === deletedItem.pk && item.sk === deletedItem.sk)
-          ));
-        }
-      });
+      } catch (err) { 
+          if (isMounted) {
+              setError(err.message); 
+              setLoading(false);
+          }
+      } 
     };
 
     fetchAndSubscribe();
 
-    return () => {
-      if (createSub) createSub.unsubscribe();
-      if (updateSub) updateSub.unsubscribe();
-      if (deleteSub) deleteSub.unsubscribe();
+    // ✅ ROBUST CLEANUP
+    // This runs when the component unmounts or re-runs
+    return () => { 
+        isMounted = false;
+        subscriptions.forEach(sub => sub.unsubscribe());
     };
   }, [phoneNbr]);
 
-  const sortedOrders = useMemo(() =>
-    [...orders].sort((a, b) => b.sk.localeCompare(a.sk)), [orders]
-  );
+  // 2. Computed Values
+  const sortedOrders = useMemo(() => [...orders].sort((a, b) => b.sk.localeCompare(a.sk)), [orders]);
 
   const filteredOrders = useMemo(() => {
     if (!sortedOrders.length) return [];
@@ -252,39 +280,92 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     return [];
   }, [sortedOrders, filter]);
 
-  // 1. Ready for Dispatch (Only PREPARED) - Used for button count & auto-assign logic
   const readyForDispatch = useMemo(() => {
     return sortedOrders
-      .filter(o => o.orderStatus === 'PREPARED')// && !o.isPickUp )
+      .filter(o => o.orderStatus === 'PREPARED')
       .map(order => ({
         sk: order.sk,
         pk: order.pk,
         location: parseLocation(order.location),
         customer: order.gsi2pk?.split('#')[2] || 'Unknown',
-        orderStatus: order.orderStatus // Keep status for logic downstream
+        orderStatus: order.orderStatus
       }))
       .filter(o => o.location !== null);
   }, [sortedOrders]);
 
-  // ✅ 2. All Map Orders (PREPARED + DELIVERING + DELIVERED) - Used for Map Display
+  // ✅ 3. All Map Orders (LAST 24 HOURS ONLY)
+  // This filters the data *before* sending it to DeliveryOptimizer
   const allMapOrders = useMemo(() => {
+    // Calculate cutoff time (24 hours ago)
+    const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
     return sortedOrders
-      .filter(o =>
-        ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus) &&
-        !o.isPickUp
-      )
+      .filter(o => {
+          const isValidStatus = ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus);
+          const isNotPickup = !o.isPickUp;
+          // ✅ Time Filter: Only include orders created after the cutoff
+          // (Assuming 'createdAt' exists. If it's missing, we default to true to avoid hiding data)
+          const isRecent = o.createdAt ? o.createdAt >= cutoffTime : true; 
+          
+          return isValidStatus && isNotPickup && isRecent;
+      })
       .map(order => ({
         sk: order.sk,
         pk: order.pk,
         location: parseLocation(order.location),
         customer: order.gsi2pk?.split('#')[2] || 'Unknown',
-        orderStatus: order.orderStatus, // Critical for filtering in DeliveryOptimizer
-        gsi1pk: order.gsi1pk // Critical for agent assignment lookup
+        orderStatus: order.orderStatus,
+        gsi1pk: order.gsi1pk,
+        pickupLocation: parseLocation(order.pickupLocation), // Important for optimization
+        restaurantLocation: parseLocation(businessLocation) // Fallback
       }))
       .filter(o => o.location !== null);
-  }, [sortedOrders]);
+  }, [sortedOrders, businessLocation]);
 
-  const preparedCount = readyForDispatch.length;
+  // ✅ 4. FETCH LIVE AGENTS FUNCTION
+  const fetchLiveAgentLocations = async () => {
+    setLoadingMap(true);
+    try {
+        console.log("📍 Locating Agents via Profile...");
+        const promises = deliveryAgents.map(async (agent) => {
+            try {
+                // Agent.sk is usually "AGENT#+973..."
+                const agentPhonePk = agent.sk; 
+                
+                // Fetch the PROFILE record (which has the real live location)
+                const { data } = await client.models.BusinessData.listByBusiness({
+                    pk: agentPhonePk,       
+                    sk: { eq: agentPhonePk } 
+                });
+
+                const profile = data[0]; 
+                
+                return {
+                    id: agent.sk,
+                    name: agent.name,
+                    // PRIORITY: Profile Location > Business Record Location > null
+                    maxCapacity: profile?.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
+                    currentLoad: profile?.capacityLeft ? parseInt(profile.capacityLeft) : 0,
+                    location: profile?.location ? parseLocation(profile.location) : parseLocation(agent.location)
+                };
+            } catch (e) {
+                console.warn(`Failed to fetch profile for ${agent.name}`, e);
+                return { id: agent.sk, name: agent.name, location: parseLocation(agent.location), maxCapacity: 10, currentLoad: 0 };
+            }
+        });
+
+        const results = await Promise.all(promises);
+        setLiveAgents(results); 
+        
+        // After fetching, open the map
+        setFilter('Auto-Assign');
+
+    } catch (e) {
+        console.error("Error fetching live agents", e);
+    } finally {
+        setLoadingMap(false);
+    }
+  };
 
   const parentRef = useRef();
   const rowVirtualizer = useVirtualizer({
@@ -294,29 +375,16 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     overscan: 5,
   });
 
-  const agentColors = useMemo(() => {
-    return generateDistinctColors(deliveryAgents.length);
-  }, [deliveryAgents.length]);
-
+  const agentColors = useMemo(() => generateDistinctColors(deliveryAgents.length), [deliveryAgents.length]);
   const virtualItems = rowVirtualizer.getVirtualItems();
 
-  // ✅ Stable Callback for Memoization
   const handleStatusChange = useCallback(async (order, newStatus) => {
     if (order.orderStatus === newStatus) return setEditingId(null);
     setUpdatingId(order.sk);
     try {
-      await client.models.BusinessData.update({
-        pk: order.pk,
-        sk: order.sk,
-        orderStatus: newStatus
-      });
-    } catch (err) {
-      alert('Update failed');
-      console.error(err);
-    } finally {
-      setUpdatingId(null);
-      setEditingId(null);
-    }
+      await client.models.BusinessData.update({ pk: order.pk, sk: order.sk, orderStatus: newStatus });
+    } catch (err) { alert('Update failed'); console.error(err); } 
+    finally { setUpdatingId(null); setEditingId(null); }
   }, []);
 
   const getAgentName = useCallback((gsi1pk) => {
@@ -332,7 +400,15 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     <div className="p-4">
       <h1 className="text-2xl font-bold text-yellow-500 mb-4">Orders Dashboard</h1>
 
-      <OrderFilters currentFilter={filter} setFilter={setFilter} hasPrepared={preparedCount} readyForDispatch={readyForDispatch} />
+      {/* ✅ Filters with Connected Dispatch Button */}
+      <OrderFilters 
+        currentFilter={filter} 
+        setFilter={setFilter} 
+        hasPrepared={readyForDispatch.length} 
+        readyForDispatch={readyForDispatch}
+        onDispatch={fetchLiveAgentLocations} // Connect the function here
+        loadingMap={loadingMap} 
+      />
 
       {filter !== 'Auto-Assign' ? (
         <div ref={parentRef} className="overflow-y-auto h-[600px] pr-2">
@@ -341,18 +417,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
               {virtualItems.map((virtualItem) => {
                 const order = filteredOrders[virtualItem.index];
                 return (
-                  <div
-                    key={order.sk}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: virtualItem.size + 'px',
-                      transform: `translateY(${virtualItem.start}px)`
-                    }}
-                  >
-                    {/* ✅ Uses Memoized Component */}
+                  <div key={order.sk} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: virtualItem.size + 'px', transform: `translateY(${virtualItem.start}px)` }}>
                     <OrderCard
                         order={order}
                         isEditing={editingId === order.sk}
@@ -360,13 +425,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
                         updatingId={updatingId}
                         onStatusChange={handleStatusChange}
                         getAgentName={getAgentName}
-                        onClick={() => !editingId && setModal({
-                            type: 'orderDetail',
-                            Id: order.sk,
-                            orderStatus: order.orderStatus,
-                            totalAmount: order.totalAmount,
-                            customerId: order.gsi2pk?.split('#')[2] || 'N/A'
-                        })}
+                        onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk, orderStatus: order.orderStatus, totalAmount: order.totalAmount, customerId: order.gsi2pk?.split('#')[2] || 'N/A' })}
                     />
                   </div>
                 );
@@ -377,23 +436,14 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
           )}
         </div>
       ) : (
-        /* Map View */
+        /* ✅ Map View with Live Agents */
         <DeliveryOptimizer
           orders={allMapOrders}
-          agents={deliveryAgents
-            .map(agent => ({
-              id: agent.sk,
-              name: agent.name,
-              currentLocation: parseLocation(businessLocation)
-            }))
-            .filter(a => a.currentLocation)
-          }
+          agents={liveAgents} // Use the Hydrated Agents
           AGENT_COLORS={agentColors}
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
-          onAssignmentSaved={() => {
-            // alert('Orders updated!');
-          }}
+          onAssignmentSaved={() => { /* optional refresh */ }}
         />
       )}
     </div>

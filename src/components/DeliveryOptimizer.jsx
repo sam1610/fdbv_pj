@@ -6,6 +6,31 @@ import 'maplibre-gl-js-amplify/dist/public/amplify-map.css';
 import { client } from '../DataHook/amplifyClient'; 
 import { updateRec } from '../DataHook/UpdateRec'; 
 
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+// Estimates drive time based on distance (e.g., 3 mins per km + 2 mins parking)
+function estimateDurationSeconds(distanceKm) {
+    if (!distanceKm) return 0;
+    // Assumption: Average city speed ~20km/h = 3 mins per km
+    // + 5 minutes (300s) fixed time for parking/handover
+    return Math.round((distanceKm * 180) + 300);
+}
+
 const DeliveryOptimizer = ({
   orders,
   agents,
@@ -21,6 +46,8 @@ const DeliveryOptimizer = ({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [assignments, setAssignments] = useState({});
+  const [metricsCache, setMetricsCache] = useState({});
+  const [errorMessage, setErrorMessage] = useState(null);
 
   // ✅ Updated Defaults: Show ALL (including Delivered/Delivering) by default
   const [showDelivered, setShowDelivered] = useState(true);
@@ -31,8 +58,8 @@ const DeliveryOptimizer = ({
 
   // ✅ Check if there are actually any PREPARED orders to work with
   const hasPreparedOrders = orders.some(o => o.orderStatus === 'PREPARED');
-  console.log("Available  Agents :", agents);
-
+  
+  console.log("DeliveryOptimizer Props:", { orders, agents, restaurantLocation });
   // --- Helper: Get Color for Agent ---
   const getAgentColor = (agentId) => {
     if (!agentId) return '#64748b'; // Slate-500 for Unassigned (Grey)
@@ -175,7 +202,7 @@ const DeliveryOptimizer = ({
               if (status === 'DELIVERED') {
                   headerText = `✅ DELIVERED by: ${agentName}`;
               } else if (status === 'DELIVERING') {
-                  headerText = `🚚 DELIVERING by: ${agentName}`;
+                  headerText = `🚚 by: ${agentName}`;
               }
 
               const popupContent = `
@@ -184,7 +211,6 @@ const DeliveryOptimizer = ({
                     <span style="display:inline-block; width:10px; height:10px; background-color:${markerColor}; border-radius:50%; margin-right:6px;"></span>
                     ${headerText}
                   </div>
-                  
                   <div style="font-size: 13px; margin-bottom: 4px;">
                     <span style="color: #444;">Customer:</span> 📞 <b>${phone}</b>
                   </div>
@@ -219,81 +245,188 @@ const DeliveryOptimizer = ({
     }
   };
 
-  const runOptimization = async () => {
+
+const runOptimization = async () => {
     setLoading(true);
+    setErrorMessage(null); 
+
     try {
-      const response = await client.graphql({
-        query: `
-          query optimizeDelivery($orders: AWSJSON!, $agents: AWSJSON!, $restaurantLocation: AWSJSON!) {
-            optimizeDelivery(orders: $orders, agents: $agents, restaurantLocation: $restaurantLocation)
-          }
-        `,
-        variables: {
-          orders: JSON.stringify(orders),
-          agents: JSON.stringify(agents),
-          restaurantLocation: JSON.stringify(restaurantLocation)
-        }
+      // 1. Validation (Keep existing validation logic)
+      if (!restaurantLocation || !restaurantLocation.latitude) throw new Error("Restaurant Location missing.");
+
+      const validAgents = agents.filter(a => {
+         if (!a.location) return false;
+         const lat = parseFloat(a.location.latitude);
+         const lng = parseFloat(a.location.longitude);
+         return !isNaN(lat) && !isNaN(lng);
+      }).map(a => ({
+         id: a.id,
+         name: a.name,
+         location: a.location,
+         maxCapacity: a.maxCapacity || 10,
+         currentLoad: a.currentLoad || 0
+      }));
+
+      if (validAgents.length === 0) throw new Error("No active agents found.");
+
+      // 2. Call API
+      const response = await client.queries.optimizeDelivery({
+        orders: JSON.stringify(orders),
+        agents: JSON.stringify(validAgents), 
+        restaurantLocation: JSON.stringify(restaurantLocation),
+        agentLocation: JSON.stringify(restaurantLocation) 
       });
 
-      let raw = response.data?.optimizeDelivery;
-      if (typeof raw === 'string') raw = JSON.parse(raw);
+      // 1. Parse the main body first
+      let raw = response.data;
+      if (typeof raw === 'string') {
+        try { raw = JSON.parse(raw); } catch (e) { /* ignore */ }
+      }
 
-      const proposal = raw.proposal || [];
+      console.log("🚀 Raw Response:", raw);
+
+      // 🚨 FIX: Parse the inner fields if they are strings
+      let proposal = raw.proposal;
+      if (typeof proposal === 'string') {
+          try { proposal = JSON.parse(proposal); } catch (e) { console.error("Failed to parse proposal", e); proposal = []; }
+      }
+
+      let routeMetrics = raw.routeMetrics;
+      if (typeof routeMetrics === 'string') {
+          try { routeMetrics = JSON.parse(routeMetrics); } catch (e) { console.error("Failed to parse metrics", e); routeMetrics = []; }
+      }
+
+      // 2. Validate Proposal is now an Array
+      if (!Array.isArray(proposal)) {
+          console.warn("⚠️ Proposal is still not an array:", proposal);
+          proposal = [];
+      }
+
+      // 3. Process Assignments
       const newAssignments = {};
-      
       proposal.forEach(p => {
-          p.assignedOrders.forEach(orderSk => {
-              newAssignments[orderSk] = p.agentId;
-          });
+          if (p.assignedOrders) {
+             p.assignedOrders.forEach(orderSk => {
+                 newAssignments[orderSk] = p.agentId;
+             });
+          }
       });
-      
       setAssignments(newAssignments);
 
+      // 4. Process Metrics
+      const newMetrics = {};
+      if (Array.isArray(routeMetrics)) {
+          routeMetrics.forEach(m => {
+              newMetrics[m.orderId] = {
+                  deliveryDistance: parseFloat(m.distanceKm || 0),
+                  deliveryDuration: parseInt(m.durationSeconds || 0)
+              };
+          });
+      }
+      setMetricsCache(newMetrics);
+      console.log("📊 Metrics processed:", Object.keys(newMetrics).length);
+
     } catch (err) {
-      console.error(err);
-      // alert("Optimization failed: " + err.message);
+      console.error("Optimization failed:", err);
+      setErrorMessage(err.message || "Optimization Failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDispatch = async () => {
+// ... inside DeliveryOptimizer.jsx
+
+const handleDispatch = async () => {
     if (Object.keys(assignments).length === 0) return;
     setSaving(true);
 
     try {
       const updatesByAgent = {};
-      
+
+      // 1. Group orders by Agent
       Object.entries(assignments).forEach(([orderSk, agentId]) => {
-          if (!updatesByAgent[agentId]) {
-              updatesByAgent[agentId] = [];
+          const order = orders.find(o => o.sk === orderSk);
+          if (order && order.orderStatus === 'PREPARED' && order.location) {
+              if (!updatesByAgent[agentId]) updatesByAgent[agentId] = [];
+              updatesByAgent[agentId].push(orderSk);
           }
-          updatesByAgent[agentId].push(orderSk);
       });
 
-      const pk = orders[0]?.pk; 
-      if (!pk) throw new Error("Missing PK");
+      if (Object.keys(updatesByAgent).length === 0) {
+          console.warn("No valid PREPARED orders to dispatch.");
+          setSaving(false);
+          return;
+      }
 
-      const updatePromises = Object.entries(updatesByAgent).map(([agentId, skList]) => {
-          return updateRec(pk, skList, {
-              gsi1pk: agentId,          
-              deliveryAgentId: agentId, 
-              orderStatus: 'DELIVERING'
+      // 2. Perform Updates
+      const updatePromises = Object.entries(updatesByAgent).map(async ([agentId, skList]) => {
+          
+          // A. Calculate Load to add (Optional, for Capacity tracking)
+          let addedLoad = 0;
+          skList.forEach(sk => {
+             const o = orders.find(x => x.sk === sk);
+             // Simple logic: Big=4, Med=2, Regular=1
+             addedLoad += (o.size === 'BIG' ? 4 : (o.size === 'MEDIUM' ? 2 : 1));
           });
+
+          // B. Update Agent Capacity (Optional but recommended)
+          try {
+             const agent = agents.find(a => a.id === agentId);
+             if (agent) {
+                 await client.models.BusinessData.update({
+                    pk: agentId, // AGENT#phone
+                    sk: agentId, 
+                    // Increment current load
+                    currentLoad: (agent.currentLoad || 0) + addedLoad
+                 });
+             }
+          } catch(e) { console.warn("Capacity update failed", e); }
+
+          // C. Update Each Order (CRITICAL PART)
+          for (const sk of skList) {
+             const order = orders.find(o => o.sk === sk);
+             const pk = order.pk; // Ensure we have the PK
+             const orderLoc = parseLocation(order.location);
+
+             // Calculate Dist/Time
+             let deliveryDist = 0;
+             if (orderLoc && restaurantLocation) {
+                 deliveryDist = getDistanceFromLatLonInKm(
+                     restaurantLocation.latitude,
+                     restaurantLocation.longitude,
+                     orderLoc.latitude,
+                     orderLoc.longitude
+                 );
+             }
+             const deliveryDur = estimateDurationSeconds(deliveryDist);
+
+             console.log(`📦 Dispatching ${sk} to ${agentId}`);
+
+             // ✅ DIRECT AMPLIFY UPDATE (Replaces updateRec)
+             await client.models.BusinessData.update({
+                pk: pk,
+                sk: sk,
+                gsi1pk: agentId,           // This assigns it to the Agent for the Dashboard Query
+                deliveryAgentId: agentId,  // Redundant but good for backup
+                orderStatus: 'DELIVERING', // Required for AgentDashboard filter
+                deliveryDistance: parseFloat(deliveryDist.toFixed(2)),
+                deliveryDuration: deliveryDur
+             });
+          }
       });
 
       await Promise.all(updatePromises);
-
-      // alert("All orders dispatched successfully!");
+      
+      console.log("✅ All assignments saved successfully.");
       if (onAssignmentSaved) onAssignmentSaved();
 
     } catch (error) {
       console.error("Dispatch Error", error);
-      // alert("Failed to save assignments: " + error.message);
+      setErrorMessage("Failed to save assignments: " + error.message);
     } finally {
       setSaving(false);
     }
-  };
+};
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex z-50 overflow-hidden">

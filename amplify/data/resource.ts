@@ -63,6 +63,8 @@ deliveryDate: a.datetime(),
 isPickUp: a.boolean(),
 pickupLocation: a.json(),
 location: a.json(),
+maxCapacity: a.integer(), // For order's number of items
+currentLoad: a.integer(), // For order's number of items
 itemsNbr: a.integer(), // For order's number of items
 // --- Product-specific fields can be added here if needed ---
 
@@ -91,7 +93,6 @@ deliveryAgentId: a.string()
     allow.groups(['Admins']).to(['create', 'read', 'update']),
     allow.groups(['DeliveryAgents']).to(['read', 'update']),
     allow.publicApiKey().to(['create', 'update', 'read']),
-
     ]),
  
     optimizeDelivery: a.query()

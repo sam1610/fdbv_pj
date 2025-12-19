@@ -81,7 +81,7 @@ const cognitoPolicy = new PolicyStatement({
 
 backend.createAgentUser.resources.lambda.addToRolePolicy(cognitoPolicy);
 
-businessTable.grantWriteData(
+businessTable.grantReadWriteData(
   backend.createAgentUser.resources.lambda
 );
 

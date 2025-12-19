@@ -19,9 +19,9 @@ const statusColors = { ordered: 'bg-blue-500', 'in preparation': 'bg-yellow-500'
 const HomeIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
 const ClipboardListIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></svg>;
 const UsersIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>;
-const businessLocation = { "latitude" : { "N" : "26.0935053" }, "longitude" : { "N" : "50.48796" } };
+// const businessLocation = { "latitude" : { "N" : "26.0935053" }, "longitude" : { "N" : "50.48796" } };
 // --- Main App Component ---
-export default function Dashboard({phoneNbr}) {
+export default function Dashboard({phoneNbr,businessLocation }) {
     const [activeView, setActiveView] = useState('dashboard');
     const [modal, setModal] = useState(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -48,7 +48,7 @@ const handleDataRefresh = useCallback(() => {
             case 'customers':
                 return <CustomersView phoneNbr={phoneNbr} setModal={setModal} />;
             case 'agents':
-                return <AgentsView phoneNbr={phoneNbr} setModal={setModal}  onAgentAdded={handleDataRefresh}/>;
+                return <AgentsView phoneNbr={phoneNbr} setModal={setModal}  onAgentAdded={handleDataRefresh} businessLocation={businessLocation}/>;
             default:
                 return <DashboardView phoneNbr={phoneNbr}  filterDays={2}  setModal={setModal} />;
         }

@@ -6,12 +6,14 @@ const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
 // --- Simple Modal Component (Unchanged) ---
 const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
-  const [formData, setFormData] = useState({ name: '', phone: '', email: '' });
-
+const [formData, setFormData] = useState({ name: '', phone: '', email: '', maxCapacity: '10' });
   // ✅ Validation: Check if all fields have values
   const isValid = formData.name.trim() !== '' && 
                   formData.phone.trim() !== '' && 
                   formData.email.trim() !== '';
+                  formData.maxCapacity.trim() !== '' &&
+                  !isNaN(formData.maxCapacity) && 
+                  parseInt(formData.maxCapacity) > 0;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -64,6 +66,21 @@ const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
               onChange={e => setFormData({...formData, email: e.target.value})}
               placeholder="agent@example.com"
             />
+          </div>
+          <div>
+            <label className="block text-slate-400 text-sm mb-1">
+              Max Capacity (Units) <span className="text-red-500">*</span>
+            </label>
+            <input 
+              type="number" 
+              required
+              min="1"
+              className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white focus:border-orange-500 outline-none"
+              value={formData.maxCapacity}
+              onChange={e => setFormData({...formData, maxCapacity: e.target.value})}
+              placeholder="e.g. 10"
+            />
+            <p className="text-xs text-slate-500 mt-1">Total load units this agent can carry (e.g., 10).</p>
           </div>
           
           <div className="flex gap-3 mt-6">
@@ -162,12 +179,14 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
     const handleCreateAgent = async (data) => {
         setCreating(true);
         try {
+          const cleanPhone = data.phone.replace(/\s+/g, '');
             // 1. Fire the mutation
             await client.mutations.createAgentUser({
                 name: data.name,
-                phone: data.phone,
+                phone: cleanPhone,
                 email: data.email,
-                businessPhone: phoneNbr 
+                businessPhone: phoneNbr ,
+                maxCapacityUnit: data.maxCapacity
             }, { authMode: 'userPool' });
 
             // 2. Success!

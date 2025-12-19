@@ -284,7 +284,7 @@ function App({ signOut, user }: AppProps) {
       ) : (
         <Dashboard 
           phoneNbr={userAttributes?.phone_number} 
-          restaurantLocation={startLocation} 
+          businessLocation={startLocation} 
         />
       )}
     </div>
