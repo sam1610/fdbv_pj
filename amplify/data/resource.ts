@@ -92,7 +92,8 @@ deliveryAgentId: a.string()
 
     allow.groups(['Admins']).to(['create', 'read', 'update']),
     allow.groups(['DeliveryAgents']).to(['read', 'update']),
-    allow.publicApiKey().to(['create', 'update', 'read']),
+    allow.groups(['ManaDeeb']).to(['read', 'update']),
+    allow.publicApiKey().to(['create', 'update', 'read'])
     ]),
  
     optimizeDelivery: a.query()

@@ -1,13 +1,14 @@
 
-
 // import React, { useEffect, useState } from 'react';
 // import { FetchUserAttributesOutput, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
 // import { client } from './DataHook/amplifyClient'; 
 // import './App.css';
 // import Dashboard from './components/Dashboard';
-// import AgentDashboard from './components/AgentDashboard'; // Import the new dashboard
+// import AgentDashboard from './components/AgentDashboard'; 
 
-// // Custom hook to fetch user attributes
+// // Fallback Default (Bahrain)
+// const DEFAULT_LOCATION = { latitude: 26.0935053, longitude: 50.48796 };
+
 // function useUserAttributes() {
 //   const [userAttributes, setUserAttributes] = useState<FetchUserAttributesOutput | null>(null);
 //   const [loading, setLoading] = React.useState(true);
@@ -31,116 +32,111 @@
 
 // interface AppProps {
 //   signOut: () => void;
-//   user: {
-//     username: string;
-//     userId: string; 
-//   } | null;
+//   user: { username: string; userId: string; } | null;
 // }
 
 // function App({ signOut, user }: AppProps) {
 //   const { userAttributes, loading: attributesLoading } = useUserAttributes();
-//   const [businessLoading, setBusinessLoading] = useState(true);
-//   const [userGroup, setUserGroup] = useState<string | null>(null); // Track group: 'ADMIN' or 'AGENT'
-//   const userEmail = userAttributes?.email || user?.signInDetails?.loginId;
+//   const [appLoading, setAppLoading] = useState(true);
+//   const [userGroup, setUserGroup] = useState<string | null>(null); 
+//   const [startLocation, setStartLocation] = useState<any>(null);
+
 //   // --- 1. Check User Group ---
 //   useEffect(() => {
 //     const checkGroup = async () => {
 //       try {
 //         const session = await fetchAuthSession();
 //         const groups = (session.tokens?.accessToken?.payload['cognito:groups'] as string[]) || [];
-        
-//         if (groups.includes('DeliveryAgents')) {
-//           setUserGroup('AGENT');
-//         } else {
-//           // Default to Admin/Business Owner if not explicitly an Agent
-//           // You can add stricter checks here if needed (e.g., must be in 'Admins')
-//           setUserGroup('ADMIN');
-//         }
+//         setUserGroup(groups.includes('DeliveryAgents') ? 'AGENT' : 'ADMIN');
 //       } catch (e) {
 //         console.error("Error checking groups", e);
+//         setUserGroup('ADMIN'); 
 //       }
 //     };
 //     checkGroup();
 //   }, []);
 
-//   // --- 2. Business Profile Logic (Only for Admins) ---
+//   // --- 2. Fetch Location (ZERO SCAN LOGIC) ---
 //   useEffect(() => {
-//     // If we don't know the group yet, or if it's an Agent, skip this check
-//     if (!user || !userAttributes?.phone_number || userGroup === 'AGENT' || userGroup === null) {
-//       if (!attributesLoading && userGroup !== null) {
-//         setBusinessLoading(false);
-//       }
+//     if (!user || !userAttributes?.phone_number || userGroup === null) {
+//       if (!attributesLoading && userGroup !== null) setAppLoading(false);
 //       return;
 //     }
 
-//     const phoneNbr = userAttributes.phone_number;
-//     const businessPk = `BUSINESS#${phoneNbr}`;
-//     const businessSk = "CONFIG";
+//     const phone = userAttributes.phone_number;
 
-//     const checkAndCreateBusiness = async () => {
-//       setBusinessLoading(true);
+//     const initData = async () => {
+//       setAppLoading(true);
 //       try {
-//         const { data: existingBusiness, errors } = await client.models.BusinessData.get({
-//           pk: businessPk,
-//           sk: businessSk,
-      
-//         });
+//         let locationFound = null;
 
-//         if (errors) {
-//           console.error("Error checking for business:", errors);
-//           return;
+//         if (userGroup === 'ADMIN') {
+//           // 🅰️ ADMIN: Primary Key Lookup (Fastest)
+//           // PK: BUSINESS#<phone>, SK: CONFIG
+//           const { data: config } = await client.models.BusinessData.get({
+//             pk: `BUSINESS#${phone}`,
+//             sk: "CONFIG",
+//           });
+//           if (config?.location) locationFound = config.location;
+
+//         } else if (userGroup === 'AGENT') {
+//           // 🅱️ AGENT: GSI Query (Exact Match)
+//           // Query "ByAgent" Index where:
+//           // gsi1pk = AGENT#<phone> AND sk = AGENT#<phone>
+//           // This avoids scanning the whole table.
+//           const { data: agentRecords } = await client.models.BusinessData.ByAgent({
+//              gsi1pk: `AGENT#${phone}`,
+//              sk: { eq: `AGENT#${phone}` } // 🔥 EXACT MATCH on Sort Key
+//           });
+
+//           if (agentRecords.length > 0 && agentRecords[0].location) {
+//             locationFound = agentRecords[0].location;
+//             console.log("📍 Agent Profile Location Found:", locationFound);
+//           }
 //         }
 
-//         if (!existingBusiness) {
-//           console.log("Business not found, creating new one...");
-//           await client.models.BusinessData.create({
-//             pk: businessPk,
-//             sk: businessSk,
-//             entityType: 'Business',
-//             businessOwnerId: user.userId,
-//             businessPhone: phoneNbr,
-//             name: user.username,
-//           });
-//           console.log("Business created successfully.");
+//         // Set Location State
+//         if (locationFound) {
+//             const loc = typeof locationFound === 'string' ? JSON.parse(locationFound) : locationFound;
+//             setStartLocation(loc);
 //         } else {
-//           console.log("Business profile already exists.");
+//             // New businesses/agents might not have a record yet
+//             console.log("ℹ️ No custom location found, using default.");
+//             setStartLocation(DEFAULT_LOCATION);
 //         }
 
 //       } catch (err) {
-//         console.error("Error in checkAndCreateBusiness:", err);
+//         console.error("Error initializing app data:", err);
+//         setStartLocation(DEFAULT_LOCATION);
 //       } finally {
-//         setBusinessLoading(false);
+//         setAppLoading(false);
 //       }
 //     };
 
-//     checkAndCreateBusiness();
-
+//     initData();
 //   }, [user, userAttributes, attributesLoading, userGroup]); 
 
-//   // --- Render Logic ---
-//   if (!user) {
-//     return <p>Please sign in to view data.</p>;
-//   }
 
-//   // Wait for all checks to finish
-//   if (attributesLoading || (userGroup === 'ADMIN' && businessLoading) || userGroup === null) {
-//     return <p className="p-4 text-center text-slate-400">Loading application...</p>;
-//   }
+//   if (!user) return <p>Please sign in.</p>;
+//   if (attributesLoading || appLoading) return <div className="flex h-screen items-center justify-center bg-slate-900 text-white">Loading App...</div>;
 
 //   return (
 //     <div className="App">
-//       {/* Header is shared, but you might want to simplify it for Agents */}
 //       <header>
 //         <button onClick={signOut}>Sign Out</button> 
 //       </header>
       
-//       {/* Route based on Group */}
 //       {userGroup === 'AGENT' ? (
-//         // Agents see their specific dashboard
-//         <AgentDashboard agentPhone={userAttributes?.phone_number}  agentEmail={userAttributes?.email } />
+//         <AgentDashboard 
+//           agentPhone={userAttributes?.phone_number}  
+//           agentEmail={userAttributes?.email}
+//           initialLocation={startLocation} 
+//         />
 //       ) : (
-//         // Admins see the main dashboard
-//         <Dashboard phoneNbr={userAttributes?.phone_number} />
+//         <Dashboard 
+//           phoneNbr={userAttributes?.phone_number} 
+//           businessLocation={startLocation} 
+//         />
 //       )}
 //     </div>
 //   );
@@ -154,6 +150,7 @@ import { client } from './DataHook/amplifyClient';
 import './App.css';
 import Dashboard from './components/Dashboard';
 import AgentDashboard from './components/AgentDashboard'; 
+import SuperAgentDashboard from './components/SuperAgentDashboard';
 
 // Fallback Default (Bahrain)
 const DEFAULT_LOCATION = { latitude: 26.0935053, longitude: 50.48796 };
@@ -196,7 +193,22 @@ function App({ signOut, user }: AppProps) {
       try {
         const session = await fetchAuthSession();
         const groups = (session.tokens?.accessToken?.payload['cognito:groups'] as string[]) || [];
-        setUserGroup(groups.includes('DeliveryAgents') ? 'AGENT' : 'ADMIN');
+        
+        // ✅ PRIORITY 1: Check for 'ManaDeeb' (Super Agent)
+        if (groups.includes('ManaDeeb')) {
+            console.log("User identified as SUPER_AGENT");
+            setUserGroup('SUPER_AGENT');
+        } 
+        // ✅ PRIORITY 2: Check for 'DeliveryAgents' (Regular Agent)
+        else if (groups.includes('DeliveryAgents')) {
+            console.log("User identified as AGENT");
+            setUserGroup('AGENT');
+        } 
+        // ✅ DEFAULT: Business Owner / Admin
+        else {
+            console.log("User identified as ADMIN");
+            setUserGroup('ADMIN');
+        }
       } catch (e) {
         console.error("Error checking groups", e);
         setUserGroup('ADMIN'); 
@@ -205,8 +217,9 @@ function App({ signOut, user }: AppProps) {
     checkGroup();
   }, []);
 
-  // --- 2. Fetch Location (ZERO SCAN LOGIC) ---
+  // --- 2. Fetch Location ---
   useEffect(() => {
+    // Wait until we know who the user is
     if (!user || !userAttributes?.phone_number || userGroup === null) {
       if (!attributesLoading && userGroup !== null) setAppLoading(false);
       return;
@@ -220,24 +233,21 @@ function App({ signOut, user }: AppProps) {
         let locationFound = null;
 
         if (userGroup === 'ADMIN') {
-          // 🅰️ ADMIN: Primary Key Lookup (Fastest)
-          // PK: BUSINESS#<phone>, SK: CONFIG
+          // 🅰️ ADMIN: Look for Business Config
           const { data: config } = await client.models.BusinessData.get({
             pk: `BUSINESS#${phone}`,
             sk: "CONFIG",
           });
           if (config?.location) locationFound = config.location;
 
-        } else if (userGroup === 'AGENT') {
-          // 🅱️ AGENT: GSI Query (Exact Match)
-          // Query "ByAgent" Index where:
-          // gsi1pk = AGENT#<phone> AND sk = AGENT#<phone>
-          // This avoids scanning the whole table.
+        } else if (userGroup === 'AGENT' || userGroup === 'SUPER_AGENT') {
+          // 🅱️ AGENT & SUPER AGENT: Look for Agent Profile
+          // ✅ FIX: Use 'SUPER_AGENT' here to match the state, NOT 'ManaDeeb'
           const { data: agentRecords } = await client.models.BusinessData.ByAgent({
              gsi1pk: `AGENT#${phone}`,
-             sk: { eq: `AGENT#${phone}` } // 🔥 EXACT MATCH on Sort Key
+             sk: { eq: `AGENT#${phone}` } 
           });
-
+          
           if (agentRecords.length > 0 && agentRecords[0].location) {
             locationFound = agentRecords[0].location;
             console.log("📍 Agent Profile Location Found:", locationFound);
@@ -249,8 +259,6 @@ function App({ signOut, user }: AppProps) {
             const loc = typeof locationFound === 'string' ? JSON.parse(locationFound) : locationFound;
             setStartLocation(loc);
         } else {
-            // New businesses/agents might not have a record yet
-            console.log("ℹ️ No custom location found, using default.");
             setStartLocation(DEFAULT_LOCATION);
         }
 
@@ -275,15 +283,23 @@ function App({ signOut, user }: AppProps) {
         <button onClick={signOut}>Sign Out</button> 
       </header>
       
-      {userGroup === 'AGENT' ? (
+      {/* ✅ FIX: Route based on 'SUPER_AGENT' state */}
+      {userGroup === 'SUPER_AGENT' ? (
+        <SuperAgentDashboard 
+          agentPhone={userAttributes?.phone_number}  
+          businessLocation={startLocation} 
+        />
+      ) : userGroup === 'AGENT' ? (
         <AgentDashboard 
           agentPhone={userAttributes?.phone_number}  
-          agentEmail={userAttributes?.email}
-          initialLocation={startLocation} 
+          businessLocation={startLocation} 
         />
       ) : (
         <Dashboard 
           phoneNbr={userAttributes?.phone_number} 
+          // Note: Dashboard expects 'restaurantLocation' prop in previous turns, 
+          // but 'businessLocation' works if you updated Dashboard.jsx as discussed.
+          // Using 'restaurantLocation' to be safe based on your Dashboard.jsx history.
           businessLocation={startLocation} 
         />
       )}

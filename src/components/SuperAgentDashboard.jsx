@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createMap } from 'maplibre-gl-js-amplify';
 import maplibregl from 'maplibre-gl';
@@ -24,7 +23,10 @@ const getCoordinates = (loc) => {
     if (!loc) return null;
     try {
         const data = typeof loc === 'string' ? JSON.parse(loc) : loc;
-        const extract = (v) => (v && v.N ? parseFloat(v.N) : parseFloat(v));
+        const extract = (v) => {
+            if (v && typeof v === 'object' && v.N) return parseFloat(v.N);
+            return parseFloat(v);
+        };
         const lat = extract(data.latitude || data.lat);
         const lng = extract(data.longitude || data.lng || data.long);
         if (isNaN(lat) || isNaN(lng)) return null;
@@ -44,7 +46,7 @@ const getRestaurantColor = (str) => {
 
 const formatTime = (sec) => sec ? `${Math.round(sec / 60)} min` : '--';
 
-const AgentDashboard = ({ agentPhone, businessLocation }) => {
+const SuperAgentDashboard = ({ agentPhone, businessLocation }) => {
     const mapContainerRef = useRef(null);
     const mapInstance = useRef(null);
     const markersRef = useRef({});            
@@ -55,12 +57,10 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
     // ✅ DATA STATE
     const [rawOrders, setRawOrders] = useState([]); 
     const [restaurants, setRestaurants] = useState({}); 
+    const [isLoading, setIsLoading] = useState(true);
     
-    // ✅ PAGINATION & VIEW STATE
-    const [nextToken, setNextToken] = useState(null);
+    // ✅ VIEW STATE
     const [isHistoryMode, setIsHistoryMode] = useState(false); 
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [selectedRestaurant, setSelectedRestaurant] = useState(null);
     const [focusedRestaurant, setFocusedRestaurant] = useState(null);
@@ -99,7 +99,7 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                 const map = await createMap({
                     container: mapContainerRef.current,
                     center: [startLoc.lng, startLoc.lat],
-                    zoom: 12,
+                    zoom: 11, 
                     attributionControl: false,
                     ...outputs.geo
                 });
@@ -128,94 +128,166 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         initMap();
     }, [businessLocation]);
 
-    // 2. FETCH DATA
-    const fetchOrders = async (token = null) => {
-        if (!agentPhone) return;
-        setIsLoadingMore(true);
-        try {
-            // Fetch batch
-            const { data, nextToken: newNextToken } = await client.models.BusinessData.ByAgent({
-                gsi1pk: `AGENT#${agentPhone}`,
-                sk: { beginsWith: 'ORDER#' },
-                sortDirection: 'DESC',
-                limit: token ? 10 : 20, // Load 20 initially
-                nextToken: token
-            });
-
-            const validOrders = data.filter(o => ['DELIVERING', 'DELIVERED'].includes(o.orderStatus));
-            
-            setRawOrders(prev => token ? [...prev, ...validOrders] : validOrders); 
-            setNextToken(newNextToken);
-
-            const initialPks = [...new Set(validOrders.map(o => o.pk))];
-            loadRestaurantConfigs(initialPks);
-
-            if (!token) {
-                const { data: agentRecord } = await client.models.BusinessData.listByBusiness({
-                    pk: `AGENT#${agentPhone}`, sk: { eq: `AGENT#${agentPhone}` }
-                });
-                if (agentRecord[0]?.location) {
-                    const profLoc = getCoordinates(agentRecord[0].location);
-                    if (profLoc) setAgentProfileLoc(profLoc);
-                }
-            }
-        } catch (e) { console.error("Fetch Error:", e); }
-        finally { setIsLoadingMore(false); }
-    };
-
-    // Initial Load
+    // 2. ✅ FETCH & SUBSCRIBE (The Brute Force Reliable Method)
     useEffect(() => {
-        fetchOrders(null); 
+        if (!agentPhone) return;
+        setIsLoading(true);
 
-        const subFilter = { gsi1pk: { eq: `AGENT#${agentPhone}` } };
+        const agentPk = `AGENT#${agentPhone}`;
+
+        // A. INITIAL FETCH (Get everything right now)
+        const fetchInitialData = async () => {
+            try {
+                // High limit (1000) to find orders buried in history
+                const { data } = await client.models.BusinessData.list({
+                    filter: {
+                        or: [
+                            { gsi1pk: { eq: agentPk } },        // My Assignments
+                            { orderStatus: { eq: 'PREPARED' } } // Available Global
+                        ]
+                    },
+                    limit: 1000 
+                });
+                
+                // Safe Sort
+                const validItems = data.filter(o => o && o.sk && o.sk.startsWith('ORDER#'));
+                validItems.sort((a, b) => {
+                    const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return tB - tA;
+                });
+
+                setRawOrders(validItems);
+                
+                const uniquePks = [...new Set(validItems.map(o => o.pk))];
+                loadRestaurantConfigs(uniquePks);
+                setIsLoading(false);
+            } catch (e) {
+                console.error("Fetch Error:", e);
+                setIsLoading(false);
+            }
+        };
+
+        fetchInitialData();
+
+        // B. REAL-TIME SUBSCRIPTION (Listen to EVERYTHING and filter locally)
+        // This avoids "missed events" due to complex AppSync filters.
         const handleLiveEvent = (item) => {
             if (!item || !item.sk || !item.sk.startsWith('ORDER#')) return;
+
             setRawOrders(prev => {
-                const existing = prev.find(o => o.pk === item.pk && o.sk === item.sk);
+                // 1. Does this item match my interest?
+                const isMine = item.gsi1pk === agentPk;
+                const isAvailable = item.orderStatus === 'PREPARED';
+                const isRelevant = isMine || isAvailable;
+
+                // 2. Remove existing version (if any)
                 const others = prev.filter(o => o.pk !== item.pk || o.sk !== item.sk);
-                const merged = existing ? { ...existing, ...item } : item;
-                
-                if (['DELIVERING', 'DELIVERED'].includes(merged.orderStatus)) {
-                    loadRestaurantConfigs([merged.pk]);
-                    return [merged, ...others]; 
+
+                // 3. Add new version (ONLY if relevant)
+                if (isRelevant) {
+                    // Lazy load config if it's a new restaurant
+                    loadRestaurantConfigs([item.pk]);
+                    // Add to top
+                    const newList = [item, ...others];
+                    // Re-sort to be safe
+                    newList.sort((a, b) => {
+                        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        return tB - tA;
+                    });
+                    return newList;
+                } else {
+                    // If it WAS relevant but isn't anymore (e.g., someone else claimed it)
+                    // We just return 'others', effectively removing it from the list.
+                    return others;
                 }
-                return others; 
             });
         };
 
-        const createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({ next: handleLiveEvent });
-        const updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({ next: handleLiveEvent });
+        const createSub = client.models.BusinessData.onCreate().subscribe({ 
+            next: handleLiveEvent,
+            error: (e) => console.error("Create Sub Error:", e)
+        });
+        const updateSub = client.models.BusinessData.onUpdate().subscribe({ 
+            next: handleLiveEvent,
+            error: (e) => console.error("Update Sub Error:", e)
+        });
+
+        // Fetch Agent Profile once
+        const fetchProfile = async () => {
+            try {
+                const { data } = await client.models.BusinessData.listByBusiness({
+                    pk: agentPk, sk: { eq: agentPk }
+                });
+                if (data[0]?.location) setAgentProfileLoc(getCoordinates(data[0].location));
+            } catch(e) {}
+        };
+        fetchProfile();
+
         return () => { createSub.unsubscribe(); updateSub.unsubscribe(); };
     }, [agentPhone, loadRestaurantConfigs]);
 
 
-    // ✅ 3. RESET HANDLER (Fixed)
-    const handleReset = () => {
-        setIsHistoryMode(false);
-        setNextToken(null);
-        setRawOrders([]); // Clear UI immediately for feedback
-        fetchOrders(null); 
+    // 3. CLAIM ACTION (Updates GSI1PK -> Removes from "Global", Adds to "My")
+    const claimOrder = async (order) => {
+        if (!window.confirm("Claim this delivery?")) return;
+
+        try {
+            await client.models.BusinessData.update({
+                pk: order.pk,
+                sk: order.sk,
+                gsi1pk: `AGENT#${agentPhone}`, 
+                deliveryAgentId: `AGENT#${agentPhone}`,
+                orderStatus: 'DELIVERING'
+            }, {
+                condition: { orderStatus: { eq: 'PREPARED' } }
+            });
+            alert("Order Claim Accepted! 🚀");
+            setSelectedOrder(null);
+        } catch (e) {
+            console.error("Claim Failed", e);
+            alert("⚠️ This order is no longer available.");
+        }
     };
 
+    const markAsDelivered = async (order) => {
+        try {
+            await client.models.BusinessData.update({ 
+                pk: order.pk, sk: order.sk, 
+                orderStatus: 'DELIVERED', 
+                deliveryAgentId: `AGENT#${agentPhone}` 
+            });
+            // Update agent location
+            await client.models.BusinessData.update({ 
+                pk: `AGENT#${agentPhone}`, sk: `AGENT#${agentPhone}`, 
+                location: order.location 
+            });
+            setSelectedOrder(null);
+        } catch (e) { alert(e.message); }
+    };
 
-    // ✅ 4. UNIFIED FILTER (Strict 24h Filter Fix)
+    // 4. UNIFIED FILTER (24h Window)
     const visibleOrders = useMemo(() => {
         const now = Date.now();
         const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
 
         return rawOrders.filter(o => {
+            // Safety Check for bad data
+            if (!o) return false;
+
             // A. Checkbox Filter
             if (o.orderStatus === 'DELIVERED' && !showDelivered) return false;
 
-            // B. 24h Filter 
-            // If NOT in History Mode, we strictly enforce time limits.
-            // This hides old "Delivering" test orders that are stuck in the past.
+            // B. Always show active/available (Critical)
+            if (['DELIVERING', 'PREPARED'].includes(o.orderStatus)) return true;
+
+            // C. 24h Filter (Unless History Mode is ON)
             if (!isHistoryMode) {
                 const t = o.createdAt ? new Date(o.createdAt).getTime() : now;
                 return t > twentyFourHoursAgo;
             }
-
-            return true; // Show everything if "More History" was clicked
+            return true; 
         });
     }, [rawOrders, isHistoryMode, showDelivered]);
 
@@ -225,6 +297,7 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         if (!isMapReady || !mapInstance.current) return;
         const map = mapInstance.current;
 
+        // A. Restaurants
         const uniqueRestaurants = new Map();
         visibleOrders.forEach(order => {
             const loc = getCoordinates(order.pickupLocation);
@@ -242,36 +315,19 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
             const color = getRestaurantColor(pk); 
             const el = document.createElement('div');
             el.innerHTML = `🏪`; el.className = 'marker-restaurant';
-            el.style.width = '40px'; el.style.height = '40px';
-            el.style.borderRadius = '50%'; el.style.display = 'flex';
-            el.style.justifyContent = 'center'; el.style.alignItems = 'center';
-            el.style.backgroundColor = 'white'; el.style.border = `3px solid ${color}`;
-            el.style.fontSize = '24px'; el.style.cursor = 'pointer';
-            el.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
-            el.style.transition = 'all 0.3s ease';
+            el.style.cssText = `width:40px;height:40px;border-radius:50%;display:flex;justify-content:center;align-items:center;background:white;border:3px solid ${color};font-size:24px;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,0.3);transition:all 0.3s ease;`;
 
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
                 setFocusedRestaurant(prev => (prev === pk ? null : pk));
                 setSelectedOrder(null);
             });
-            el.addEventListener('dblclick', (e) => {
-                e.stopPropagation();
-                setSelectedRestaurant({ pk, ...info });
-                setSelectedOrder(null);
-                setFocusedRestaurant(pk); 
-                map.flyTo({ center: [info.lng, info.lat], zoom: 15 });
-            });
-
-            if (focusedRestaurant === pk) {
-                el.style.transform = 'scale(1.3)';
-                el.style.filter = `drop-shadow(0 0 15px ${color})`;
-            }
-
+            
             const marker = new maplibregl.Marker({ element: el }).setLngLat([info.lng, info.lat]).addTo(map);
             restaurantMarkersRef.current[pk] = marker;
         });
 
+        // B. Orders
         Object.values(markersRef.current).forEach(m => m.remove());
         markersRef.current = {};
 
@@ -281,18 +337,22 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
 
             const isRelated = focusedRestaurant && order.pk === focusedRestaurant;
             const restColor = getRestaurantColor(order.pk);
-            const isDelivered = order.orderStatus === 'DELIVERED';
-
-            const el = document.createElement('div');
-            el.innerHTML = isDelivered ? `📦` : `🚚`;
-            el.className = isDelivered ? 'Order-delivered' : 'Order-delivering';
-            el.style.width = '32px'; el.style.height = '32px';
-            el.style.borderRadius = '50%'; el.style.display = 'flex';
-            el.style.justifyContent = 'center'; el.style.alignItems = 'center';
-            el.style.fontWeight = 'bold'; el.style.color = 'white'; el.style.cursor = 'pointer';
-            el.style.transition = 'all 0.3s ease';
-            el.style.backgroundColor = isDelivered ? '#22c55e' : '#fbbf24';
             
+            const el = document.createElement('div');
+            el.className = 'Order-Marker';
+            el.style.cssText = `width:32px;height:32px;border-radius:50%;display:flex;justify-content:center;align-items:center;font-weight:bold;color:white;cursor:pointer;transition:all 0.3s ease;box-shadow:0 2px 4px rgba(0,0,0,0.3);`;
+            
+            if (order.orderStatus === 'PREPARED') {
+                el.innerHTML = `👋`; 
+                el.style.backgroundColor = '#3b82f6'; // Blue
+            } else if (order.orderStatus === 'DELIVERING') {
+                el.innerHTML = `🚚`; 
+                el.style.backgroundColor = '#fbbf24'; // Orange
+            } else {
+                el.innerHTML = `📦`; 
+                el.style.backgroundColor = '#22c55e'; // Green
+            }
+
             if (isRelated) {
                 el.style.border = `3px solid ${restColor}`;
                 el.style.transform = 'scale(1.3)'; 
@@ -301,7 +361,6 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                 el.style.border = '3px solid white';
                 el.style.transform = 'scale(1)';
             }
-            el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
 
             const marker = new maplibregl.Marker({ element: el }).setLngLat([coords.lng, coords.lat]).addTo(map);
             el.addEventListener('click', (e) => {
@@ -329,24 +388,8 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         }).sort((a,b) => parseFloat(a._sortDist) - parseFloat(b._sortDist));
     }, [visibleOrders, agentLocation, agentProfileLoc]);
 
-    const markAsDelivered = async (order) => {
-        try {
-            await client.models.BusinessData.update({ pk: order.pk, sk: order.sk, orderStatus: 'DELIVERED', deliveryAgentId: `AGENT#${agentPhone}` });
-            await client.models.BusinessData.update({ pk: `AGENT#${agentPhone}`, sk: `AGENT#${agentPhone}`, location: order.location });
-            const newLoc = getCoordinates(order.location);
-            if (newLoc) setAgentProfileLoc(newLoc);
-            setSelectedOrder(null);
-        } catch (e) { alert(e.message); }
-    };
-
     const openGoogleMaps = (lat, lng) => {
         if (lat && lng) window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
-    };
-
-    // Load More Handler
-    const handleLoadMore = () => {
-        setIsHistoryMode(true); // Disable 24h filter
-        if (nextToken) fetchOrders(nextToken); // Fetch older if available
     };
 
     return (
@@ -354,8 +397,8 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
             {/* Header */}
             <div className="p-3 bg-slate-800 shadow-md z-[60] flex justify-between items-center shrink-0 border-b border-slate-700">
                 <div className="flex flex-col">
-                    <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                        {focusedRestaurant ? '📍 Related Orders' : '🚀 All Deliveries'}
+                    <h1 className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 flex items-center gap-2">
+                        {focusedRestaurant ? '📍 Related Orders' : '🚀 Super Agent Portal'}
                     </h1>
                     {agentLocation && <span className="text-[10px] text-green-400 font-mono">● GPS Active</span>}
                 </div>
@@ -369,7 +412,7 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
             <div className="flex-1 relative w-full h-full">
                 <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
                 
-                {/* Checkbox Legend */}
+                {/* Legend */}
                 <div className="absolute bottom-8 left-4 z-[50]">
                     <div className="bg-white p-1 rounded-lg shadow-lg border border-slate-200 min-w-[140px]">
                         <label className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
@@ -398,7 +441,14 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <button onClick={() => { const c = getCoordinates(selectedOrder.location); openGoogleMaps(c?.lat, c?.lng); }} className="bg-blue-100 text-blue-700 py-3 rounded-lg font-bold">🗺️ Go</button>
-                            {selectedOrder.orderStatus === 'DELIVERING' ? <button onClick={() => markAsDelivered(selectedOrder)} className="bg-green-600 text-white py-3 rounded-lg font-bold">📦 Delivered</button> : <button disabled className="bg-slate-100 text-slate-400 py-3 rounded-lg font-bold">✓ Done</button>}
+                            
+                            {selectedOrder.orderStatus === 'DELIVERING' ? (
+                                <button onClick={() => markAsDelivered(selectedOrder)} className="bg-green-600 text-white py-3 rounded-lg font-bold">📦 Delivered</button>
+                            ) : selectedOrder.orderStatus === 'PREPARED' ? (
+                                <button onClick={() => claimOrder(selectedOrder)} className="bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-bold shadow-lg animate-pulse">✋ Claim IT</button>
+                            ) : (
+                                <button disabled className="bg-slate-100 text-slate-400 py-3 rounded-lg font-bold">✓ Done</button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -407,58 +457,49 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                 <div className={`absolute inset-0 bg-slate-900/95 z-[60] transition-transform duration-300 flex flex-col ${isGridOpen ? 'translate-y-0' : 'translate-y-full'}`}>
                     <div className="p-4 bg-slate-800 border-b border-slate-700 shadow-lg shrink-0">
                          <div className="flex justify-between items-center mb-3">
-                             <h2 className="text-white font-bold text-lg">Daily Manifest</h2>
+                             <h2 className="text-white font-bold text-lg">Available Jobs</h2>
                              <div className="flex items-center gap-2">
-                                {/* ✅ ACTIVE RESET BUTTON */}
                                 <button 
-                                    onClick={handleReset}
-                                    className="bg-red-900/50 hover:bg-red-800 text-red-300 text-xs font-bold px-3 py-1.5 rounded border border-red-800 flex items-center gap-1 transition active:scale-95"
+                                    onClick={() => setIsHistoryMode(!isHistoryMode)}
+                                    className={`text-xs font-bold px-3 py-1.5 rounded border flex items-center gap-1 transition active:scale-95 ${isHistoryMode ? 'bg-indigo-900 border-indigo-700 text-indigo-300' : 'bg-slate-800 border-slate-600 text-slate-400'}`}
                                 >
-                                    ↻ RESET (24h)
+                                    {isHistoryMode ? 'Show Less (24h)' : 'Show All History'}
                                 </button>
                                 <div className="text-xs text-slate-400">{gridList.length} Orders</div>
                              </div>
                          </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-20">
-                        {gridList.length === 0 && !isLoadingMore && <div className="text-center text-slate-500 mt-10">No recent orders found.</div>}
+                        {gridList.length === 0 && <div className="text-center text-slate-500 mt-10">No jobs found nearby.</div>}
                         
                         {gridList.map(order => (
-                            <div key={order.sk} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-between shadow-sm">
+                            <div key={order.sk} className={`bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-between shadow-sm ${order.orderStatus === 'PREPARED' ? 'border-blue-500/50 bg-blue-900/10' : ''}`}>
                                 <div className="flex items-center gap-3 overflow-hidden">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${order.orderStatus === 'DELIVERED' ? 'bg-green-900/40 text-green-400' : 'bg-amber-900/40 text-amber-400'}`}>
-                                        {order.orderStatus === 'DELIVERED' ? '✓' : '🚚'}
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${
+                                        order.orderStatus === 'DELIVERED' ? 'bg-green-900/40 text-green-400' : 
+                                        order.orderStatus === 'PREPARED' ? 'bg-blue-600 text-white animate-bounce-slow' : 'bg-amber-900/40 text-amber-400'
+                                    }`}>
+                                        {order.orderStatus === 'DELIVERED' ? '✓' : order.orderStatus === 'PREPARED' ? '👋' : '🚚'}
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="text-white font-bold whitespace-nowrap truncate">#{order.sk.split('#')[1]}</h4>
-                                        <div className={`text-xs mt-0.5 font-bold ${order.orderStatus === 'DELIVERED' ? 'text-green-500' : 'text-amber-500'}`}>{order.orderStatus}</div>
+                                        <div className={`text-xs mt-0.5 font-bold ${
+                                            order.orderStatus === 'DELIVERED' ? 'text-green-500' : 
+                                            order.orderStatus === 'PREPARED' ? 'text-blue-400 uppercase tracking-wider' : 'text-amber-500'
+                                        }`}>
+                                            {order.orderStatus === 'PREPARED' ? 'AVAILABLE' : order.orderStatus}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="text-right min-w-[70px] shrink-0">
-                                    {order._dist ? (<><div className="text-indigo-400 font-bold text-sm">{order._dist} km</div><div className="text-slate-500 text-xs font-mono mt-1">{formatTime(order._time)}</div></>) : (<div className="text-slate-600 text-xs italic">--</div>)}
+                                    {order.orderStatus === 'PREPARED' ? (
+                                        <button onClick={() => claimOrder(order)} className="text-xs bg-indigo-600 px-3 py-1 rounded text-white font-bold hover:bg-indigo-500">Claim it</button>
+                                    ) : (
+                                        order._dist ? (<><div className="text-indigo-400 font-bold text-sm">{order._dist} km</div><div className="text-slate-500 text-xs font-mono mt-1">{formatTime(order._time)}</div></>) : (<div className="text-slate-600 text-xs italic">--</div>)
+                                    )}
                                 </div>
                             </div>
                         ))}
-
-                        {/* ✅ LOAD MORE BUTTON */}
-                        <div className="pt-4 pb-8 flex justify-center">
-                            {(nextToken || (!isHistoryMode && rawOrders.length > gridList.length)) && (
-                                <button 
-                                    onClick={handleLoadMore}
-                                    disabled={isLoadingMore}
-                                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 px-6 rounded-full border border-slate-600 text-sm flex items-center gap-2 transition-all active:scale-95 shadow-lg"
-                                >
-                                    {isLoadingMore ? (
-                                        <>Loading...</>
-                                    ) : (
-                                        <>👇 MORE HISTORY (+10)</>
-                                    )}
-                                </button>
-                            )}
-                            {isHistoryMode && !nextToken && gridList.length > 0 && (
-                                <div className="text-slate-500 text-xs italic">All history loaded.</div>
-                            )}
-                        </div>
                     </div>
                 </div>
             </div>
@@ -466,4 +507,4 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
     );
 };
 
-export default AgentDashboard;
+export default SuperAgentDashboard;
