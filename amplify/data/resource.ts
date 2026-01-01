@@ -10,6 +10,7 @@ const itemCategories = [
     'STARTERS',          // Appetizers, Wings, Dim Sum
     'MAIN_COURSE',       // General Plates, Steaks, Rice Dishes
     'BREAKFAST',         // Eggs, Pancakes, Morning items
+    'FASTFOOD',          // Burgers, Fries, Nuggets
     'LUNCH_SPECIALS',    // Time-limited items
     
     // --- Specific Food Types (That often stand alone) ---
