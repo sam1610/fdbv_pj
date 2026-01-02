@@ -279,9 +279,9 @@ function App({ signOut, user }: AppProps) {
 
   return (
     <div className="App">
-      <header>
+      {/* <header>
         <button onClick={signOut}>Sign Out</button> 
-      </header>
+      </header> */}
       
       {/* ✅ FIX: Route based on 'SUPER_AGENT' state */}
       {userGroup === 'SUPER_AGENT' ? (

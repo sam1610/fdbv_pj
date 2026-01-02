@@ -2,13 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import * as Recharts from 'recharts';
 import { client } from '../DataHook/amplifyClient';
 
-// Defined Critical Categories for Daily Prep
-const PREP_CATEGORIES = [
-    'SANDWICHES_WRAPS',
-    'MAIN_COURSE',
-    'SALADS',
-    'PIZZA_PASTA'
-];
+
 
 const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     // --- Existing State ---
@@ -26,26 +20,26 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     const minSk = `ORDER#${cutoffDate.toISOString()}`;
     const [menuCategories, setMenuCategories] = useState([]);
     // ✅ NEW: Fetch available Menu Categories from ITEM# records
-useEffect(() => {
-    if (!phoneNbr) return;
-    
-    const fetchMenu = async () => {
-        try {
-            // Query the ByBusiness GSI specifically for ITEM# records
-            const { data } = await client.models.BusinessData.listByBusiness({
-                pk: `BUSINESS#${phoneNbr}`,
-                sk: { beginsWith: 'ITEM#' }
-            });
+    useEffect(() => {
+        if (!phoneNbr) return;
 
-            // Extract unique categories defined in your catalogue
-            const cats = [...new Set(data.map(item => item.itemCategory).filter(Boolean))];
-            setMenuCategories(cats);
-        } catch (err) {
-            console.error("Error fetching menu categories:", err);
-        }
-    };
-    fetchMenu();
-}, [phoneNbr]);
+        const fetchMenu = async () => {
+            try {
+                // Query the ByBusiness GSI specifically for ITEM# records
+                const { data } = await client.models.BusinessData.listByBusiness({
+                    pk: `BUSINESS#${phoneNbr}`,
+                    sk: { beginsWith: 'ITEM#' }
+                });
+
+                // Extract unique categories defined in your catalogue
+                const cats = [...new Set(data.map(item => item.itemCategory).filter(Boolean))];
+                setMenuCategories(cats);
+            } catch (err) {
+                console.error("Error fetching menu categories:", err);
+            }
+        };
+        fetchMenu();
+    }, [phoneNbr]);
 
 
     // --- 1. Fetch & Subscribe (Unchanged) ---
@@ -149,46 +143,37 @@ useEffect(() => {
     // We simply call the new Backend Query: client.queries.generateKitchenPlan
     // =========================================================
     // 1. Identify categories that actually exist in your fetched data
-    const activeCategories = useMemo(() => {
-        if (!orders || orders.length === 0) return [];
+ 
 
-        // Extract unique categories from orders, removing nulls or empties
-        const categories = orders
-            .map(order => order.itemCategory)
-            .filter(cat => cat && cat !== "null" && cat !== "");
+    const generateForecasts = async () => {
+        // ✅ Now using categories derived from your ITEM# records
+        if (menuCategories.length === 0) return;
 
-        return [...new Set(categories)]; // Deduplicate
-    }, [orders]);
+        setIsForecasting(true);
+        const newForecasts = {};
+        const targetDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-const generateForecasts = async () => {
-    // ✅ Now using categories derived from your ITEM# records
-    if (menuCategories.length === 0) return;
-    
-    setIsForecasting(true);
-    const newForecasts = {};
-    const targetDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-    try {
-        // Only run forecasts for categories actually defined in your Item list
-        const promiseList = menuCategories.map(async (category) => {
-            const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
-            const response = await client.queries.generateKitchenPlan({
-                businessPhone: formattedPhone, 
-                targetDate: targetDateStr,
-                category: category
+        try {
+            // Only run forecasts for categories actually defined in your Item list
+            const promiseList = menuCategories.map(async (category) => {
+                const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
+                const response = await client.queries.generateKitchenPlan({
+                    businessPhone: formattedPhone,
+                    targetDate: targetDateStr,
+                    category: category
+                });
+                return { category, data: response.data };
             });
-            return { category, data: response.data };
-        });
 
-        const results = await Promise.all(promiseList);
-        results.forEach(res => { if (res.data) newForecasts[res.category] = res.data; });
-        setForecasts(newForecasts);
-    } catch (e) {
-        console.error("❌ Forecast failed:", e);
-    } finally {
-        setIsForecasting(false);
-    }
-};
+            const results = await Promise.all(promiseList);
+            results.forEach(res => { if (res.data) newForecasts[res.category] = res.data; });
+            setForecasts(newForecasts);
+        } catch (e) {
+            console.error("❌ Forecast failed:", e);
+        } finally {
+            setIsForecasting(false);
+        }
+    };
     if (loading) return <div className="p-4 text-center text-slate-400">Loading Dashboard...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
@@ -273,25 +258,25 @@ const generateForecasts = async () => {
                         </button>
                     </div>
 
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-    {menuCategories.length > 0 ? (
-        menuCategories.map(cat => {
-            const f = forecasts[cat];
-            return (
-                <div key={cat} className="bg-slate-900/80 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">
-                        {cat.replace(/_/g, ' ')}
-                    </h3>
-                    {/* ... (Existing card logic for displaying f.predictedQuantity) ... */}
-                </div>
-            );
-        })
-    ) : (
-        <p className="col-span-full text-center text-slate-500 py-8">
-            No menu items found. Please add items to your catalogue first.
-        </p>
-    )}
-</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                        {menuCategories.length > 0 ? (
+                            menuCategories.map(cat => {
+                                const f = forecasts[cat];
+                                return (
+                                    <div key={cat} className="bg-slate-900/80 p-4 rounded-lg border border-slate-700">
+                                        <h3 className="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">
+                                            {cat.replace(/_/g, ' ')}
+                                        </h3>
+                                        {/* ... (Existing card logic for displaying f.predictedQuantity) ... */}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <p className="col-span-full text-center text-slate-500 py-8">
+                                No menu items found. Please add items to your catalogue first.
+                            </p>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

@@ -228,15 +228,50 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
 
     return (
         <div className="p-4 h-full flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-                <h1 className="text-2xl font-bold text-orange-500">Delivery Agents</h1>
-                <button 
-                    onClick={() => setShowCreateModal(true)}
-                    className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg flex items-center"
-                >
-                    <span className="text-xl mr-2">+</span> Add Agent
-                </button>
+            <div className="flex justify-between items-center mb-6 bg-slate-800/30 p-4 rounded-2xl border border-slate-700/50">
+    <div>
+        <h1 className="text-2xl font-black text-orange-500 tracking-tighter uppercase">
+            Logistics
+        </h1>
+        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+            Manage Delivery Personnel
+        </p>
+    </div>
+
+    {/* 🚚 NEW: Delivery Agent Icon Button */}
+    <button 
+        onClick={() => setShowCreateModal(true)}
+        className="group relative flex flex-col items-center justify-center p-2 transition-all active:scale-95"
+        title="Add New Agent"
+    >
+        <div className="relative bg-orange-500/10 p-3 rounded-xl border border-orange-500/20 group-hover:bg-orange-500/20 group-hover:border-orange-500/40 transition-colors">
+            {/* Delivery Agent SVG */}
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="32" height="32" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="#f97316" // Orange-500
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+            >
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            
+            {/* The Plus (+) Badge */}
+            <div className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-lg">
+                +
             </div>
+        </div>
+        <span className="text-[9px] font-black text-orange-400 mt-1 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
+            Add Agent
+        </span>
+    </button>
+</div>
 
             <div ref={parentRef} className="overflow-y-auto flex-1 pr-2">
                 {sortedCustomers.length > 0 ? (

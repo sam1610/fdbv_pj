@@ -49,25 +49,57 @@ const PickUpBadge = () => (
 );
 
 // ✅ UPDATED FILTERS: Accepts 'onDispatch' and 'loadingMap'
-const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch, onDispatch, loadingMap }) => (
-  <div className="flex flex-wrap gap-3 mb-6">
-    <button onClick={() => setFilter('active')} className={classNames(currentFilter === 'active' ? 'bg-sky-600' : 'bg-slate-700', 'px-4 py-2 rounded-lg text-sm font-medium')}>
-      Active
-    </button>
-    <button onClick={() => setFilter('Prepared')} className={classNames(currentFilter === 'Prepared' ? 'bg-sky-600' : 'bg-slate-700', 'px-4 py-2 rounded-lg text-sm font-medium')}>
-      Prepared ({hasPrepared})
-    </button>
-    <button onClick={() => setFilter('all')} className={classNames(currentFilter === 'all' ? 'bg-sky-600' : 'bg-slate-700', 'px-4 py-2 rounded-lg text-sm font-medium')}>
-      All
-    </button>
+const TABS = [
+  { id: 'active', label: 'Active' },
+  { id: 'Prepared', label: 'Prepared' },
+  { id: 'all', label: 'All History' }
+];
 
-    {/* ✅ UPDATED DISPATCH BUTTON: Calls onDispatch instead of setting filter directly */}
+const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch, onDispatch, loadingMap }) => (
+  <div className="flex flex-col space-y-4 mb-6">
+    <div className="flex bg-slate-800 p-1.5 rounded-2xl border border-slate-700 shadow-inner">
+      {TABS.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => setFilter(tab.id)}
+          className={classNames(
+            'flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200',
+            currentFilter === tab.id 
+              ? 'bg-sky-600 text-white shadow-lg' 
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+          )}
+        >
+          {tab.label} {tab.id === 'Prepared' && hasPrepared > 0 ? `(${hasPrepared})` : ''}
+        </button>
+      ))}
+    </div>
+
+    {/* Dispatch Action Button */}
     <button
       onClick={onDispatch}
       disabled={loadingMap}
-      className={`bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg transform hover:scale-105 transition ${loadingMap ? 'opacity-70 cursor-wait' : ''}`}
+      className={classNames(
+        "w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl transition-all active:scale-[0.98]",
+        loadingMap 
+          ? "bg-slate-700 text-slate-500 cursor-not-allowed" 
+          : "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:brightness-110"
+      )}
     >
-      {loadingMap ? 'Locating Agents...' : `Dispatch Map (${readyForDispatch.length} Ready)`}
+      <div className="flex items-center justify-center gap-2">
+        {loadingMap ? (
+          <>
+            <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+            <span>Locating Agents...</span>
+          </>
+        ) : (
+          <>
+            <span>📍 Dispatch Center</span>
+            <span className="bg-white/20 px-2 py-0.5 rounded-lg text-[10px]">
+              {readyForDispatch.length} Ready
+            </span>
+          </>
+        )}
+      </div>
     </button>
   </div>
 );
@@ -447,16 +479,29 @@ useEffect(() => {
   if (error) return <div className="p-8 text-center text-red-400">{error}</div>;
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold text-yellow-500 mb-4">Orders Dashboard</h1>
+    <div className="p-4 max-w-4xl mx-auto">
+      <header className="flex justify-between items-end mb-6">
+        <div>
+          <h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">
+            Orders <span className="text-sky-500">Live</span>
+          </h1>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+            Real-time Logistics Manager
+          </p>
+        </div>
+        <div className="text-right">
+            <span className="text-xs font-mono text-sky-400 bg-sky-400/10 px-2 py-1 rounded border border-sky-400/20">
+                ● {filteredOrders.length} {filter}
+            </span>
+        </div>
+      </header>
 
-      {/* ✅ Filters with Connected Dispatch Button */}
       <OrderFilters 
         currentFilter={filter} 
         setFilter={setFilter} 
         hasPrepared={readyForDispatch.length} 
         readyForDispatch={readyForDispatch}
-        onDispatch={fetchLiveAgentLocations} // Connect the function here
+        onDispatch={fetchLiveAgentLocations} 
         loadingMap={loadingMap} 
       />
 
