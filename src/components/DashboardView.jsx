@@ -47,10 +47,6 @@ useEffect(() => {
     fetchMenu();
 }, [phoneNbr]);
 
-// --- 1. Fetch & Subscribe (Keep this separate for Live Orders) ---
-useEffect(() => {
-   // ... your existing code for initialOrders and subscriptions
-}, [phoneNbr]);
 
     // --- 1. Fetch & Subscribe (Unchanged) ---
     useEffect(() => {
