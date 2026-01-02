@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'; 
+import React, { useState, useEffect, useMemo } from 'react';
 import * as Recharts from 'recharts';
 import { client } from '../DataHook/amplifyClient';
 
@@ -15,15 +15,42 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    
+
     // --- Forecast State ---
     const [forecasts, setForecasts] = useState({});
     const [isForecasting, setIsForecasting] = useState(false);
-    const [isForecastOpen, setIsForecastOpen] = useState(false); 
+    const [isForecastOpen, setIsForecastOpen] = useState(false);
 
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - 24 * filterDays);
     const minSk = `ORDER#${cutoffDate.toISOString()}`;
+    const [menuCategories, setMenuCategories] = useState([]);
+    // ✅ NEW: Fetch available Menu Categories from ITEM# records
+useEffect(() => {
+    if (!phoneNbr) return;
+    
+    const fetchMenu = async () => {
+        try {
+            // Query the ByBusiness GSI specifically for ITEM# records
+            const { data } = await client.models.BusinessData.listByBusiness({
+                pk: `BUSINESS#${phoneNbr}`,
+                sk: { beginsWith: 'ITEM#' }
+            });
+
+            // Extract unique categories defined in your catalogue
+            const cats = [...new Set(data.map(item => item.itemCategory).filter(Boolean))];
+            setMenuCategories(cats);
+        } catch (err) {
+            console.error("Error fetching menu categories:", err);
+        }
+    };
+    fetchMenu();
+}, [phoneNbr]);
+
+// --- 1. Fetch & Subscribe (Keep this separate for Live Orders) ---
+useEffect(() => {
+   // ... your existing code for initialOrders and subscriptions
+}, [phoneNbr]);
 
     // --- 1. Fetch & Subscribe (Unchanged) ---
     useEffect(() => {
@@ -46,7 +73,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                     next: (event) => {
                         if (!event || !event.sk) return;
                         if (event.sk.startsWith('ORDER#')) {
-                            setOrders(prev => [event, ...prev]); 
+                            setOrders(prev => [event, ...prev]);
                         }
                     },
                     error: (err) => console.error("Create Sub Error:", err)
@@ -56,7 +83,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                     next: (event) => {
                         if (!event || !event.sk) return;
                         if (event.sk.startsWith('ORDER#')) {
-                            setOrders(prev => prev.map(order => 
+                            setOrders(prev => prev.map(order =>
                                 (order.pk === event.pk && order.sk === event.sk) ? { ...order, ...event } : order
                             ));
                         }
@@ -84,7 +111,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         const now = new Date();
         const startDate = new Date(now);
         startDate.setDate(now.getDate() - (filterDays - 1));
-        startDate.setHours(0, 0, 0, 0); 
+        startDate.setHours(0, 0, 0, 0);
 
         return orders.filter(order => {
             if (!order.orderDate) return false;
@@ -116,49 +143,52 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         }));
     }, [filteredOrders]);
 
-    const readyForDeliveryOrders = useMemo(() => 
-        filteredOrders.filter((o) => o.orderStatus === 'PREPARED'), 
-    [filteredOrders]);
+    const readyForDeliveryOrders = useMemo(() =>
+        filteredOrders.filter((o) => o.orderStatus === 'PREPARED'),
+        [filteredOrders]);
 
     // =========================================================
     // 🚀 3. THE FIXED FORECAST LOGIC
     // We removed all the manual data fetching.
     // We simply call the new Backend Query: client.queries.generateKitchenPlan
     // =========================================================
-  const generateForecasts = async () => {
+    // 1. Identify categories that actually exist in your fetched data
+    const activeCategories = useMemo(() => {
+        if (!orders || orders.length === 0) return [];
+
+        // Extract unique categories from orders, removing nulls or empties
+        const categories = orders
+            .map(order => order.itemCategory)
+            .filter(cat => cat && cat !== "null" && cat !== "");
+
+        return [...new Set(categories)]; // Deduplicate
+    }, [orders]);
+
+const generateForecasts = async () => {
+    // ✅ Now using categories derived from your ITEM# records
+    if (menuCategories.length === 0) return;
+    
     setIsForecasting(true);
     const newForecasts = {};
-    
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const targetDateStr = tomorrow.toISOString().split('T')[0];
+    const targetDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
     try {
-        const promiseList = PREP_CATEGORIES.map(async (category) => {
-            // ✅ Standardize phone format for the GSI query
+        // Only run forecasts for categories actually defined in your Item list
+        const promiseList = menuCategories.map(async (category) => {
             const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
-            
             const response = await client.queries.generateKitchenPlan({
                 businessPhone: formattedPhone, 
                 targetDate: targetDateStr,
                 category: category
             });
-
-            // The heuristic handler returns a ForecastResult object
             return { category, data: response.data };
         });
 
         const results = await Promise.all(promiseList);
-
-        results.forEach(res => {
-            if (res.data) {
-                newForecasts[res.category] = res.data;
-            }
-        });
-
+        results.forEach(res => { if (res.data) newForecasts[res.category] = res.data; });
         setForecasts(newForecasts);
     } catch (e) {
-        console.error("❌ Heuristic Forecast failed:", e);
+        console.error("❌ Forecast failed:", e);
     } finally {
         setIsForecasting(false);
     }
@@ -187,8 +217,8 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                     <p className="text-yellow-300 text-sm">In Progress</p>
                     <p className="text-3xl font-bold text-white">{kpis.inProgress}</p>
                 </div>
-                <button 
-                    onClick={() => setModal({ type: 'assignDelivery', PreparedOrders: readyForDeliveryOrders })} 
+                <button
+                    onClick={() => setModal({ type: 'assignDelivery', PreparedOrders: readyForDeliveryOrders })}
                     className="bg-green-800/50 p-4 rounded-lg shadow-md text-center transition hover:bg-green-700/50"
                 >
                     <p className="text-green-300 text-sm">Ready for Delivery</p>
@@ -213,7 +243,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
 
             {/* --- COLLAPSIBLE KITCHEN INTELLIGENCE --- */}
             <div className="border border-slate-700 rounded-lg overflow-hidden transition-all duration-300">
-                <button 
+                <button
                     onClick={() => setIsForecastOpen(!isForecastOpen)}
                     className="w-full flex items-center justify-between bg-slate-800 p-4 hover:bg-slate-750 transition"
                 >
@@ -232,9 +262,9 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                 </button>
 
                 <div className={`bg-slate-800/50 transition-all duration-500 ease-in-out ${isForecastOpen ? 'max-h-[1000px] opacity-100 p-4 border-t border-slate-700' : 'max-h-0 opacity-0 overflow-hidden'}`}>
-                    
+
                     <div className="flex justify-end mb-4">
-                        <button 
+                        <button
                             onClick={generateForecasts}
                             disabled={isForecasting}
                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
@@ -247,53 +277,25 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                        {PREP_CATEGORIES.map(cat => {
-    const f = forecasts[cat];
-    return (
-        <div key={cat} className="bg-slate-900/80 p-4 rounded-lg border border-slate-700">
-            <h3 className="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">
-                {cat.replace(/_/g, ' ')}
-            </h3>
-            {f ? (
-                <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                        <div className="text-center">
-                            <p className="text-[10px] text-slate-500 mb-1">PREP TARGET</p>
-                            <span className="text-2xl font-bold text-white">
-                                {f.predictedQuantity} <span className="text-xs text-slate-400">units</span>
-                            </span>
-                        </div>
-                        <span className={`text-[10px] px-2 py-1 rounded font-bold ${
-                            f.confidence === 'HIGH' ? 'bg-green-900/50 text-green-400 border border-green-800' : 
-                            f.confidence === 'MEDIUM' ? 'bg-yellow-900/50 text-yellow-400 border border-yellow-800' : 
-                            'bg-red-900/50 text-red-400 border border-red-800'
-                        }`}>
-                            {f.confidence} DATA
-                        </span>
-                    </div>
-                    
-                    {/* ✅ Emphasis on the High-Demand Meal Action */}
-                    <div className="flex items-start gap-2 bg-blue-500/10 p-2 rounded border border-blue-500/20">
-                        <span className="text-lg">🎯</span>
-                        <p className="text-sm text-blue-300 font-bold leading-tight">
-                            {f.suggestedAction}
-                        </p>
-                    </div>
-                    
-                    <p className="text-[11px] text-slate-500 leading-relaxed italic">
-                        {f.reasoning}
-                    </p>
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+    {menuCategories.length > 0 ? (
+        menuCategories.map(cat => {
+            const f = forecasts[cat];
+            return (
+                <div key={cat} className="bg-slate-900/80 p-4 rounded-lg border border-slate-700">
+                    <h3 className="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">
+                        {cat.replace(/_/g, ' ')}
+                    </h3>
+                    {/* ... (Existing card logic for displaying f.predictedQuantity) ... */}
                 </div>
-            ) : (
-                <div className="h-24 flex items-center justify-center text-slate-600 text-xs text-center px-4">
-                    Click "Generate Plan" to calculate demand for this category
-                </div>
-            )}
-        </div>
-    );
-})}
-                    </div>
+            );
+        })
+    ) : (
+        <p className="col-span-full text-center text-slate-500 py-8">
+            No menu items found. Please add items to your catalogue first.
+        </p>
+    )}
+</div>
                 </div>
             </div>
         </div>
