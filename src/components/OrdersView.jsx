@@ -103,6 +103,7 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 
 // Memoized Order Card
 const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, onClick, getAgentName, updatingId }) => {
+  const isActuallyPickup = order.isPickUp === true || String(order.isPickUp) === 'true';
   return (
     <div
       onClick={onClick}
@@ -117,7 +118,11 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
           <p className="font-bold text-white truncate">
             ORD: {order.sk.replace('ORDER#', '').split('.')[0]}
           </p>
-          {order.isPickUp && <PickUpBadge />}
+          {isActuallyPickup && (
+            <div className="flex-shrink-0">
+              <PickUpBadge />
+            </div>
+          )}
         </div>
         <p className="text-sm text-slate-400 truncate">
           Customer: {order.gsi2pk?.split('#')[2] || 'N/A'}
@@ -173,7 +178,8 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
   const [filter, setFilter] = useState('active');
   const [editingId, setEditingId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
-  
+  const [nextToken, setNextToken] = useState(null); // ✅ NEW: Tracks DynamoDB cursor
+  const [isFetchingNextPage, setIsFetchingNextPage] = useState(false); // ✅ NEW: Pagination loader
   // ✅ New States for Map/Agents
   const [liveAgents, setLiveAgents] = useState([]); 
   const [loadingMap, setLoadingMap] = useState(false);
@@ -195,14 +201,16 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     const fetchAndSubscribe = async () => {
       try {
         // A. Initial Fetch
-        const { data } = await client.models.BusinessData.listByBusiness({
+        const { data , nextToken: initialToken} = await client.models.BusinessData.listByBusiness({
           pk: businessPk,
           sk: { beginsWith: orderPrefix },
-          sortDirection: 'DESC'
+          sortDirection: 'DESC',
+          limit: 20 // Fetch a small initial chunk
         });
         
         if (isMounted) {
             setOrders(data);
+            setNextToken(initialToken);
             setLoading(false);
         }
 
@@ -366,6 +374,32 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
         setLoadingMap(false);
     }
   };
+// ✅ 5. DEEP DIVE PAGINATION FUNCTION
+const fetchNextPage = useCallback(async () => {
+  // Guard: Don't fetch if there's no cursor or we are already loading
+  if (!nextToken || isFetchingNextPage) return;
+
+  setIsFetchingNextPage(true);
+  try {
+    console.log("🔍 Fetching next page of history...");
+    const { data, nextToken: newNextToken } = await client.models.BusinessData.listByBusiness({
+      pk: `BUSINESS#${phoneNbr}`,
+      sk: { beginsWith: 'ORDER#' },
+      sortDirection: 'DESC', // ✅ Newest first
+      nextToken: nextToken,  // ✅ Use cursor to dig deeper
+      limit: 20
+    });
+
+    // Append older orders to the end of the existing list
+    setOrders(prev => [...prev, ...data]); 
+    setNextToken(newNextToken);
+  } catch (err) {
+    console.error("Pagination error:", err);
+  } finally {
+    setIsFetchingNextPage(false);
+  }
+}, [nextToken, isFetchingNextPage, phoneNbr]);
+
 
   const parentRef = useRef();
   const rowVirtualizer = useVirtualizer({
@@ -377,6 +411,18 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
 
   const agentColors = useMemo(() => generateDistinctColors(deliveryAgents.length), [deliveryAgents.length]);
   const virtualItems = rowVirtualizer.getVirtualItems();
+// ✅ 6. INFINITE SCROLL TRIGGER
+useEffect(() => {
+  const lastItem = virtualItems[virtualItems.length - 1];
+  
+  if (!lastItem) return;
+
+  // Trigger fetch when user is 5 items away from the bottom of currently loaded orders
+  if (lastItem.index >= filteredOrders.length - 5 && nextToken && !isFetchingNextPage) {
+    fetchNextPage();
+  }
+}, [virtualItems, filteredOrders.length, nextToken, isFetchingNextPage, fetchNextPage]);
+
 
   const handleStatusChange = useCallback(async (order, newStatus) => {
     if (order.orderStatus === newStatus) return setEditingId(null);
