@@ -125,53 +125,44 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     // We removed all the manual data fetching.
     // We simply call the new Backend Query: client.queries.generateKitchenPlan
     // =========================================================
-    const generateForecasts = async () => {
-        setIsForecasting(true);
-        const newForecasts = {};
-        
-        // Calculate Target Date (Tomorrow)
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const targetDateStr = tomorrow.toISOString().split('T')[0];
+  const generateForecasts = async () => {
+    setIsForecasting(true);
+    const newForecasts = {};
+    
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const targetDateStr = tomorrow.toISOString().split('T')[0];
 
-        try {
-            // We can run these requests in parallel for speed!
-            const promiseList = PREP_CATEGORIES.map(async (category) => {
-                console.log(`📡 Asking AI for ${category}...`);
-                
-                // ✅ This matches the arguments in your amplify/data/resource.ts
-                const response = await client.queries.generateKitchenPlan({
-    businessPhone: `+${phoneNbr.replace('+','')}`, 
-    targetDate: targetDateStr,
-    category: category
-});
-let parsedData = response.data;
-if (typeof parsedData === 'string') {
-    try { parsedData = JSON.parse(parsedData); } catch(e) {}
-}
-
-                // The response.data IS the ForecastResult object
-                return { category, data: parsedData };
+    try {
+        const promiseList = PREP_CATEGORIES.map(async (category) => {
+            // ✅ Standardize phone format for the GSI query
+            const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
+            
+            const response = await client.queries.generateKitchenPlan({
+                businessPhone: formattedPhone, 
+                targetDate: targetDateStr,
+                category: category
             });
 
-            const results = await Promise.all(promiseList);
+            // The heuristic handler returns a ForecastResult object
+            return { category, data: response.data };
+        });
 
-            // Map results back to state object
-            results.forEach(res => {
-                if (res.data) {
-                    newForecasts[res.category] = res.data;
-                }
-            });
+        const results = await Promise.all(promiseList);
 
-            setForecasts(newForecasts);
+        results.forEach(res => {
+            if (res.data) {
+                newForecasts[res.category] = res.data;
+            }
+        });
 
-        } catch (e) {
-            console.error("❌ Forecast failed:", e);
-        } finally {
-            setIsForecasting(false);
-        }
-    };
-
+        setForecasts(newForecasts);
+    } catch (e) {
+        console.error("❌ Heuristic Forecast failed:", e);
+    } finally {
+        setIsForecasting(false);
+    }
+};
     if (loading) return <div className="p-4 text-center text-slate-400">Loading Dashboard...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
@@ -258,44 +249,50 @@ if (typeof parsedData === 'string') {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
                         {PREP_CATEGORIES.map(cat => {
-                            const f = forecasts[cat];
-                            return (
-                                <div key={cat} className="bg-slate-900/80 p-4 rounded-lg border border-slate-700">
-                                    <h3 className="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">
-                                        {cat.replace(/_/g, ' ')}
-                                    </h3>
-                                    {f ? (
-                                        <div className="space-y-3">
-                                            <div className="flex justify-between items-center">
-                                                <div className="text-center">
-                                                    <p className="text-xs text-slate-500 mb-1">PREDICTED QTY</p>
-                                                    <span className="text-2xl font-bold text-white">{f.predictedQuantity}</span>
-                                                </div>
-                                                <span className={`text-xs px-2 py-1 rounded font-bold ${
-                                                    f.confidence === 'HIGH' ? 'bg-green-900/50 text-green-400 border border-green-800' : 
-                                                    f.confidence === 'MEDIUM' ? 'bg-yellow-900/50 text-yellow-400 border border-yellow-800' : 'bg-red-900/50 text-red-400 border border-red-800'
-                                                }`}>
-                                                    {f.confidence}
-                                                </span>
-                                            </div>
-                                            
-                                            <div className="flex items-start gap-2 bg-indigo-500/10 p-2 rounded border border-indigo-500/20">
-                                                <span className="text-lg">💡</span>
-                                                <p className="text-sm text-indigo-300 font-medium">{f.suggestedAction}</p>
-                                            </div>
-                                            
-                                            <p className="text-xs text-slate-500 leading-relaxed italic">
-                                                "{f.reasoning}"
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="h-20 flex items-center justify-center text-slate-600 text-xs">
-                                            Waiting to generate...
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+    const f = forecasts[cat];
+    return (
+        <div key={cat} className="bg-slate-900/80 p-4 rounded-lg border border-slate-700">
+            <h3 className="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">
+                {cat.replace(/_/g, ' ')}
+            </h3>
+            {f ? (
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <div className="text-center">
+                            <p className="text-[10px] text-slate-500 mb-1">PREP TARGET</p>
+                            <span className="text-2xl font-bold text-white">
+                                {f.predictedQuantity} <span className="text-xs text-slate-400">units</span>
+                            </span>
+                        </div>
+                        <span className={`text-[10px] px-2 py-1 rounded font-bold ${
+                            f.confidence === 'HIGH' ? 'bg-green-900/50 text-green-400 border border-green-800' : 
+                            f.confidence === 'MEDIUM' ? 'bg-yellow-900/50 text-yellow-400 border border-yellow-800' : 
+                            'bg-red-900/50 text-red-400 border border-red-800'
+                        }`}>
+                            {f.confidence} DATA
+                        </span>
+                    </div>
+                    
+                    {/* ✅ Emphasis on the High-Demand Meal Action */}
+                    <div className="flex items-start gap-2 bg-blue-500/10 p-2 rounded border border-blue-500/20">
+                        <span className="text-lg">🎯</span>
+                        <p className="text-sm text-blue-300 font-bold leading-tight">
+                            {f.suggestedAction}
+                        </p>
+                    </div>
+                    
+                    <p className="text-[11px] text-slate-500 leading-relaxed italic">
+                        {f.reasoning}
+                    </p>
+                </div>
+            ) : (
+                <div className="h-24 flex items-center justify-center text-slate-600 text-xs text-center px-4">
+                    Click "Generate Plan" to calculate demand for this category
+                </div>
+            )}
+        </div>
+    );
+})}
                     </div>
                 </div>
             </div>

@@ -1,164 +1,71 @@
+// amplify/functions/generate-plan/handler.ts 
 import { DynamoDBClient, QueryCommand } from "@aws-sdk/client-dynamodb";
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
-// Initialize Clients
 const ddb = new DynamoDBClient({});
-const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 
-interface HandlerEvent {
-  arguments: {
-    targetDate: string;
-    category: string;
-    businessPhone: string;
-  };
-}
-
-interface SalesAccumulator {
-  [date: string]: number;
-}
-
-export const handler = async (event: HandlerEvent) => {
-  console.log("EVENT RECEIVED:", JSON.stringify(event));
-  
-  const { targetDate, category } = event.arguments;
+export const handler = async (event: any) => {
+  const { targetDate, category, businessPhone } = event.arguments;
   const tableName = process.env.AMPLIFY_DATA_TABLE_NAME;
-
-  if (!tableName) throw new Error("Missing Table Name environment variable");
-
-  let salesStats: SalesAccumulator = {};
-  let totalSold = 0;
-  let avgDaily = 0;
+  
+  // 📅 Determine if target is a weekend (Friday=5, Saturday=6)
+  const targetDay = new Date(targetDate).getDay();
+  const isWeekend = targetDay === 5 || targetDay === 6;
 
   try {
-    // ====================================================
-    // 1. DATA FETCHING (UPDATED TO 30 DAYS)
-    // ====================================================
-    
     const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 30); // Look back 30 days
-    const dateThreshold = pastDate.toISOString();
+    pastDate.setDate(pastDate.getDate() - 30); // 30-day window
 
-    const command = new QueryCommand({
+    const { Items = [] } = await ddb.send(new QueryCommand({
       TableName: tableName,
       IndexName: "ByAgentByStatus",
       KeyConditionExpression: "gsi1pk = :pk AND sk > :sk",
       ExpressionAttributeValues: {
-        ":pk": { S: `CAT#${category}` },     
-        ":sk": { S: `ITEM#${dateThreshold}` } 
+        ":pk": { S: `CAT#${category}` },
+        ":sk": { S: `ITEM#${pastDate.toISOString()}` }
       }
-    });
+    }));
 
-    const response = await ddb.send(command);
-    const items = response.Items || [];
-    console.log(`Found ${items.length} items in last 30 days for ${category}`);
-
-    // --- CIRCUIT BREAKER: If 0 items, don't waste money on AI ---
-    if (items.length === 0) {
-        return {
-            predictedQuantity: 5, // Safe default starter prep
-            confidence: "LOW",
-            reasoning: "No sales history found in the last 30 days. Using default starter par.",
-            seasonalNote: "New Item / Low Data",
-            suggestedAction: "Prep 5 units as a trial"
-        };
+    // --- Circuit Breaker for No Data ---
+    if (Items.length === 0) {
+      return {
+        predictedQuantity: 5,
+        confidence: "LOW",
+        reasoning: "No recent history for this category. Using safety starter par.",
+        suggestedAction: "Prep 5 units as a baseline trial."
+      };
     }
-    
-    // 2. DATA AGGREGATION
-    salesStats = items.reduce<SalesAccumulator>((acc, item) => {
-      const sk = item.sk?.S;
+
+    // --- 1. Identify High-Demand Item ---
+    const itemStats: Record<string, { total: number; name: string }> = {};
+    Items.forEach(item => {
+      const id = item.itemID?.S || "Unknown";
+      const name = item.name?.S || id;
       const qty = parseInt(item.quantity?.N || "1");
-      if (!sk) return acc;
       
-      const timestampPart = sk.split("#")[1]; 
-      if (!timestampPart) return acc;
-
-      const dateKey = timestampPart.split("T")[0]; 
-      if (!acc[dateKey]) acc[dateKey] = 0;
-      acc[dateKey] += qty;
-      return acc;
-    }, {});
-
-    totalSold = Object.values(salesStats).reduce((a: number, b: number) => a + b, 0);
-    avgDaily = Math.ceil(totalSold / 30) || 5; 
-
-  } catch (dbError) {
-    console.error("DB Error:", dbError);
-    avgDaily = 5; 
-  }
-
-  // ====================================================
-  // 3. AI PREDICTION (AMAZON TITAN)
-  // ====================================================
-  try {
-    const prompt = `User: You are a Kitchen Manager. Predict prep quantities based on 30-day sales history.
-    
-Example Input:
-Category: Burgers
-Target Date: 2025-12-12
-History: {"2025-12-08": 50, "2025-12-09": 55}
-Total Sold (30 days): 450
-
-Example Output:
-{
-  "predictedQuantity": 60,
-  "confidence": "HIGH",
-  "reasoning": "Upward trend detected.",
-  "seasonalNote": "Regular weekday.",
-  "suggestedAction": "Prep slightly more."
-}
-
-Current Input:
-Category: ${category}
-Target Date: ${targetDate}
-History: ${JSON.stringify(salesStats)}
-Total Sold (30 days): ${totalSold}
-
-Task: Output valid JSON only.
-\nBot:`;
-
-    const titanPayload = {
-      inputText: prompt,
-      textGenerationConfig: {
-        maxTokenCount: 300,
-        temperature: 0.1, 
-        topP: 0.9,
-        stopSequences: ["User:"]
-      }
-    };
-
-    const bedrockCommand = new InvokeModelCommand({
-      modelId: "amazon.titan-text-express-v1",
-      contentType: "application/json",
-      accept: "application/json",
-      body: JSON.stringify(titanPayload)
+      if (!itemStats[id]) itemStats[id] = { total: 0, name: name };
+      itemStats[id].total += qty;
     });
 
-    const aiResponse = await bedrock.send(bedrockCommand);
-    const responseBody = JSON.parse(new TextDecoder().decode(aiResponse.body));
-    const aiText = responseBody.results[0].outputText;
+    // Sort to find the item with the highest demand
+    const sortedItems = Object.entries(itemStats).sort((a, b) => b[1].total - a[1].total);
+    const [topId, stats] = sortedItems[0];
 
-    console.log("RAW AI:", aiText);
+    // --- 2. Heuristic Forecast Logic ---
+    const dailyAvg = stats.total / 30;
+    // Apply a 70% boost for weekends or a 10% safety buffer for weekdays
+    const multiplier = isWeekend ? 1.7 : 1.1; 
+    const finalPrediction = Math.ceil(dailyAvg * multiplier);
 
-    // 4. PARSING LOGIC
-    const jsonStart = aiText.indexOf('{');
-    const jsonEnd = aiText.lastIndexOf('}');
-    
-    if (jsonStart !== -1 && jsonEnd !== -1) {
-        const jsonStr = aiText.substring(jsonStart, jsonEnd + 1);
-        return JSON.parse(jsonStr);
-    } 
-    
-    throw new Error("No JSON brackets found");
+    return {
+      predictedQuantity: finalPrediction,
+      confidence: Items.length > 30 ? "HIGH" : "MEDIUM",
+      reasoning: `Based on 30-day demand for ${stats.name}. Current average is ${dailyAvg.toFixed(1)} units/day.`,
+      seasonalNote: isWeekend ? "Weekend high-demand multiplier applied." : "Standard weekday trend.",
+      suggestedAction: `Focus prep on ${finalPrediction} units of ${stats.name}.`
+    };
 
   } catch (error) {
-    console.error("AI Error (Using Fallback):", error);
-    
-    return {
-      predictedQuantity: Math.ceil(avgDaily * 1.1), 
-      confidence: "LOW",
-      reasoning: "AI analysis unavailable. Using 30-day average.",
-      seasonalNote: "Standard Prep",
-      suggestedAction: `Prep ${Math.ceil(avgDaily * 1.1)} units`
-    };
+    console.error("Forecast Error:", error);
+    return { predictedQuantity: 5, confidence: "ERROR", reasoning: "System fallback applied." };
   }
 };

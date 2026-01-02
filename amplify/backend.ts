@@ -81,9 +81,7 @@ const cognitoPolicy = new PolicyStatement({
 
 backend.createAgentUser.resources.lambda.addToRolePolicy(cognitoPolicy);
 
-businessTable.grantReadWriteData(
-  backend.createAgentUser.resources.lambda
-);
+businessTable.grantReadWriteData(backend.createAgentUser.resources.lambda);
 
 // ====================================================
 // C. GEOLOCATION & MAPS CONFIGURATION
