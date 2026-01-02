@@ -103,7 +103,10 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 
 // Memoized Order Card
 const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, onClick, getAgentName, updatingId }) => {
-  const isActuallyPickup = order.isPickUp === true || String(order.isPickUp) === 'true';
+
+  const isActuallyPickup = order.isPickUp === true || 
+                         order.isPickUp === 1 || 
+                         String(order.isPickUp).toLowerCase() === 'true';
   return (
     <div
       onClick={onClick}
@@ -224,6 +227,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
                     setOrders(prev => {
                         // 🚨 CRITICAL FIX: DEDUPLICATION CHECK
                         // If an order with this SK already exists, do not add it again.
+                        console.log("📥 Subscription Payload:", newItem);
                         if (prev.some(order => order.sk === newItem.sk)) {
                             console.warn("Duplicate prevented:", newItem.sk);
                             return prev;
