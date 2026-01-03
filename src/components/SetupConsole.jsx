@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import AgentsView from './AgentsView'; // ✅ Reusing your agent management logic
 
@@ -55,86 +55,236 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
 }
 
 // --- SUB-SECTION: RESTAURANT ---
-const RestaurantSection = ({ pk, currentLoc }) => {
+// const RestaurantSection = ({ pk, currentLoc }) => {
+//     const [name, setName] = useState('');
+//     const [coords, setCoords] = useState({ 
+//         lat: currentLoc?.latitude || '', 
+//         lng: currentLoc?.longitude || '' 
+//     });
+//     const [coordError, setCoordError] = useState("");
+//     const [saving, setSaving] = useState(false);
+
+//     // ✅ Robust Float Validation Logic
+//     const handleCoordChange = (field, value) => {
+//         // Regex allows: negative signs, numbers, and a single decimal point
+//         const isFloat = /^-?[0-9]*\.?[0-9]*$/.test(value);
+        
+//         if (isFloat || value === "") {
+//             setCoordError("");
+//             setCoords(prev => ({ ...prev, [field]: value }));
+//         } else {
+//             setCoordError("Coordinates must be valid numbers (e.g. 26.123)");
+//         }
+//     };
+
+//     const handleUpdate = async () => {
+//         if (!name) return alert("Please enter a Restaurant Name");
+//         if (!coords.lat || !coords.lng) return alert("Coordinates are required");
+        
+//         setSaving(true);
+//         try {
+//             await client.models.BusinessData.update({
+//                 pk: pk,
+//                 sk: "CONFIG", 
+//                 name: name,
+//                 entityType: 'Business',
+//                 location: {
+//                     // Convert string input back to Float for DynamoDB
+//                     latitude: parseFloat(coords.lat),
+//                     longitude: parseFloat(coords.lng)
+//                 }
+//             });
+//             alert("Restaurant CONFIG updated successfully!");
+//         } catch (err) {
+//             console.error("Update Error:", err);
+//             alert("Failed to update config.");
+//         } finally {
+//             setSaving(false);
+//         }
+//     };
+
+//     return (
+//         <div className="space-y-6 max-w-sm mx-auto pt-4">
+//             <header>
+//                 <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">Restaurant Identity</h2>
+//                 <p className="text-[10px] text-slate-500 font-medium italic">Updating: CONFIG record</p>
+//             </header>
+
+//             <div className="space-y-4">
+//                 {/* Name Field */}
+//                 <div className="space-y-1">
+//                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Business Name</label>
+//                     <input 
+//                         className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" 
+//                         placeholder="e.g. Al-Mahrez Kitchen" 
+//                         value={name}
+//                         onChange={e => setName(e.target.value)} 
+//                     />
+//                 </div>
+
+//                 {/* Editable Coordinates Group */}
+//                 <div className="space-y-2">
+//                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">GPS Coordinates (Float)</label>
+//                     <div className="flex gap-2">
+//                         <input 
+//                             className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border transition-all outline-none ${coordError ? 'border-red-500' : 'border-slate-700'}`}
+//                             type="text"
+//                             placeholder="Latitude"
+//                             value={coords.lat}
+//                             onChange={e => handleCoordChange('lat', e.target.value)}
+//                         />
+//                         <input 
+//                             className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border transition-all outline-none ${coordError ? 'border-red-500' : 'border-slate-700'}`}
+//                             type="text"
+//                             placeholder="Longitude"
+//                             value={coords.lng}
+//                             onChange={e => handleCoordChange('lng', e.target.value)}
+//                         />
+//                     </div>
+//                     {coordError && <p className="text-[10px] text-red-400 font-bold ml-1 animate-pulse">{coordError}</p>}
+//                 </div>
+
+//                 <button 
+//                     onClick={() => {
+//                         navigator.geolocation.getCurrentPosition(pos => {
+//                             setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() });
+//                             setCoordError("");
+//                         });
+//                     }} 
+//                     className="w-full text-indigo-400 text-[10px] font-black py-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 flex items-center justify-center gap-2"
+//                 >
+//                     📍 AUTO-DETECT LOCATION
+//                 </button>
+
+//                 <button 
+//                     onClick={handleUpdate} 
+//                     disabled={saving || !!coordError}
+//                     className="w-full bg-sky-600 py-4 rounded-xl font-black text-white shadow-lg hover:bg-sky-500 active:scale-95 transition-all disabled:opacity-50"
+//                 >
+//                     {saving ? "SYNCING..." : "SUBMIT UPDATES"}
+//                 </button>
+//             </div>
+//         </div>
+//     );
+// };
+const RestaurantSection = ({ pk }) => {
     const [name, setName] = useState('');
-    const [coords, setCoords] = useState({ 
-        lat: currentLoc?.latitude || '', 
-        lng: currentLoc?.longitude || '' 
-    });
+    const [coords, setCoords] = useState({ lat: '', lng: '' });
     const [coordError, setCoordError] = useState("");
+    const [loading, setLoading] = useState(true); // Initial fetch state
     const [saving, setSaving] = useState(false);
 
-    // ✅ Robust Float Validation Logic
+    // 1️⃣ 🔄 MOUNT LOGIC: Fetch current database values immediately
+    // This ensures we have the current Name and Location before we try to update.
+    useEffect(() => {
+        const fetchCurrentConfig = async () => {
+            setLoading(true);
+            try {
+                const { data } = await client.models.BusinessData.get({ 
+                    pk: pk, 
+                    sk: 'CONFIG' 
+                });
+
+                if (data) {
+                    setName(data.name || '');
+                    if (data.location) {
+                        setCoords({ 
+                            lat: data.location.latitude?.toString() || '', 
+                            lng: data.location.longitude?.toString() || '' 
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Initial Fetch Error:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (pk) fetchCurrentConfig();
+    }, [pk]);
+
+    // ✅ Robust Float Validation
     const handleCoordChange = (field, value) => {
-        // Regex allows: negative signs, numbers, and a single decimal point
         const isFloat = /^-?[0-9]*\.?[0-9]*$/.test(value);
-        
         if (isFloat || value === "") {
             setCoordError("");
             setCoords(prev => ({ ...prev, [field]: value }));
         } else {
-            setCoordError("Coordinates must be valid numbers (e.g. 26.123)");
+            setCoordError("Please enter valid numeric coordinates");
         }
     };
 
+    // 2️⃣ ✅ UPDATE LOGIC: Explicit payload construction
     const handleUpdate = async () => {
-        if (!name) return alert("Please enter a Restaurant Name");
-        if (!coords.lat || !coords.lng) return alert("Coordinates are required");
+        if (!name.trim()) return alert("Restaurant Name is required to save configuration.");
+        if (!coords.lat || !coords.lng) return alert("Valid GPS coordinates are required.");
         
         setSaving(true);
+
+        const updatePayload = {
+            pk: pk,
+            sk: "CONFIG", 
+            name: name.trim(),
+            entityType: 'Business',
+            location: {
+                latitude: parseFloat(coords.lat),
+                longitude: parseFloat(coords.lng)
+            }
+        };
+
+        console.log("📤 Submitting to Amplify:", updatePayload);
+
         try {
-            await client.models.BusinessData.update({
-                pk: pk,
-                sk: "CONFIG", 
-                name: name,
-                entityType: 'Business',
-                location: {
-                    // Convert string input back to Float for DynamoDB
-                    latitude: parseFloat(coords.lat),
-                    longitude: parseFloat(coords.lng)
-                }
-            });
-            alert("Restaurant CONFIG updated successfully!");
+            await client.models.BusinessData.update(updatePayload);
+            alert("✅ Restaurant configuration synced successfully!");
         } catch (err) {
-            console.error("Update Error:", err);
-            alert("Failed to update config.");
+            console.error("❌ Update Error:", err);
+            alert(`Save failed: ${err.message || "Unknown error"}`);
         } finally {
             setSaving(false);
         }
     };
 
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center p-12 space-y-4">
+            <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Fetching Identity...</p>
+        </div>
+    );
+
     return (
-        <div className="space-y-6 max-w-sm mx-auto pt-4">
-            <header>
+        <div className="space-y-6 max-w-sm mx-auto pt-4 animate-fade-in">
+            <header className="border-l-4 border-sky-500 pl-3">
                 <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">Restaurant Identity</h2>
-                <p className="text-[10px] text-slate-500 font-medium italic">Updating: CONFIG record</p>
+                <p className="text-[10px] text-slate-500 font-medium italic">Managing: {pk}</p>
             </header>
 
             <div className="space-y-4">
                 {/* Name Field */}
                 <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Business Name</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Business Name</label>
                     <input 
-                        className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" 
+                        className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none transition-all" 
                         placeholder="e.g. Al-Mahrez Kitchen" 
                         value={name}
                         onChange={e => setName(e.target.value)} 
                     />
                 </div>
 
-                {/* Editable Coordinates Group */}
+                {/* Coordinates Group */}
                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">GPS Coordinates (Float)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location (Float)</label>
                     <div className="flex gap-2">
                         <input 
-                            className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border transition-all outline-none ${coordError ? 'border-red-500' : 'border-slate-700'}`}
+                            className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border transition-all outline-none ${coordError ? 'border-red-500' : 'border-slate-700 focus:border-sky-500'}`}
                             type="text"
                             placeholder="Latitude"
                             value={coords.lat}
                             onChange={e => handleCoordChange('lat', e.target.value)}
                         />
                         <input 
-                            className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border transition-all outline-none ${coordError ? 'border-red-500' : 'border-slate-700'}`}
+                            className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border transition-all outline-none ${coordError ? 'border-red-500' : 'border-slate-700 focus:border-sky-500'}`}
                             type="text"
                             placeholder="Longitude"
                             value={coords.lng}
@@ -146,28 +296,34 @@ const RestaurantSection = ({ pk, currentLoc }) => {
 
                 <button 
                     onClick={() => {
-                        navigator.geolocation.getCurrentPosition(pos => {
-                            setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() });
-                            setCoordError("");
-                        });
+                        navigator.geolocation.getCurrentPosition(
+                            (pos) => {
+                                setCoords({ 
+                                    lat: pos.coords.latitude.toString(), 
+                                    lng: pos.coords.longitude.toString() 
+                                });
+                                setCoordError("");
+                            },
+                            (err) => alert("Could not detect location. Please check browser permissions."),
+                            { enableHighAccuracy: true }
+                        );
                     }} 
-                    className="w-full text-indigo-400 text-[10px] font-black py-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 flex items-center justify-center gap-2"
+                    className="w-full text-indigo-400 text-[10px] font-black py-4 bg-indigo-500/10 rounded-xl border border-indigo-500/20 flex items-center justify-center gap-2 hover:bg-indigo-500/20 transition-all active:scale-[0.98]"
                 >
-                    📍 AUTO-DETECT LOCATION
+                    📍 CAPTURE CURRENT COORDINATES
                 </button>
 
                 <button 
                     onClick={handleUpdate} 
                     disabled={saving || !!coordError}
-                    className="w-full bg-sky-600 py-4 rounded-xl font-black text-white shadow-lg hover:bg-sky-500 active:scale-95 transition-all disabled:opacity-50"
+                    className="w-full bg-sky-600 py-4 rounded-xl font-black text-white shadow-lg hover:bg-sky-500 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    {saving ? "SYNCING..." : "SUBMIT UPDATES"}
+                    {saving ? "SYNCING TO CLOUD..." : "COMMIT CHANGES"}
                 </button>
             </div>
         </div>
     );
 };
-
 // --- SUB-SECTION: ITEMS ---
 const ItemsSection = ({ pk, onUpdate }) => {
     const [item, setItem] = useState({ 
