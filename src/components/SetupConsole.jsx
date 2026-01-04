@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import AgentsView from './AgentsView'; // ✅ Reusing your agent management logic
 
-const TABS = ['Restaurant', 'Branches', 'Items', 'Agents'];
+const TABS = ['Restaurant', 'Branches', 'Items', 'Agents', 'ⓘ'];
 const ITEM_CATEGORIES = [
     'STARTERS', 'MAIN_COURSE', 'BREAKFAST', 'FASTFOOD', 'LUNCH_SPECIALS',
     'SALADS', 'SOUPS', 'SANDWICHES_WRAPS', 'PIZZA_PASTA', 'SIDES',
@@ -23,7 +23,9 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`flex-1 py-3 px-2 rounded-xl text-[13px] font-black uppercase tracking-tighter transition-all ${
-                            activeTab === tab ? 'bg-sky-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700'
+                            activeTab === tab 
+                            ? (tab === 'ⓘ' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-sky-600 text-white shadow-lg') 
+                            : 'text-slate-400 hover:bg-slate-700'
                         }`}>
                         {tab}
                     </button>
@@ -49,6 +51,7 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
                         />
                     </div>
                 )}
+                {activeTab === 'ⓘ' && <PrivacyPolicySection />}
             </div>
         </div>
     );
@@ -436,6 +439,111 @@ const BranchesSection = ({ pk }) => {
                 >
                     {saving ? "GENERATING BRANCH ID..." : "REGISTER BRANCH"}
                 </button>
+            </div>
+        </div>
+    );
+};
+
+// --- 🆕 SUB-SECTION: PRIVACY POLICY ---
+const PrivacyPolicySection = () => {
+    return (
+        <div className="max-w-2xl mx-auto space-y-6 animate-fade-in text-slate-300 pt-2">
+            <header className="border-l-4 border-emerald-500 pl-4 mb-6">
+                <h2 className="text-2xl font-bold text-white">Privacy Policy</h2>
+                <p className="text-xs text-emerald-400 mt-1 uppercase tracking-widest">Effective Date: January 4, 2026</p>
+            </header>
+
+            <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 space-y-8 shadow-xl text-sm leading-relaxed">
+                
+                {/* 1. Introduction */}
+                <section>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">1. Introduction</h3>
+                    <p>
+                        Welcome to <strong className="text-white">CloudOrder</strong> (operated by <strong>1st-Hub</strong>). We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our services, including our web dashboard and our WhatsApp-based ordering system.
+                    </p>
+                    <p className="mt-2">By using our services, you agree to the collection and use of information in accordance with this policy.</p>
+                </section>
+
+                {/* 2. Information We Collect */}
+                <section>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">2. Information We Collect</h3>
+                    <p className="mb-2">We collect information to provide and improve our services. The types of data collected include:</p>
+                    
+                    <div className="pl-4 border-l-2 border-slate-600 space-y-3">
+                        <div>
+                            <h4 className="text-emerald-400 font-bold text-xs uppercase">A. Information You Provide to Us</h4>
+                            <ul className="list-disc pl-5 mt-1 space-y-1 text-slate-400">
+                                <li><strong>Merchants:</strong> Business Name, Address, Contact Details, Menu data.</li>
+                                <li><strong>End-Users (WhatsApp):</strong> Phone Number, Profile Name, Location Data (GPS for delivery), Order Details.</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 className="text-emerald-400 font-bold text-xs uppercase">B. Information Collected Automatically</h4>
+                            <ul className="list-disc pl-5 mt-1 space-y-1 text-slate-400">
+                                <li><strong>Log Data:</strong> IP addresses, browser type, access times.</li>
+                                <li><strong>Usage Data:</strong> Interactions with WhatsApp bot (flows, clicks).</li>
+                                <li><strong>Meta Platform Data:</strong> Technical identifiers for routing messages.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                {/* 3. Usage */}
+                <section>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">3. How We Use Your Information</h3>
+                    <ul className="list-disc pl-5 space-y-1">
+                        <li><strong>Service Delivery:</strong> Processing orders and routing to restaurant branches.</li>
+                        <li><strong>Communication:</strong> Sending confirmations and delivery updates via WhatsApp.</li>
+                        <li><strong>Location Services:</strong> Calculating fees and guiding delivery agents.</li>
+                        <li><strong>Compliance:</strong> Adhering to legal obligations and Meta’s Terms.</li>
+                    </ul>
+                </section>
+
+                {/* 4. Sharing */}
+                <section>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">4. Data Sharing & Third Parties</h3>
+                    <p>We do not sell your personal data. We share data only with necessary providers:</p>
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                        <li><strong>Meta Platforms (WhatsApp):</strong> For message exchange.</li>
+                        <li><strong>AWS:</strong> For secure cloud hosting and storage.</li>
+                        <li><strong>Restaurant Partners:</strong> Order details shared strictly for fulfillment.</li>
+                    </ul>
+                </section>
+
+                {/* 5. Retention & Deletion */}
+                <section>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">5. Data Retention & Deletion</h3>
+                    <p>We retain data only as long as necessary. In compliance with PDPL and Meta’s Policy:</p>
+                    <div className="bg-slate-900/50 p-4 rounded-lg mt-3 border border-slate-600">
+                        <h4 className="text-white font-bold text-xs uppercase mb-1">Requesting Data Deletion</h4>
+                        <p className="text-xs text-slate-400 mb-1">
+                            Send an email to <span className="text-emerald-400">info@1st-hub.com</span> with the subject "Data Deletion Request" and your phone number.
+                        </p>
+                        <p className="text-xs text-slate-400">
+                            We process valid requests within <strong>30 days</strong>.
+                        </p>
+                    </div>
+                </section>
+
+                {/* 6. Security */}
+                <section>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">6. Security</h3>
+                    <p>We implement industry-standard security measures including encryption in transit (TLS/SSL) and strict IAM access controls.</p>
+                </section>
+
+                {/* 9. Contact */}
+                <section>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">9. Contact Us</h3>
+                    <div className="text-slate-400 text-xs space-y-1">
+                        <p>Email: <a href="mailto:info@1st-hub.com" className="text-sky-400 hover:underline">info@1st-hub.com</a></p>
+                        <p>Website: <a href="https://1st-hub.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">https://1st-hub.com</a></p>
+                        <p>Address: Manama, Bahrain</p>
+                    </div>
+                </section>
+            </div>
+            
+            <div className="text-center pt-6 pb-4">
+                <p className="text-xs text-slate-500">© 2026 1st-Hub. All rights reserved.</p>
             </div>
         </div>
     );
