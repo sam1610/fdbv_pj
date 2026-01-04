@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { client } from '../DataHook/amplifyClient';
-import AgentsView from './AgentsView'; // ✅ Reusing your agent management logic
+import AgentsView from './AgentsView'; 
 
 const TABS = ['Restaurant', 'Branches', 'Items', 'Agents', 'ⓘ'];
+
 const ITEM_CATEGORIES = [
     'STARTERS', 'MAIN_COURSE', 'BREAKFAST', 'FASTFOOD', 'LUNCH_SPECIALS',
     'SALADS', 'SOUPS', 'SANDWICHES_WRAPS', 'PIZZA_PASTA', 'SIDES',
@@ -14,15 +15,34 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
     const [activeTab, setActiveTab] = useState('Restaurant');
     const businessPk = `BUSINESS#${phoneNbr}`;
 
+    // 1️⃣ INITIALIZE META SDK
+    useEffect(() => {
+        window.fbAsyncInit = function() {
+            window.FB.init({
+                appId: '29979645098350108', //  META APP ID
+                cookie: true,
+                xfbml: true,
+                version: 'v20.0'
+            });
+        };
+        (function(d, s, id){
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) {return;}
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/en_US/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
+    }, []);
+
     return (
         <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
-            {/* --- 4-Button Header Navigation --- */}
-            <div className="flex bg-slate-800 p-2 border-b border-slate-700">
+            {/* --- Navigation Header --- */}
+            <div className="flex bg-slate-800 p-2 border-b border-slate-700 overflow-x-auto">
                 {TABS.map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`flex-1 py-3 px-2 rounded-xl text-[13px] font-black uppercase tracking-tighter transition-all ${
+                        className={`flex-1 min-w-[80px] py-3 px-2 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all whitespace-nowrap ${
                             activeTab === tab 
                             ? (tab === 'ⓘ' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-sky-600 text-white shadow-lg') 
                             : 'text-slate-400 hover:bg-slate-700'
@@ -34,23 +54,21 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
 
             {/* --- Content Area --- */}
             <div className="flex-grow overflow-y-auto p-4 pb-24">
-                {activeTab === 'Restaurant' && <RestaurantSection pk={businessPk} currentLoc={businessLocation} />}
+                {activeTab === 'Restaurant' && (
+                    <RestaurantSection 
+                        pk={businessPk} 
+                        onShowPrivacy={() => setActiveTab('ⓘ')} 
+                    />
+                )}
                 
                 {activeTab === 'Branches' && <BranchesSection pk={businessPk} />}
-                
                 {activeTab === 'Items' && <ItemsSection pk={businessPk} onUpdate={onDataChange} />}
-
                 {activeTab === 'Agents' && (
                     <div className="animate-fade-in">
-                        {/* ✅ Renders your existing Agent List and Add Agent logic */}
-                        <AgentsView 
-                            phoneNbr={phoneNbr} 
-                            setModal={setModal} 
-                            onAgentAdded={onDataChange} 
-                            businessLocation={businessLocation} 
-                        />
+                        <AgentsView phoneNbr={phoneNbr} setModal={setModal} onAgentAdded={onDataChange} businessLocation={businessLocation} />
                     </div>
                 )}
+                
                 {activeTab === 'ⓘ' && <PrivacyPolicySection />}
             </div>
         </div>
@@ -58,47 +76,50 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
 }
 
 // --- SUB-SECTION: RESTAURANT ---
-
-const RestaurantSection = ({ pk }) => {
+const RestaurantSection = ({ pk, onShowPrivacy }) => {
+    // Identity State
     const [name, setName] = useState('');
     const [coords, setCoords] = useState({ lat: '', lng: '' });
-    const [coordError, setCoordError] = useState("");
     const [saving, setSaving] = useState(false);
-    const [hasLoaded, setHasLoaded] = useState(false); // 🛡️ LOCK GUARD
+    const [hasLoaded, setHasLoaded] = useState(false);
+    const [coordError, setCoordError] = useState("");
 
-    // 1️⃣ 🔄 FETCH DATA ONCE
+    // WhatsApp State
+    const [waStatus, setWaStatus] = useState('not_connected');
+    const [wabaId, setWabaId] = useState('');
+    const [isWaConnecting, setIsWaConnecting] = useState(false);
+
+    // 1️⃣ FETCH CONFIG
     useEffect(() => {
         const fetchInitialData = async () => {
-            if (hasLoaded) return; // Stop if we already loaded once
-            
+            if (hasLoaded) return;
             try {
-                const { data } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
-                if (data) {
-                    setName(data.name || '');
-                    if (data.location) {
+                // Fetch basic config
+                const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
+                if (config) {
+                    setName(config.name || '');
+                    if (config.location) {
                         setCoords({ 
-                            lat: data.location.latitude?.toString() || '', 
-                            lng: data.location.longitude?.toString() || '' 
+                            lat: config.location.latitude?.toString() || '', 
+                            lng: config.location.longitude?.toString() || '' 
                         });
                     }
                 }
-                setHasLoaded(true); // ✅ Mark as loaded so we don't overwrite user typing
+
+                // Fetch WhatsApp config
+                const { data: waConfig } = await client.models.BusinessData.get({ pk, sk: 'WHATSAPP_CONFIG' });
+                if (waConfig && waConfig.wabaId) {
+                    setWabaId(waConfig.wabaId);
+                    setWaStatus('connected');
+                }
+                
+                setHasLoaded(true);
             } catch (err) {
                 console.error("Fetch error:", err);
             }
         };
         fetchInitialData();
-    }, [pk, hasLoaded]); // Added hasLoaded to dependency array
-
-    const handleCoordChange = (field, value) => {
-        const isFloat = /^-?[0-9]*\.?[0-9]*$/.test(value);
-        if (isFloat || value === "") {
-            setCoordError("");
-            setCoords(prev => ({ ...prev, [field]: value }));
-        } else {
-            setCoordError("Invalid numeric format");
-        }
-    };
+    }, [pk, hasLoaded]);
 
     const handleUpdate = async () => {
         if (!name.trim()) return alert("Name is required");
@@ -114,7 +135,7 @@ const RestaurantSection = ({ pk }) => {
                     longitude: parseFloat(coords.lng)
                 }
             });
-            alert("✅ Successfully updated in Cloud!");
+            alert("✅ Configuration updated successfully!");
         } catch (err) {
             console.error("Update Error:", err);
             alert(`Failed: ${err.message}`);
@@ -123,61 +144,135 @@ const RestaurantSection = ({ pk }) => {
         }
     };
 
+    const handleCoordChange = (field, value) => {
+        const isFloat = /^-?[0-9]*\.?[0-9]*$/.test(value);
+        if (isFloat || value === "") {
+            setCoordError("");
+            setCoords(prev => ({ ...prev, [field]: value }));
+        } else {
+            setCoordError("Invalid numeric format");
+        }
+    };
+
+    // 🚀 LAUNCH META POPUP
+    const launchWhatsAppSignup = () => {
+        setIsWaConnecting(true);
+        window.FB.login((response) => {
+            if (response.authResponse) {
+                const code = response.authResponse.code;
+                console.log("Meta Auth Code:", code);
+                // Call backend exchange here
+                setWabaId("WABA-MOCK-ID"); 
+                setWaStatus('connected');
+                alert("✅ WhatsApp Connected!");
+            } else {
+                alert("Connection cancelled.");
+            }
+        }, {
+            config_id: 'YOUR_CONFIG_ID',
+            response_type: 'code',
+            override_default_response_type: true,
+            extras: {
+                feature: 'whatsapp_embedded_signup',
+                version: 2,
+                sessionInfoVersion: 2,
+                setup: { business: { name: name } }
+            }
+        });
+        setIsWaConnecting(false);
+    };
+
     return (
-        <div className="space-y-6 max-w-sm mx-auto pt-4">
-            <header className="border-l-4 border-sky-500 pl-3">
-                <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">Restaurant Identity</h2>
-                <p className="text-[10px] text-slate-500 font-medium italic">Managing: {pk}</p>
-            </header>
+        <div className="space-y-8 max-w-sm mx-auto pt-4">
+            
+            {/* --- SECTION 1: IDENTITY --- */}
+            <div>
+                <header className="border-l-4 border-sky-500 pl-3 mb-4">
+                    <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">Business Identity</h2>
+                </header>
 
-            <div className="space-y-4">
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Business Name</label>
-                    <input 
-                        className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" 
-                        value={name}
-                        onChange={e => setName(e.target.value)} 
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location (Float)</label>
-                    <div className="flex gap-2">
+                <div className="space-y-4">
+                    {/* Business Name with Info Button */}
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-center ml-1 mb-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Business Name</label>
+                            
+                            {/* ⓘ Info Button Moved Here */}
+                            <button 
+                                onClick={onShowPrivacy}
+                                className="w-5 h-5 rounded-full border border-sky-500 text-sky-500 flex items-center justify-center text-[10px] font-serif italic hover:bg-sky-500 hover:text-white transition-all cursor-pointer"
+                                title="Read Privacy Policy"
+                            >
+                                i
+                            </button>
+                        </div>
+                        
                         <input 
-                            className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border outline-none ${coordError ? 'border-red-500' : 'border-slate-700'}`}
-                            placeholder="Lat"
-                            value={coords.lat}
-                            onChange={e => handleCoordChange('lat', e.target.value)}
-                        />
-                        <input 
-                            className={`flex-1 bg-slate-800 p-4 rounded-xl text-white text-sm border outline-none ${coordError ? 'border-red-500' : 'border-slate-700'}`}
-                            placeholder="Lng"
-                            value={coords.lng}
-                            onChange={e => handleCoordChange('lng', e.target.value)}
+                            className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" 
+                            value={name}
+                            onChange={e => setName(e.target.value)} 
                         />
                     </div>
                 </div>
+            </div>
 
-                <button 
-                    onClick={() => {
-                        navigator.geolocation.getCurrentPosition(pos => {
-                            setCoords({ 
-                                lat: pos.coords.latitude.toString(), 
-                                lng: pos.coords.longitude.toString() 
-                            });
-                        });
-                    }} 
-                    className="w-full text-indigo-400 text-[10px] font-black py-4 bg-indigo-500/10 rounded-xl border border-indigo-500/20"
-                >
-                    📍 CAPTURE GPS
-                </button>
+            {/* --- SECTION 2: WHATSAPP INTEGRATION --- */}
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                <header className="flex items-center gap-2 mb-4">
+                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 4.187 1.213 4.435c.149.248 2.095 3.197 5.077 4.483.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                    </div>
+                    <h3 className="text-white text-xs font-bold uppercase tracking-wider">WhatsApp Connection</h3>
+                </header>
+
+                {waStatus === 'not_connected' ? (
+                    <button 
+                        onClick={launchWhatsAppSignup}
+                        disabled={isWaConnecting}
+                        className="w-full bg-[#1877F2] hover:bg-[#166fe5] py-3 rounded-lg font-bold text-white text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
+                    >
+                        {isWaConnecting ? "Loading Meta..." : "Connect via Facebook"}
+                    </button>
+                ) : (
+                    <div className="text-center">
+                        <p className="text-green-400 text-xs font-bold mb-1">✅ Connected</p>
+                        <p className="text-slate-500 text-[10px] font-mono">{wabaId}</p>
+                    </div>
+                )}
+            </div>
+
+            {/* --- SECTION 3: LOCATION & SAVE --- */}
+            <div>
+                <div className="space-y-2 mb-6">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location</label>
+                    <div className="flex gap-2">
+                        <input 
+                            className="flex-1 bg-slate-800 p-4 rounded-t-xl text-white text-sm border border-slate-700 outline-none"
+                            placeholder="Lat" value={coords.lat}
+                            onChange={e => handleCoordChange('lat', e.target.value)}
+                        />
+                        <input 
+                            className="flex-1 bg-slate-800 p-4 rounded-t-xl text-white text-sm border border-slate-700 outline-none"
+                            placeholder="Lng" value={coords.lng}
+                            onChange={e => handleCoordChange('lng', e.target.value)}
+                        />
+                    </div>
+                    {/* Thin GPS Button Bar */}
+                    <button 
+                        onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} 
+                        className="w-full bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-400 text-[10px] font-bold py-1.5 rounded-b-xl border-x border-b border-slate-700 border-t-0 uppercase tracking-widest transition-colors"
+                    >
+                        📍 Capture Current Location
+                    </button>
+                    {coordError && <p className="text-red-500 text-[10px]">{coordError}</p>}
+                </div>
 
                 <button 
                     onClick={handleUpdate} 
                     disabled={saving || !!coordError}
                     className="w-full bg-sky-600 py-4 rounded-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-50"
                 >
-                    {saving ? "SYNCING..." : "COMMIT CHANGES"}
+                    {saving ? "SAVING..." : "SAVE ALL SETTINGS"}
                 </button>
             </div>
         </div>
@@ -447,14 +542,12 @@ const BranchesSection = ({ pk }) => {
 // --- 🆕 SUB-SECTION: PRIVACY POLICY ---
 const PrivacyPolicySection = () => {
     return (
-        <div className="max-w-2xl mx-auto space-y-6 animate-fade-in text-slate-300 pt-2">
+<div className="max-w-2xl mx-auto space-y-6 animate-fade-in text-slate-300 pt-2">
             <header className="border-l-4 border-emerald-500 pl-4 mb-6">
                 <h2 className="text-2xl font-bold text-white">Privacy Policy</h2>
                 <p className="text-xs text-emerald-400 mt-1 uppercase tracking-widest">Effective Date: January 4, 2026</p>
             </header>
-
-            <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 space-y-8 shadow-xl text-sm leading-relaxed">
-                
+            <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 shadow-xl text-sm leading-relaxed">                
                 {/* 1. Introduction */}
                 <section>
                     <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">1. Introduction</h3>
