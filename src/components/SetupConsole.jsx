@@ -4,6 +4,13 @@ import AgentsView from './AgentsView';
 
 const TABS = ['Restaurant', 'Branches', 'Items', 'Agents', 'ⓘ'];
 
+const ITEM_CATEGORIES = [
+    'STARTERS', 'MAIN_COURSE', 'BREAKFAST', 'FASTFOOD', 'LUNCH_SPECIALS',
+    'SALADS', 'SOUPS', 'SANDWICHES_WRAPS', 'PIZZA_PASTA', 'SIDES',
+    'SAUCES_EXTRAS', 'DRINKS_COLD', 'DRINKS_HOT', 'SMOOTHIES_SHAKES',
+    'DESSERTS', 'KIDS_MEAL', 'BUNDLES_DEALS', 'HEALTHY_DIET'
+];
+
 export default function SetupConsole({ phoneNbr, onDataChange, businessLocation, setModal }) {
     const [activeTab, setActiveTab] = useState('Restaurant');
     const businessPk = `BUSINESS#${phoneNbr}`;
@@ -12,7 +19,7 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
     useEffect(() => {
         window.fbAsyncInit = function() {
             window.FB.init({
-                appId: '29979645098350108', // Matches your screenshot ID
+                appId: '29979645098350108', // App ID
                 cookie: true,
                 xfbml: true,
                 version: 'v20.0'
@@ -141,7 +148,7 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
                 
                 // --- IN PRODUCTION: Send 'code' to your Backend Lambda here ---
                 // For the VIDEO, we mock the success state immediately:
-                setWabaId("1504486807253703"); // Your Test WABA ID
+                setWabaId("1504486807253703"); //  Test WABA ID
                 setWaStatus('connected');
                 alert("✅ WhatsApp Connected! WABA Linked.");
             } else {
@@ -161,11 +168,11 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
         setIsWaConnecting(false);
     };
 
-    // 🚀 3️⃣ SEND TEST FLOW (Required for Video)
+    // 🚀 3️⃣ SEND TEST FLOW 
     const handleSendTest = async () => {
         setIsSendingTest(true);
         try {
-            // Call your Lambda to send the template
+            // Call the  Lambda to send the template
             // Mocking success for video if Lambda isn't ready
             await new Promise(r => setTimeout(r, 1500)); 
             alert(`✅ Test Menu sent to ${phoneNbr}! Check your WhatsApp.`);
