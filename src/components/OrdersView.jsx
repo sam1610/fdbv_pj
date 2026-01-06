@@ -218,6 +218,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
   // ✅ New States for Map/Agents
   const [liveAgents, setLiveAgents] = useState([]); 
   const [loadingMap, setLoadingMap] = useState(false);
+  const [dispatchProposal, setDispatchProposal] = useState(null); // ✅ Stores the AI optimization result
 
   // 1. Fetch Orders
  // 1. Fetch Orders & Subscribe
@@ -366,34 +367,112 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
       .filter(o => o.location !== null);
   }, [sortedOrders, businessLocation]);
 
+  // ✅ NEW: Calls the Backend Optimization Algorithm
+  const handleDispatch = async (currentAgents) => {
+    try {
+      console.log("🤖 Calculating Optimal Routes...");
+      
+      // 1. Format Agents (Must match handler.ts expectations)
+      const formattedAgents = currentAgents.map(a => ({
+        id: a.id,
+        location: a.location,
+        currentLoad: a.currentLoad || 0,
+        maxCapacity: a.maxCapacity || 10,
+        deliveryDurationRemaining: 0 // You can update this if you have live tracking data
+      }));
+
+      // 2. Format Orders (Only send what needs to be dispatched)
+      const formattedOrders = readyForDispatch.map(o => ({
+        sk: o.sk,
+        restaurantLocation: parseLocation(businessLocation),
+        pickupLocation: parseLocation(o.pickupLocation), // If available
+        size: 'REGULAR' // You can map this from your DB if you have order size
+      }));
+
+      // 3. Call AppSync Query
+      const { data } = await client.queries.optimizeDelivery({
+        agents: JSON.stringify(formattedAgents),
+        orders: JSON.stringify(formattedOrders),
+        restaurantLocation: JSON.stringify(parseLocation(businessLocation))
+      });
+
+      if (data) {
+        console.log("✅ Optimization Result:", data);
+        setDispatchProposal(data); // Store result to pass to DeliveryOptimizer
+      }
+      
+    } catch (err) {
+      console.error("❌ Dispatch Error:", err);
+    }
+  };
+
   // ✅ 4. FETCH LIVE AGENTS FUNCTION
+  // const fetchLiveAgentLocations = async () => {
+  //   setLoadingMap(true);
+  //   try {
+  //       console.log("📍 Locating Agents via Profile...");
+  //       const promises = deliveryAgents.map(async (agent) => {
+  //           try {
+  //               // Agent.sk is usually "AGENT#+973..."
+  //               const agentPhonePk = agent.sk; 
+                
+  //               // Fetch the PROFILE record (which has the real live location)
+  //               const { data } = await client.models.BusinessData.listByBusiness({
+  //                   pk: agentPhonePk,       
+  //                   sk: { eq: agentPhonePk } 
+  //               });
+
+  //               const profile = data[0]; 
+                
+  //               return {
+  //                   id: agent.sk,
+  //                   name: agent.name,
+  //                   // PRIORITY: Profile Location > Business Record Location > null
+  //                   maxCapacity: profile?.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
+  //                   currentLoad: profile?.capacityLeft ? parseInt(profile.capacityLeft) : 0,
+  //                   location: profile?.location ? parseLocation(profile.location) : parseLocation(agent.location)
+  //               };
+  //           } catch (e) {
+  //               console.warn(`Failed to fetch profile for ${agent.name}`, e);
+  //               return { id: agent.sk, name: agent.name, location: parseLocation(agent.location), maxCapacity: 10, currentLoad: 0 };
+  //           }
+  //       });
+
+  //       const results = await Promise.all(promises);
+  //       setLiveAgents(results); 
+        
+  //       // After fetching, open the map
+  //       setFilter('Auto-Assign');
+
+  //   } catch (e) {
+  //       console.error("Error fetching live agents", e);
+  //   } finally {
+  //       setLoadingMap(false);
+  //   }
+  // };
+
+  // ✅ UPDATED: Fetches Agents AND Triggers Optimization
   const fetchLiveAgentLocations = async () => {
     setLoadingMap(true);
     try {
         console.log("📍 Locating Agents via Profile...");
         const promises = deliveryAgents.map(async (agent) => {
+            // ... (Your existing agent fetching logic remains exactly the same) ...
             try {
-                // Agent.sk is usually "AGENT#+973..."
                 const agentPhonePk = agent.sk; 
-                
-                // Fetch the PROFILE record (which has the real live location)
                 const { data } = await client.models.BusinessData.listByBusiness({
                     pk: agentPhonePk,       
                     sk: { eq: agentPhonePk } 
                 });
-
                 const profile = data[0]; 
-                
                 return {
                     id: agent.sk,
                     name: agent.name,
-                    // PRIORITY: Profile Location > Business Record Location > null
                     maxCapacity: profile?.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
                     currentLoad: profile?.capacityLeft ? parseInt(profile.capacityLeft) : 0,
                     location: profile?.location ? parseLocation(profile.location) : parseLocation(agent.location)
                 };
             } catch (e) {
-                console.warn(`Failed to fetch profile for ${agent.name}`, e);
                 return { id: agent.sk, name: agent.name, location: parseLocation(agent.location), maxCapacity: 10, currentLoad: 0 };
             }
         });
@@ -401,7 +480,10 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
         const results = await Promise.all(promises);
         setLiveAgents(results); 
         
-        // After fetching, open the map
+        // 🚀 TRIGGER OPTIMIZATION HERE with the fresh 'results'
+        await handleDispatch(results);
+        
+        // Open the map view
         setFilter('Auto-Assign');
 
     } catch (e) {
@@ -535,6 +617,7 @@ useEffect(() => {
         <DeliveryOptimizer
           orders={allMapOrders}
           agents={liveAgents} // Use the Hydrated Agents
+          proposal={dispatchProposal} // 👈 PASS THE OPTIMIZATION RESULT HERE
           AGENT_COLORS={agentColors}
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
