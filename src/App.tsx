@@ -226,6 +226,7 @@ function App({ signOut, user }: AppProps) {
     }
 
     const phone = userAttributes.phone_number;
+    console.log("Fetching location for phone:", phone, "in group:", userGroup);
 
     const initData = async () => {
       setAppLoading(true);

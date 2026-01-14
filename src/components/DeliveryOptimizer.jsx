@@ -3,33 +3,47 @@ import { createMap } from 'maplibre-gl-js-amplify';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import 'maplibre-gl-js-amplify/dist/public/amplify-map.css';
-import { client } from '../DataHook/amplifyClient'; 
-import { updateRec } from '../DataHook/UpdateRec'; 
+import { client } from '../DataHook/amplifyClient';
+import outputs from '../../amplify_outputs.json'; 
+import { LocationClient, ListDevicePositionsCommand } from "@aws-sdk/client-location";
+import { GeoRoutesClient, CalculateRoutesCommand } from "@aws-sdk/client-geo-routes"; 
+import { fetchAuthSession } from 'aws-amplify/auth';
+
+// --- CONFIG ---
+const REFRESH_RATE_MS = 10000; 
+
+// --- HELPERS ---
+function deg2rad(deg) { return deg * (Math.PI / 180); }
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371; // Radius of the earth in km
+  const R = 6371; 
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in km
+  return R * c; 
 }
 
-function deg2rad(deg) {
-  return deg * (Math.PI / 180);
-}
-
-// Estimates drive time based on distance (e.g., 3 mins per km + 2 mins parking)
 function estimateDurationSeconds(distanceKm) {
     if (!distanceKm) return 0;
-    // Assumption: Average city speed ~20km/h = 3 mins per km
-    // + 5 minutes (300s) fixed time for parking/handover
     return Math.round((distanceKm * 180) + 300);
 }
+
+const getCleanPhone = (id) => String(id || "").replace(/[^0-9]/g, '');
+
+const parseLocation = (loc) => {
+    if (!loc) return null;
+    try {
+      const parsed = typeof loc === 'string' ? JSON.parse(loc) : loc;
+      const lat = parseFloat(parsed.latitude?.N || parsed.latitude || 0);
+      const lng = parseFloat(parsed.longitude?.N || parsed.longitude || 0);
+      if (lat === 0 && lng === 0) return null;
+      return { latitude: lat, longitude: lng };
+    } catch { return null; }
+};
 
 const DeliveryOptimizer = ({
   orders,
@@ -39,193 +53,369 @@ const DeliveryOptimizer = ({
   onClose,
   onAssignmentSaved
 }) => {
-  const mapContainerRef = useRef(null);
   const mapInstance = useRef(null);
-  const markersRef = useRef({}); 
+  const intervalRef = useRef(null); // Ref to clear interval on unmount
+  
+  // Refs for Orders (DOM markers)
+  const markersRef = useRef({});          
 
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [assignments, setAssignments] = useState({});
-  const [metricsCache, setMetricsCache] = useState({});
-  const [errorMessage, setErrorMessage] = useState(null);
-
-  // ✅ Updated Defaults: Show ALL (including Delivered/Delivering) by default
+  // State
   const [showDelivered, setShowDelivered] = useState(true);
   const [showDelivering, setShowDelivering] = useState(true);
+  const [assignments, setAssignments] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false); 
+  const [optimizationMetrics, setOptimizationMetrics] = useState({});
+  const [errorMessage, setErrorMessage] = useState(null);
 
-  // Helper to determine if we are in "Dispatch Mode" (Only Prepared visible)
   const isDispatchMode = !showDelivered && !showDelivering;
-
-  // ✅ Check if there are actually any PREPARED orders to work with
   const hasPreparedOrders = orders.some(o => o.orderStatus === 'PREPARED');
-  
-  console.log("DeliveryOptimizer Props:", { orders, agents, restaurantLocation });
-  // --- Helper: Get Color for Agent ---
-  const getAgentColor = (agentId) => {
-    if (!agentId) return '#64748b'; // Slate-500 for Unassigned (Grey)
-    const index = agents.findIndex(a => a.id === agentId);
-    if (index === -1) return '#64748b';
-    return AGENT_COLORS[index % AGENT_COLORS.length];
-  };
-
-  const parseLocation = (loc) => {
-    if (!loc) return null;
-    try {
-      const parsed = typeof loc === 'string' ? JSON.parse(loc) : loc;
-      const lat = parseFloat(parsed.latitude?.N || parsed.latitude || 0);
-      const lng = parseFloat(parsed.longitude?.N || parsed.longitude || 0);
-      if (lat === 0 && lng === 0) return null;
-      return { latitude: lat, longitude: lng };
-    } catch {
-      return null;
-    }
-  };
-
+  const mapContainerRef = useRef(null);
+  const latestOrdersRef = useRef(orders);
+  const latestAgentsRef = useRef(agents);
   useEffect(() => {
+      latestOrdersRef.current = orders;
+      latestAgentsRef.current = agents;
+  }, [orders, agents]);
+
+  const getAgentColor = (agentId) => {
+    if (!agentId) return '#64748b'; 
+    const index = agents.findIndex(a => (a.id || a.sk) === agentId); 
+    return AGENT_COLORS[index % AGENT_COLORS.length] || '#64748b';
+  };
+
+  // --- 1. MAP INIT & LAYER SETUP ---
+// --- 1. MAP INIT & LAYER SETUP ---
+  useEffect(() => {
+    let isMounted = true;
+
     async function initializeMap() {
       if (mapInstance.current) return;
 
       try {
         const map = await createMap({
           container: mapContainerRef.current,
-          center: [
-            restaurantLocation?.longitude || 2.3522,
-            restaurantLocation?.latitude || 48.8566
-          ],
+          center: [restaurantLocation?.longitude || 50.5, restaurantLocation?.latitude || 26.2],
           zoom: 12,
           attributionControl: false 
         });
-
+        
+        if (!isMounted) return;
         mapInstance.current = map;
-        map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
+        map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+
+        // Wait for style load to add layers
+        map.on('load', () => {
+            if (!isMounted) return;
+
+            // A. Add GeoJSON Source for Agents
+            // This single source feeds both the Glow and the Dot
+            if (!map.getSource('agents-source')) {
+                map.addSource('agents-source', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+            }
+
+            // ✅ B. Add GLOW Layer (Background)
+            // This creates the large, fuzzy halo effect behind the agent
+            if (!map.getLayer('agents-glow-layer')) {
+                map.addLayer({
+                    id: 'agents-glow-layer',
+                    type: 'circle',
+                    source: 'agents-source',
+                    paint: {
+                        'circle-radius': 15,       // Large radius
+                        'circle-color': '#3b82f6', // Same blue
+                        'circle-opacity': 0.4,     // Semi-transparent
+                        'circle-blur': 0.5         // 🌟 The Blur makes it "Glow"
+                    }
+                });
+            }
+
+            // ✅ C. Add CORE Layer (Foreground)
+            // This is the sharp, solid dot representing the actual agent
+            if (!map.getLayer('agents-layer')) {
+                map.addLayer({
+                    id: 'agents-layer',
+                    type: 'circle',
+                    source: 'agents-source',
+                    paint: {
+                        'circle-radius': 6,        // Smaller, sharp dot
+                        'circle-color': '#3b82f6',
+                        'circle-stroke-width': 2,  // White border
+                        'circle-stroke-color': '#ffffff', 
+                        'circle-pitch-alignment': 'map'
+                    }
+                });
+            }
+
+            // D. Add Click Interaction (Target the Core Layer)
+            map.on('click', 'agents-layer', (e) => {
+                if (!e.features || !e.features.length) return;
+                
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const props = e.features[0].properties; 
+                
+                const trackerId = props.id; 
+                const cleanTrackerId = getCleanPhone(trackerId);
+
+                const agentProfile = latestAgentsRef.current.find(a => getCleanPhone(a.id || a.sk) === cleanTrackerId);
+                const agentName = agentProfile ? agentProfile.name : (props.name || 'Unknown Agent');
+                const agentPhone = agentProfile ? (agentProfile.phone || cleanTrackerId) : cleanTrackerId;
+
+                const relevantOrders = latestOrdersRef.current.filter(o => {
+                    const orderAgentId = getCleanPhone(o.gsi1pk || o.deliveryAgentId);
+                    if (orderAgentId !== cleanTrackerId) return false;
+                    return ['DELIVERING', 'DELIVERED'].includes(o.orderStatus);
+                });
+
+                // --- 🎨 NEW COMPACT LIST LOGIC START ---
+                let ordersListHtml = '';
+                if (relevantOrders.length > 0) {
+                    ordersListHtml = relevantOrders.map(o => {
+                        const isDelivering = o.orderStatus === 'DELIVERING';
+                        // Icon logic
+                        const icon = isDelivering ? '🚚' : '✅';
+                        // Short ID: "2026-01-..."
+                        const shortId = (o.sk || "").replace('ORDER#', '').slice(0, 10);
+                        const items = o.itemsNbr || 1;
+                        // Status Text
+                        const statusTxt = isDelivering ? 'ON WAY' : 'DONE';
+                        const statusColor = isDelivering ? '#3b82f6' : '#22c55e'; // Blue / Green
+
+                        // Single Line Flex Layout
+                        return `
+                        <div style="
+                            display: flex; 
+                            align-items: center; 
+                            font-size: 11px; 
+                            margin-bottom: 4px; 
+                            padding: 4px 6px; 
+                            background: ${isDelivering ? '#eff6ff' : '#f0fdf4'}; 
+                            border-radius: 4px; 
+                            border-left: 3px solid ${statusColor};
+                            white-space: nowrap;
+                            gap: 6px;
+                        ">
+                            <span style="font-weight: 700; color: #334155;">${icon} ${shortId}</span>
+                            <span style="color: #64748b; font-size: 10px;">(${items} Itms)</span>
+                            <span style="margin-left: auto; font-weight: 600; color: ${statusColor}; font-size: 10px;">${agentPhone}</span>
+                        </div>`;
+                    }).join('');
+                } else {
+                    ordersListHtml = `<div style="font-size:11px; color:#94a3b8; font-style:italic; padding: 4px;">No active deliveries (24h).</div>`;
+                }
+                // --- 🎨 NEW COMPACT LIST LOGIC END ---
+
+                new maplibregl.Popup({ maxWidth: '280px' })
+                    .setLngLat(coordinates)
+                    .setHTML(`
+                        <div style="font-family: sans-serif; min-width: 200px;">
+                            <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 8px;">
+                                <div style="font-weight: bold; font-size: 14px; color: #0f172a;">${agentName}</div>
+                                <div style="font-size: 12px; color: #64748b;">📞 +${agentPhone}</div>
+                            </div>
+                            <div style="max-height: 150px; overflow-y: auto;">
+                                ${ordersListHtml}
+                            </div>
+                        </div>
+                    `)
+                    .addTo(map);
+            });
+
+            // Change cursor on hover
+            map.on('mouseenter', 'agents-layer', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'agents-layer', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+            // E. Start Tracking Loop
+            startTrackingLoop(map);
+        });
 
         // Plot Restaurant
         if (restaurantLocation) {
           const el = document.createElement('div');
           el.style.backgroundColor = '#ef4444'; 
-          el.style.width = '32px';
-          el.style.height = '32px';
-          el.style.borderRadius = '50%';
-          el.style.border = '3px solid white';
+          el.style.width = '32px'; el.style.height = '32px';
+          el.style.borderRadius = '50%'; el.style.border = '3px solid white';
           el.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
-          el.style.display = 'flex';
-          el.style.justifyContent = 'center';
-          el.style.alignItems = 'center';
+          el.style.display = 'flex'; el.style.justifyContent = 'center'; el.style.alignItems = 'center';
           el.innerHTML = '<span style="font-size:16px;">🏠</span>';
 
           new maplibregl.Marker({ element: el })
             .setLngLat([restaurantLocation.longitude, restaurantLocation.latitude])
-            .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML("<b>HQ / Restaurant</b>"))
             .addTo(map);
         }
 
+        // Initial Order Plot
         plotOrdersOnMap(orders, map, assignments);
 
-      } catch (error) {
-        console.error("Error creating map:", error);
-      }
+      } catch (error) { console.error("Error creating map:", error); }
     }
-
+    
     initializeMap();
 
+    // CLEANUP
     return () => {
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
-      }
+      isMounted = false;
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 
-  // ✅ Trigger replot when filters or data change
-  useEffect(() => {
-    if (mapInstance.current) {
-        plotOrdersOnMap(orders, mapInstance.current, assignments);
-    }
-  }, [assignments, orders, showDelivered, showDelivering]); 
+  // --- 2. TRACKING LOGIC (WebGL Strategy) ---
+  const startTrackingLoop = (map) => {
+    
+    const fetchPositions = async () => {
+      try {
+        const session = await fetchAuthSession();
+        const client = new LocationClient({
+          region: outputs.geo.aws_region,
+          credentials: session.credentials
+        });
 
+        const allFeatures = [];
+        let token = undefined;
 
-  // --- Plot Orders (Updated with Filter Logic) ---
+        // PAGINATION: Retrieve ALL agents (even if > 100)
+        do {
+          const response = await client.send(new ListDevicePositionsCommand({
+            TrackerName: outputs.custom.amazon_location_service.trackers.default,
+            NextToken: token,
+            MaxResults: 100 
+          }));
+
+          if (response.Entries) {
+            response.Entries.forEach(entry => {
+                if (entry.Position && entry.DeviceId) {
+                    // Create GeoJSON Feature
+                    allFeatures.push({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: entry.Position // [Long, Lat]
+                        },
+                        properties: {
+                            id: entry.DeviceId,
+                            name: `Agent ${entry.DeviceId.slice(-4)}` 
+                        }
+                    });
+                }
+            });
+          }
+          token = response.NextToken;
+        } while (token);
+
+        // UPDATE SOURCE (Triggers efficient GPU render)
+        if (map && map.getSource('agents-source')) {
+            map.getSource('agents-source').setData({
+                type: 'FeatureCollection',
+                features: allFeatures
+            });
+        }
+
+      } catch (error) { console.error("Error fetching positions:", error); }
+    };
+
+    // Initial Fetch & Interval
+    fetchPositions();
+    intervalRef.current = setInterval(fetchPositions, REFRESH_RATE_MS);
+  };
+
+  // --- 3. ORDER PLOTTING (Legacy DOM Markers) ---
+  useEffect(() => { 
+      if (mapInstance.current) plotOrdersOnMap(orders, mapInstance.current, assignments); 
+  }, [assignments, orders, showDelivered, showDelivering]);
+
+// --- 3. ORDER PLOTTING (Legacy DOM Markers) ---
+  // Updated to show detailed Popup Info
   const plotOrdersOnMap = (ordersToPlot, map, currentAssignments) => {
       if (!map) return;
       
-      // Clear old markers
+      // Clear old order markers
       Object.values(markersRef.current).forEach(m => m.remove());
       markersRef.current = {};
 
       ordersToPlot.forEach((order, index) => {
-          // ✅ Filter Logic: 
           const status = order.orderStatus || 'PREPARED'; 
           
-          // 1. If it's DELIVERED, show only if checkbox checked
+          // Filter Logic
           if (status === 'DELIVERED' && !showDelivered) return;
-          
-          // 2. If it's DELIVERING, show only if checkbox checked
           if (status === 'DELIVERING' && !showDelivering) return;
-          
-          // 3. PREPARED orders (or any other status) are always shown
           
           const loc = parseLocation(order.location);
           if (loc) {
-              const assignedAgentId = currentAssignments[order.sk] || order.gsi1pk; // Fallback to order.gsi1pk if not in local assignment state yet
-              const assignedAgent = agents.find(a => a.id === assignedAgentId);
+              // 1. Get Details
+              const assignedAgentId = currentAssignments[order.sk] || order.gsi1pk; 
+              // Find agent object to get the Name
+              const assignedAgent = agents.find(a => (a.id || a.sk) === assignedAgentId);
               const agentName = assignedAgent ? assignedAgent.name : 'Unassigned';
-              
               const markerColor = getAgentColor(assignedAgentId);
-
-              const el = document.createElement('div');
-              el.className = 'marker-order';
               
-              // Optional: Change icon based on status for better visual cue
+              // 2. Format Data for Display
+              const cleanId = (order.sk || "").split('#')[1] || order.sk;
+              const itemsNbr = order.itemsNbr || 1;
+              const phone = order.customer || order.phone || 'Unknown';
+
+              // 3. Status Styling
+              let statusLabel = `<span style="color:#fbbf24; font-weight:bold;">PREPARED</span>`;
               let iconContent = index + 1;
-              if (status === 'DELIVERED') iconContent = '✓';
-              else if (status === 'DELIVERING') iconContent = '🚚';
-
-              el.innerHTML = `<span style="color:white; font-weight:bold; font-size:12px;">${iconContent}</span>`;
               
-              el.style.backgroundColor = markerColor;
-              el.style.width = '24px';
-              el.style.height = '24px';
-              el.style.borderRadius = '50%';
-              el.style.display = 'flex';
-              el.style.justifyContent = 'center';
-              el.style.alignItems = 'center';
-              el.style.border = '2px solid white';
-              el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-              el.style.cursor = 'pointer';
-              el.style.transition = 'background-color 0.3s ease';
-
-              const cleanId = order.sk.split('#')[1] || order.sk;
-              const phone = order.customer || 'No Phone';
-
-              // ✅ Updated Popup Content Logic
-              let headerText = `ORDER ${index + 1}`;
               if (status === 'DELIVERED') {
-                  headerText = `✅ DELIVERED by: ${agentName}`;
+                  statusLabel = `<span style="color:#22c55e; font-weight:bold;">DELIVERED</span>`;
+                  iconContent = '✓';
               } else if (status === 'DELIVERING') {
-                  headerText = `🚚 by: ${agentName}`;
+                  statusLabel = `<span style="color:#3b82f6; font-weight:bold;">ON WAY</span>`;
+                  iconContent = '🚚';
               }
 
+              // 4. Create Marker Element
+              const el = document.createElement('div');
+              el.className = 'marker-order';
+              el.innerHTML = `<span style="color:white; font-weight:bold; font-size:12px;">${iconContent}</span>`;
+              Object.assign(el.style, {
+                  backgroundColor: markerColor,
+                  width: '24px', height: '24px', borderRadius: '50%',
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', cursor: 'pointer', zIndex: '10'
+              });
+
+              // 5. Construct Rich Popup HTML
               const popupContent = `
-                <div style="color: black; font-family: sans-serif; min-width: 180px; padding: 5px;">
-                  <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px; display: flex; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 4px;">
-                    <span style="display:inline-block; width:10px; height:10px; background-color:${markerColor}; border-radius:50%; margin-right:6px;"></span>
-                    ${headerText}
+                <div style="font-family: ui-sans-serif, system-ui, sans-serif; color: #1e293b; padding: 4px; min-width: 180px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 6px;">
+                    <span style="font-weight: bold; font-size: 14px;">Order ${index + 1}</span>
+                    <span style="font-size: 12px; background: #f1f5f9; padding: 2px 6px; rounded: 4px;">${itemsNbr} Items</span>
                   </div>
-                  <div style="font-size: 13px; margin-bottom: 4px;">
-                    <span style="color: #444;">Customer:</span> 📞 <b>${phone}</b>
-                  </div>
-                  <div style="font-size: 12px;">
-                    <span style="color: #666;">ID:</span> <span style="font-family: monospace;">${cleanId}</span>
+                  
+                  <div style="font-size: 12px; line-height: 1.6;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#64748b;">Status:</span> ${statusLabel}
+                    </div>
+                    
+                    ${assignedAgent ? `
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#64748b;">By:</span> 
+                        <span style="font-weight:600;">${agentName}</span>
+                    </div>` : ''}
+                    
+                    <div style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed #e2e8f0;">
+                        <span style="color:#64748b;">Cust:</span> <b>${phone}</b>
+                    </div>
+                    <div style="color:#94a3b8; font-size: 10px; margin-top: 2px; font-family: monospace;">
+                        ID: ${cleanId}
+                    </div>
                   </div>
                 </div>
               `;
 
+              // 6. Add to Map
               const marker = new maplibregl.Marker({ element: el })
                   .setLngLat([loc.longitude, loc.latitude])
-                  .setPopup(
-                    new maplibregl.Popup({ offset: 25, closeButton: false })
-                      .setHTML(popupContent)
-                  )
+                  .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(popupContent))
                   .addTo(map);
 
               markersRef.current[order.sk] = marker;
@@ -233,344 +423,157 @@ const DeliveryOptimizer = ({
       });
   };
 
+  // --- 4. DISPATCH LOGIC ---
+  const handleDispatch = async () => {
+    if (Object.keys(assignments).length === 0) return;
+    setSaving(true); 
+    try {
+      const session = await fetchAuthSession();
+      const geoClient = new GeoRoutesClient({
+          region: outputs.geo.aws_region,
+          credentials: session.credentials
+      });
+
+      const updateTasks = Object.entries(assignments).map(async ([orderSk, rawAgentId]) => {
+          const order = orders.find(o => o.sk === orderSk);
+          if (!order || order.orderStatus !== 'PREPARED') return;
+
+          const cleanPhone = getCleanPhone(rawAgentId);
+          const dbAgentId = `AGENT#+${cleanPhone}`; 
+
+          let dist = 0;
+          let dur = 0;
+          const custLoc = parseLocation(order.location);
+          
+          if (restaurantLocation && custLoc) {
+             try {
+                 const res = await geoClient.send(new CalculateRoutesCommand({
+                     Origin: [restaurantLocation.longitude, restaurantLocation.latitude],
+                     Destination: [custLoc.longitude, custLoc.latitude],
+                     TravelMode: "Car",
+                 }));
+                 if (res.Routes?.length > 0) {
+                     const summary = res.Routes[0].Summary;
+                     dist = parseFloat((summary.Distance / 1000).toFixed(2)); 
+                     dur = Math.round(summary.Duration); 
+                 }
+             } catch (e) { console.warn(`Route calc error`, e.message); }
+          }
+
+          await client.models.BusinessData.update({
+              pk: order.pk, sk: orderSk,
+              gsi1pk: dbAgentId, deliveryAgentId: dbAgentId,  
+              orderStatus: 'DELIVERING', deliveryDistance: dist, deliveryDuration: dur   
+          });
+      });
+
+      await Promise.all(updateTasks);
+      if (onAssignmentSaved) onAssignmentSaved();
+    } catch (error) { console.error("Dispatch Error", error); } finally { setSaving(false); }
+  };
+
+  const runOptimization = async () => {
+    setLoading(true);
+    try {
+      const validAgents = agents.filter(a => parseLocation(a.location)).map(a => ({
+         id: a.id || a.sk, name: a.name, location: parseLocation(a.location),
+         maxCapacity: 10, currentLoad: 0
+      }));
+
+      const response = await client.queries.optimizeDelivery({
+        orders: JSON.stringify(orders),
+        agents: JSON.stringify(validAgents), 
+        restaurantLocation: JSON.stringify(restaurantLocation)
+      });
+
+      let raw = response.data;
+      if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch (e) {} }
+      
+      let proposal = raw.proposal;
+      if (typeof proposal === 'string') { try { proposal = JSON.parse(proposal); } catch (e) { proposal = []; } }
+
+      let metrics = raw.routeMetrics;
+      if (typeof metrics === 'string') { try { metrics = JSON.parse(metrics); } catch (e) { metrics = []; } }
+      
+      const metricsMap = {}; 
+      if (Array.isArray(metrics)) {
+          metrics.forEach(m => { metricsMap[m.orderId] = { dist: parseFloat(m.distanceKm), dur: parseInt(m.durationSeconds) }; });
+      }
+      setOptimizationMetrics(metricsMap); 
+
+      const newAssignments = {};
+      if (Array.isArray(proposal)) {
+          proposal.forEach(p => {
+              if (p.assignedOrders) {
+                 p.assignedOrders.forEach(orderSk => { newAssignments[orderSk] = p.agentId; });
+              }
+          });
+      }
+      setAssignments(newAssignments);
+    } catch (err) { console.error("Optimization failed:", err); } finally { setLoading(false); }
+  };
+
   const handleOrderClick = (orderSk) => {
     const marker = markersRef.current[orderSk];
     if (marker) {
       marker.togglePopup(); 
-      mapInstance.current.flyTo({
-        center: marker.getLngLat(),
-        zoom: 14,
-        speed: 1.5
-      });
+      mapInstance.current.flyTo({ center: marker.getLngLat(), zoom: 14 });
     }
   };
-
-
-const runOptimization = async () => {
-    setLoading(true);
-    setErrorMessage(null); 
-
-    try {
-      // 1. Validation (Keep existing validation logic)
-      if (!restaurantLocation || !restaurantLocation.latitude) throw new Error("Restaurant Location missing.");
-
-      const validAgents = agents.filter(a => {
-         if (!a.location) return false;
-         const lat = parseFloat(a.location.latitude);
-         const lng = parseFloat(a.location.longitude);
-         return !isNaN(lat) && !isNaN(lng);
-      }).map(a => ({
-         id: a.id,
-         name: a.name,
-         location: a.location,
-         maxCapacity: a.maxCapacity || 10,
-         currentLoad: a.currentLoad || 0
-      }));
-
-      if (validAgents.length === 0) throw new Error("No active agents found.");
-
-      // 2. Call API
-      const response = await client.queries.optimizeDelivery({
-        orders: JSON.stringify(orders),
-        agents: JSON.stringify(validAgents), 
-        restaurantLocation: JSON.stringify(restaurantLocation),
-        agentLocation: JSON.stringify(restaurantLocation) 
-      });
-
-      // 1. Parse the main body first
-      let raw = response.data;
-      if (typeof raw === 'string') {
-        try { raw = JSON.parse(raw); } catch (e) { /* ignore */ }
-      }
-
-      console.log("🚀 Raw Response:", raw);
-
-      // 🚨 FIX: Parse the inner fields if they are strings
-      let proposal = raw.proposal;
-      if (typeof proposal === 'string') {
-          try { proposal = JSON.parse(proposal); } catch (e) { console.error("Failed to parse proposal", e); proposal = []; }
-      }
-
-      let routeMetrics = raw.routeMetrics;
-      if (typeof routeMetrics === 'string') {
-          try { routeMetrics = JSON.parse(routeMetrics); } catch (e) { console.error("Failed to parse metrics", e); routeMetrics = []; }
-      }
-
-      // 2. Validate Proposal is now an Array
-      if (!Array.isArray(proposal)) {
-          console.warn("⚠️ Proposal is still not an array:", proposal);
-          proposal = [];
-      }
-
-      // 3. Process Assignments
-      const newAssignments = {};
-      proposal.forEach(p => {
-          if (p.assignedOrders) {
-             p.assignedOrders.forEach(orderSk => {
-                 newAssignments[orderSk] = p.agentId;
-             });
-          }
-      });
-      setAssignments(newAssignments);
-
-      // 4. Process Metrics
-      const newMetrics = {};
-      if (Array.isArray(routeMetrics)) {
-          routeMetrics.forEach(m => {
-              newMetrics[m.orderId] = {
-                  deliveryDistance: parseFloat(m.distanceKm || 0),
-                  deliveryDuration: parseInt(m.durationSeconds || 0)
-              };
-          });
-      }
-      setMetricsCache(newMetrics);
-      console.log("📊 Metrics processed:", Object.keys(newMetrics).length);
-
-    } catch (err) {
-      console.error("Optimization failed:", err);
-      setErrorMessage(err.message || "Optimization Failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-// ... inside DeliveryOptimizer.jsx
-
-const handleDispatch = async () => {
-    if (Object.keys(assignments).length === 0) return;
-    setSaving(true);
-
-    try {
-      const updatesByAgent = {};
-
-      // 1. Group orders by Agent
-      Object.entries(assignments).forEach(([orderSk, agentId]) => {
-          const order = orders.find(o => o.sk === orderSk);
-          if (order && order.orderStatus === 'PREPARED' && order.location) {
-              if (!updatesByAgent[agentId]) updatesByAgent[agentId] = [];
-              updatesByAgent[agentId].push(orderSk);
-          }
-      });
-
-      if (Object.keys(updatesByAgent).length === 0) {
-          console.warn("No valid PREPARED orders to dispatch.");
-          setSaving(false);
-          return;
-      }
-
-      // 2. Perform Updates
-      const updatePromises = Object.entries(updatesByAgent).map(async ([agentId, skList]) => {
-          
-          // A. Calculate Load to add (Optional, for Capacity tracking)
-          let addedLoad = 0;
-          skList.forEach(sk => {
-             const o = orders.find(x => x.sk === sk);
-             // Simple logic: Big=4, Med=2, Regular=1
-             addedLoad += (o.size === 'BIG' ? 4 : (o.size === 'MEDIUM' ? 2 : 1));
-          });
-
-          // B. Update Agent Capacity (Optional but recommended)
-          try {
-             const agent = agents.find(a => a.id === agentId);
-             if (agent) {
-                 await client.models.BusinessData.update({
-                    pk: agentId, // AGENT#phone
-                    sk: agentId, 
-                    // Increment current load
-                    currentLoad: (agent.currentLoad || 0) + addedLoad
-                 });
-             }
-          } catch(e) { console.warn("Capacity update failed", e); }
-
-          // C. Update Each Order (CRITICAL PART)
-          for (const sk of skList) {
-             const order = orders.find(o => o.sk === sk);
-             const pk = order.pk; // Ensure we have the PK
-             const orderLoc = parseLocation(order.location);
-
-             // Calculate Dist/Time
-             let deliveryDist = 0;
-             if (orderLoc && restaurantLocation) {
-                 deliveryDist = getDistanceFromLatLonInKm(
-                     restaurantLocation.latitude,
-                     restaurantLocation.longitude,
-                     orderLoc.latitude,
-                     orderLoc.longitude
-                 );
-             }
-             const deliveryDur = estimateDurationSeconds(deliveryDist);
-
-             console.log(`📦 Dispatching ${sk} to ${agentId}`);
-
-             // ✅ DIRECT AMPLIFY UPDATE (Replaces updateRec)
-             await client.models.BusinessData.update({
-                pk: pk,
-                sk: sk,
-                gsi1pk: agentId,           // This assigns it to the Agent for the Dashboard Query
-                deliveryAgentId: agentId,  // Redundant but good for backup
-                orderStatus: 'DELIVERING', // Required for AgentDashboard filter
-                deliveryDistance: parseFloat(deliveryDist.toFixed(2)),
-                deliveryDuration: deliveryDur
-             });
-          }
-      });
-
-      await Promise.all(updatePromises);
-      
-      console.log("✅ All assignments saved successfully.");
-      if (onAssignmentSaved) onAssignmentSaved();
-
-    } catch (error) {
-      console.error("Dispatch Error", error);
-      setErrorMessage("Failed to save assignments: " + error.message);
-    } finally {
-      setSaving(false);
-    }
-};
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex z-50 overflow-hidden">
-      
-      {/* 1. MAP PANEL */}
       <div className="flex-1 relative bg-gray-100 h-full border-r border-slate-700 order-1">
         <div ref={mapContainerRef} id="map" style={{ width: '100%', height: '100%' }} />
         
-        {/* ✅ Updated Legend with Checkboxes */}
-        <div 
-          className="absolute bottom-6 left-4 bg-white/95 p-3 rounded-lg shadow-xl text-sm pointer-events-auto backdrop-blur-sm border border-gray-200"
-          onClick={(e) => e.stopPropagation()} 
-        >
-           
-           {/* <div className="flex items-center mb-2">
-             <span className="w-3 h-3 bg-red-500 rounded-full mr-2 shadow-sm"></span> 
-             <span className="font-semibold text-gray-700">HQ</span>
-           </div> */}
-
-           {/* <div className="border-t border-gray-200 my-2"></div> */}
-
-           <label className="flex items-center mb-2 cursor-pointer hover:bg-gray-50 p-1 rounded transition">
-             <input 
-               type="checkbox" 
-               checked={showDelivering} 
-               onChange={(e) => setShowDelivering(e.target.checked)}
-               className="mr-2 cursor-pointer accent-orange-500 h-4 w-4"
-             />
-             <span className="mr-2">🚚</span>
-             <span className="text-gray-700">DELIVERING</span>
+        {/* Legend */}
+        <div className="absolute bottom-6 left-4 bg-white/95 p-3 rounded-lg shadow-xl text-sm pointer-events-auto backdrop-blur-sm border border-gray-200" onClick={(e) => e.stopPropagation()}>
+           <label className="flex items-center mb-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+             <input type="checkbox" checked={showDelivering} onChange={(e) => setShowDelivering(e.target.checked)} className="mr-2 cursor-pointer accent-orange-500 h-4 w-4"/>
+             <span className="mr-2">🚚</span><span className="text-gray-700">DELIVERING</span>
            </label>
-
-           <label className="flex items-center cursor-pointer hover:bg-gray-50 p-1 rounded transition">
-             <input 
-               type="checkbox" 
-               checked={showDelivered} 
-               onChange={(e) => setShowDelivered(e.target.checked)}
-               className="mr-2 cursor-pointer accent-green-600 h-4 w-4"
-             />
-             <span className="mr-2">✅</span>
-             <span className="text-gray-700">DELIVERED</span>
+           <label className="flex items-center cursor-pointer hover:bg-gray-50 p-1 rounded">
+             <input type="checkbox" checked={showDelivered} onChange={(e) => setShowDelivered(e.target.checked)} className="mr-2 cursor-pointer accent-green-600 h-4 w-4"/>
+             <span className="mr-2">✅</span><span className="text-gray-700">DELIVERED</span>
            </label>
-
         </div>
-        
-        {/* Close button only when sidebar is hidden (Review Mode) */}
+
         {!isDispatchMode && (
-          <button 
-            onClick={onClose} 
-            className="absolute top-4 right-4 bg-white text-slate-800 p-2 rounded-full shadow-lg hover:bg-gray-100 z-10"
-            title="Close"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <button onClick={onClose} className="absolute top-4 right-4 bg-white text-slate-800 p-2 rounded-full shadow-lg hover:bg-gray-100 z-10">✕</button>
         )}
       </div>
-
-      {/* 2. SIDEBAR PANEL - Visible ONLY in Dispatch Mode */}
+      
       {isDispatchMode && (
         <div className="h-full bg-slate-900 text-white shadow-2xl flex flex-col order-2 transition-all duration-300 w-[80px] md:w-64">
-          
           <div className="p-4 flex flex-col items-center md:items-stretch border-b border-slate-800">
             <div className="flex justify-between items-center w-full mb-4">
               <h2 className="hidden md:block text-xl font-bold text-yellow-400">Dispatch</h2>
-              <button onClick={onClose} className="text-3xl text-slate-400 hover:text-white mx-auto md:mx-0">&times;</button>
+              <button onClick={onClose} className="text-3xl text-slate-400 hover:text-white mx-auto md:mx-0">×</button>
             </div>
-            
-            {/* ✅ Logic for Button Activation */}
             {hasPreparedOrders ? (
               <div className="flex gap-2 w-full flex-col">
-                <button 
-                    onClick={runOptimization} 
-                    disabled={loading || saving}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg transition-all h-10 flex items-center justify-center text-sm"
-                    title="Run Auto-Assign"
-                >
-                    {loading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : 
-                      <><span className="text-lg mr-2">⚡️</span> <span className="hidden md:inline">Auto-Assign</span></>
-                    }
-                </button>
-
-                <button 
-                    onClick={handleDispatch}
-                    // ✅ Only active if assignments exist AND are not saving/loading
-                    disabled={loading || saving || Object.keys(assignments).length === 0}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all h-10 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    title="Confirm & Save"
-                >
-                    {saving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div> : 
-                      <><span className="text-lg mr-2">📦</span> <span className="hidden md:inline">Confirm</span></>
-                    }
+                <button onClick={runOptimization} disabled={loading || saving} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg h-10 flex items-center justify-center text-sm">{loading ? "..." : "⚡️ Auto-Assign"}</button>
+                <button onClick={handleDispatch} disabled={loading || saving || Object.keys(assignments).length === 0} className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg h-10 flex items-center justify-center disabled:opacity-50 text-sm">
+                    {saving ? "..." : "📦 Confirm"}
                 </button>
               </div>
-            ) : (
-              <div className="text-center py-2 text-slate-400 text-sm bg-slate-800 rounded border border-slate-700">
-                No new orders to assign.
-              </div>
-            )}
+            ) : <div className="text-center py-2 text-slate-400 text-sm">No new orders.</div>}
           </div>
-
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
               {orders.map((o, i) => {
-                  // In Dispatch Mode, we ONLY show PREPARED orders in the list to avoid clutter
-                  // (since the others are hidden from map anyway via isDispatchMode logic)
                   if (o.orderStatus === 'DELIVERED' || o.orderStatus === 'DELIVERING') return null;
-
                   const agentId = assignments[o.sk];
                   const color = getAgentColor(agentId);
-
+                  
                   return (
-                  <div 
-                      key={o.sk} 
-                      onClick={() => handleOrderClick(o.sk)} 
-                      className="bg-slate-800 rounded-lg border border-slate-700 hover:border-blue-400 transition-all flex items-center group justify-center md:justify-between p-2"
-                      style={{ borderLeft: `3px solid ${color}` }} 
-                  >
-                      <span 
-                        className="text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm"
-                        style={{ backgroundColor: color }}
-                      >
-                        {i+1}
-                      </span>
-
+                  <div key={o.sk || i} onClick={() => handleOrderClick(o.sk)} className="bg-slate-800 rounded-lg border border-slate-700 hover:border-blue-400 flex items-center p-2" style={{ borderLeft: `3px solid ${color}` }}>
+                      <span className="text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: color }}>{i+1}</span>
                       <div className="hidden md:block flex-1 ml-2 min-w-0">
-                        <p className="font-bold text-xs truncate text-left mb-1">
-                          {o.customer || 'Unknown'}
-                        </p>
-                        
-                        <select
-                          value={assignments[o.sk] || ''}
-                          onClick={(e) => e.stopPropagation()} 
-                          onChange={(e) => setAssignments(prev => ({
-                              ...prev,
-                              [o.sk]: e.target.value
-                          }))}
-                          className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1 focus:border-yellow-400 outline-none"
-                        >
+                        <p className="font-bold text-xs truncate mb-1">{o.customer || 'Unknown'}</p>
+                        <select value={assignments[o.sk] || ''} onClick={(e) => e.stopPropagation()} onChange={(e) => setAssignments(prev => ({...prev, [o.sk]: e.target.value}))} className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1">
                           <option value="" disabled>Select Agent</option>
-                          {agents.map(agent => (
-                              <option key={agent.id} value={agent.id}>
-                                  {agent.name}
-                              </option>
+                          {agents.map((agent, aIndex) => (
+                              <option key={agent.id || aIndex} value={agent.id || agent.sk}>{agent.name}</option> 
                           ))}
                         </select>
                       </div>

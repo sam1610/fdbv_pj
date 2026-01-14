@@ -225,7 +225,7 @@ export const handler = async (event: any) => {
                         pk: businessPk,
                         sk: agentPk,
                         __typename: 'BusinessData',
-                        entityType: 'AgentLink', // Changed to 'AgentLink' to distinguish
+                        entityType: 'Agent', // Changed to 'AgentLink' to distinguish
                         name: name,
                         phone: formattedPhone,
                         email: finalEmail,

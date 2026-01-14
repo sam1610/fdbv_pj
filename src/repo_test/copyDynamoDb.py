@@ -109,8 +109,8 @@ class DynamoDBCopier:
 
 def main():
     # Configuration
-    SOURCE_TABLE = "BusinessData-yqug5zclbzgvneztgfii3ejoke-NONE"
-    DESTINATION_TABLE = "BusinessData-7j2pa4744bh6doqvqh73xkopym-NONE"
+    SOURCE_TABLE = "BusinessData-7j2pa4744bh6doqvqh73xkopym-NONE"
+    DESTINATION_TABLE = "BusinessData-omxxbb3zkbhtpa5v2hn57j6gmq-NONE"
     REGION = "us-east-1"
     MAX_WORKERS = 15  # Adjust based on your table's capacity
     

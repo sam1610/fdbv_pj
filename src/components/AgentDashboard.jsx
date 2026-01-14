@@ -6,8 +6,17 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import 'maplibre-gl-js-amplify/dist/public/amplify-map.css';
 import { client } from '../DataHook/amplifyClient';
 import outputs from '../../amplify_outputs.json'; 
+// ✅ ADDED: AWS Location SDK Imports
+import { LocationClient, BatchUpdateDevicePositionCommand } from "@aws-sdk/client-location";
+import { fetchAuthSession } from 'aws-amplify/auth';
 
-// --- 📏 HELPER: Haversine Distance ---
+/* ------------------------------------------------------------------
+   CONFIG
+-------------------------------------------------------------------*/
+const TRACKING_INTERVAL_MS = 20000;          
+const MIN_MOVE_METERS = 15;                  
+
+// --- 📏 HELPER: Haversine Distance (Display - KM) ---
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
     if (!lat1 || !lon1 || !lat2 || !lon2) return null;
     const R = 6371; 
@@ -17,6 +26,19 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
               Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return (R * c).toFixed(1);
+};
+
+// --- 📏 HELPER: Haversine Meters (Logic - Tracking) ---
+// ✅ ADDED: Required for deciding when to push updates to AWS
+const haversineMeters = (a, b) => {
+  if (!a || !b) return Infinity;
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const c = s1 * s1 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * s2 * s2;
+  return 2 * R * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c));
 };
 
 // --- 🛠 HELPER: Robust Coordinate Parsing ---
@@ -44,11 +66,20 @@ const getRestaurantColor = (str) => {
 
 const formatTime = (sec) => sec ? `${Math.round(sec / 60)} min` : '--';
 
+/* ------------------------------------------------------------------
+   COMPONENT
+-------------------------------------------------------------------*/
 const AgentDashboard = ({ agentPhone, businessLocation }) => {
     const mapContainerRef = useRef(null);
     const mapInstance = useRef(null);
+    
     const markersRef = useRef({});            
     const restaurantMarkersRef = useRef({});  
+    const latestLocationRef = useRef(null);
+    
+    // ✅ ADDED: Refs for Tracking
+    const agentMarkerRef = useRef(null); 
+    const lastSentRef = useRef(null);    
 
     const [agentLocation, setAgentLocation] = useState(null); 
     
@@ -70,8 +101,44 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
     const [showDelivered, setShowDelivered] = useState(true);
     
     const [agentProfileLoc, setAgentProfileLoc] = useState(null);
+   
 
-    // 0. HELPER: Load Configs
+    // ------------------------------------------------------------
+    // ✅ 1. TRACKER ID CONFIGURATION
+    // ------------------------------------------------------------
+    const trackerDeviceId = useMemo(() => {
+        if (!agentPhone) return null;
+        const clean = agentPhone.replace(/[^0-9]/g, '');
+        return `AGENT_${clean}`;
+    }, [agentPhone]);
+
+    // ------------------------------------------------------------
+    // ✅ 2. CSS INJECTION (For the Blue Dot Pulse)
+    // ------------------------------------------------------------
+    useEffect(() => {
+        if (!document.getElementById('agent-pulse-style')) {
+            const style = document.createElement('style');
+            style.id = 'agent-pulse-style';
+            style.innerHTML = `
+                @keyframes pulse-ring {
+                    0% { transform: scale(0.5); opacity: 0.8; }
+                    80% { transform: scale(2.5); opacity: 0; }
+                    100% { transform: scale(2.5); opacity: 0; }
+                }
+                .pulse-container { position: relative; display: flex; justify-content: center; align-items: center; }
+                .pulse-ring {
+                    position: absolute; width: 20px; height: 20px; border-radius: 50%;
+                    background-color: rgba(59, 130, 246, 0.6); z-index: -1;
+                    animation: pulse-ring 2s infinite cubic-bezier(0.455, 0.03, 0.515, 0.955);
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }, []);
+
+    // ------------------------------------------------------------
+    // 3. LOAD CONFIGS
+    // ------------------------------------------------------------
     const loadRestaurantConfigs = useCallback(async (pks) => {
         const missingPks = pks.filter(pk => !restaurants[pk]);
         if (missingPks.length === 0) return;
@@ -89,7 +156,9 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         setRestaurants(prev => ({ ...prev, ...newCache }));
     }, [restaurants]);
 
-    // 1. INITIALIZE MAP
+    // ------------------------------------------------------------
+    // 4. MAP INITIALIZATION & GPS
+    // ------------------------------------------------------------
     useEffect(() => {
         if (mapInstance.current || !mapContainerRef.current) return;
         const startLoc = getCoordinates(businessLocation) || { lat: 26.0935, lng: 50.4880 };
@@ -108,7 +177,7 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                 const geolocate = new maplibregl.GeolocateControl({
                     positionOptions: { enableHighAccuracy: true },
                     trackUserLocation: true,
-                    showUserLocation: true
+                    showUserLocation: false // We render our own marker
                 });
 
                 map.addControl(geolocate, 'bottom-right');
@@ -117,10 +186,14 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                     setSelectedRestaurant(null);
                     setSelectedOrder(null);
                 });
-                geolocate.on('geolocate', (e) => setAgentLocation({ lat: e.coords.latitude, lng: e.coords.longitude }));
+                
+                // ✅ Update State when Geolocation fires
+                geolocate.on('geolocate', (e) => {
+                    setAgentLocation({ lat: e.coords.latitude, lng: e.coords.longitude });
+                });
                 
                 map.on('load', () => {
-                    geolocate.trigger();
+                    geolocate.trigger(); // Start finding location immediately
                     setIsMapReady(true);
                 });
             } catch (e) { console.error("Map Init Error:", e); }
@@ -128,17 +201,95 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         initMap();
     }, [businessLocation]);
 
-    // 2. FETCH DATA
+    // ------------------------------------------------------------
+    // ✅ 5. VISUAL AGENT MARKER (The Blue Dot)
+    // ------------------------------------------------------------
+    useEffect(() => {
+        if (!isMapReady || !agentLocation) return;
+        const map = mapInstance.current;
+        const markerHTML = `
+            <div class="pulse-ring"></div>
+            <div style="width:16px; height:16px; background:#3b82f6; border:2px solid white; border-radius:50%; box-shadow:0 2px 5px rgba(0,0,0,0.3); z-index:2; position:relative;"></div>
+        `;
+        if (!agentMarkerRef.current) {
+            const el = document.createElement('div');
+            el.className = 'pulse-container';
+            el.innerHTML = markerHTML;
+            agentMarkerRef.current = new maplibregl.Marker({ element: el })
+                .setLngLat([agentLocation.lng, agentLocation.lat])
+                .addTo(map);
+            return;
+        }
+        // Smoothly animate to new position
+        const marker = agentMarkerRef.current;
+        const start = marker.getLngLat();
+        const end = { lng: agentLocation.lng, lat: agentLocation.lat };
+        let t = 0;
+        const animate = () => {
+            t += 0.05; 
+            const lng = start.lng + (end.lng - start.lng) * t;
+            const lat = start.lat + (end.lat - start.lat) * t;
+            marker.setLngLat([lng, lat]);
+            if (t < 1) requestAnimationFrame(animate);
+        };
+        animate();
+    }, [agentLocation, isMapReady]);
+
+     useEffect(() => {
+        latestLocationRef.current = agentLocation;
+    }, [agentLocation]);
+
+    // ------------------------------------------------------------
+    // ✅ 6. AWS TRACKER LOOP (Send Data to DeliveryOptimizer)
+    // ------------------------------------------------------------
+    useEffect(() => {
+        if (!trackerDeviceId) return;
+        
+        const timer = setInterval(async () => {
+            // Read from REF, not State
+            const currentLoc = latestLocationRef.current;
+            
+            if (!currentLoc) return;
+            
+            // Jitter check using REF data
+            if (lastSentRef.current && haversineMeters(lastSentRef.current, currentLoc) < MIN_MOVE_METERS) return;
+
+            try {
+                const session = await fetchAuthSession();
+                const locClient = new LocationClient({
+                    region: outputs.geo.aws_region,
+                    credentials: session.credentials,
+                });
+                
+                await locClient.send(new BatchUpdateDevicePositionCommand({
+                    TrackerName: outputs.custom.amazon_location_service.trackers.default,
+                    Updates: [{
+                        DeviceId: trackerDeviceId,
+                        Position: [currentLoc.lng, currentLoc.lat],
+                        SampleTime: new Date(),
+                    }],
+                }));
+                
+                console.log(`📡 Tracker Sent: ${trackerDeviceId}`);
+                lastSentRef.current = currentLoc; 
+            } catch (e) { console.warn('Tracker update skipped', e); }
+        }, TRACKING_INTERVAL_MS);
+
+        return () => clearInterval(timer);
+    }, [trackerDeviceId]); // 🚨 REMOVED agentLocation from dependency
+
+    // ------------------------------------------------------------
+    // 7. FETCH DATA & SUBSCRIPTIONS
+    // ------------------------------------------------------------
     const fetchOrders = async (token = null) => {
         if (!agentPhone) return;
         setIsLoadingMore(true);
         try {
-            // Fetch batch
             const { data, nextToken: newNextToken } = await client.models.BusinessData.ByAgent({
                 gsi1pk: `AGENT#${agentPhone}`,
                 sk: { beginsWith: 'ORDER#' },
                 sortDirection: 'DESC',
-                limit: token ? 10 : 20, // Load 20 initially
+                limit: token ? 10 : 20, 
                 nextToken: token
             });
 
@@ -163,7 +314,6 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         finally { setIsLoadingMore(false); }
     };
 
-    // Initial Load
     useEffect(() => {
         fetchOrders(null); 
 
@@ -189,38 +339,30 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
     }, [agentPhone, loadRestaurantConfigs]);
 
 
-    // ✅ 3. RESET HANDLER (Fixed)
+    // 8. DATA HANDLERS
     const handleReset = () => {
         setIsHistoryMode(false);
         setNextToken(null);
-        setRawOrders([]); // Clear UI immediately for feedback
+        setRawOrders([]); 
         fetchOrders(null); 
     };
 
-
-    // ✅ 4. UNIFIED FILTER (Strict 24h Filter Fix)
     const visibleOrders = useMemo(() => {
         const now = Date.now();
         const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
 
         return rawOrders.filter(o => {
-            // A. Checkbox Filter
             if (o.orderStatus === 'DELIVERED' && !showDelivered) return false;
-
-            // B. 24h Filter 
-            // If NOT in History Mode, we strictly enforce time limits.
-            // This hides old "Delivering" test orders that are stuck in the past.
             if (!isHistoryMode) {
                 const t = o.createdAt ? new Date(o.createdAt).getTime() : now;
                 return t > twentyFourHoursAgo;
             }
-
-            return true; // Show everything if "More History" was clicked
+            return true; 
         });
     }, [rawOrders, isHistoryMode, showDelivered]);
 
 
-    // 5. PLOT MARKERS
+    // 9. PLOT ORDER & RESTAURANT MARKERS
     useEffect(() => {
         if (!isMapReady || !mapInstance.current) return;
         const map = mapInstance.current;
@@ -305,23 +447,23 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
 
             const marker = new maplibregl.Marker({ element: el }).setLngLat([coords.lng, coords.lat]).addTo(map);
             el.addEventListener('click', (e) => {
-                 e.stopPropagation();
-                 setSelectedOrder(order);
-                 setSelectedRestaurant(null);
-                 map.flyTo({ center: [coords.lng, coords.lat], zoom: 15 });
+                  e.stopPropagation();
+                  setSelectedOrder(order);
+                  setSelectedRestaurant(null);
+                  map.flyTo({ center: [coords.lng, coords.lat], zoom: 15 });
             });
             markersRef.current[order.sk] = marker;
         });
 
     }, [visibleOrders, focusedRestaurant, isMapReady, restaurants]); 
 
-    // 6. GRID LIST
+    // 10. GRID LIST CALCULATION
     const gridList = useMemo(() => {
         let origin = agentLocation || agentProfileLoc || { lat: 26.0935, lng: 50.4880 };
         if (isNaN(Number(origin.lat))) origin = { lat: 26.0935, lng: 50.4880 };
 
         return visibleOrders.map(order => {
-            const dbDist = order.deliveryDistance ? `${order.deliveryDistance.toFixed(1)} km` : '--';
+            const dbDist = order.deliveryDistance ? `${order.deliveryDistance.toFixed(1)}` : '--';
             const dbTime = order.deliveryDuration;
             const dest = getCoordinates(order.location);
             const sortDist = dest ? calculateDistance(origin.lat, origin.lng, dest.lat, dest.lng) : 999;
@@ -329,6 +471,7 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         }).sort((a,b) => parseFloat(a._sortDist) - parseFloat(b._sortDist));
     }, [visibleOrders, agentLocation, agentProfileLoc]);
 
+    // 11. ACTIONS
     const markAsDelivered = async (order) => {
         try {
             await client.models.BusinessData.update({ pk: order.pk, sk: order.sk, orderStatus: 'DELIVERED', deliveryAgentId: `AGENT#${agentPhone}` });
@@ -343,10 +486,9 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
         if (lat && lng) window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
     };
 
-    // Load More Handler
     const handleLoadMore = () => {
-        setIsHistoryMode(true); // Disable 24h filter
-        if (nextToken) fetchOrders(nextToken); // Fetch older if available
+        setIsHistoryMode(true); 
+        if (nextToken) fetchOrders(nextToken); 
     };
 
     return (
@@ -357,7 +499,10 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                     <h1 className="text-lg font-bold text-white flex items-center gap-2">
                         {focusedRestaurant ? '📍 Related Orders' : '🚀 All Deliveries'}
                     </h1>
-                    {agentLocation && <span className="text-[10px] text-green-400 font-mono">● GPS Active</span>}
+                    {/* ✅ Visual Feedback for GPS */}
+                    {agentLocation && <span className="text-[10px] text-green-400 font-mono flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> GPS Active
+                    </span>}
                 </div>
                 <div className="flex gap-2 items-center">
                     {focusedRestaurant && <button onClick={() => setFocusedRestaurant(null)} className="bg-slate-700 text-slate-300 px-3 py-1 rounded text-xs font-bold">Reset View</button>}
@@ -409,7 +554,6 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                          <div className="flex justify-between items-center mb-3">
                              <h2 className="text-white font-bold text-lg">Daily Manifest</h2>
                              <div className="flex items-center gap-2">
-                                {/* ✅ ACTIVE RESET BUTTON */}
                                 <button 
                                     onClick={handleReset}
                                     className="bg-red-900/50 hover:bg-red-800 text-red-300 text-xs font-bold px-3 py-1.5 rounded border border-red-800 flex items-center gap-1 transition active:scale-95"
@@ -440,7 +584,6 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                             </div>
                         ))}
 
-                        {/* ✅ LOAD MORE BUTTON */}
                         <div className="pt-4 pb-8 flex justify-center">
                             {(nextToken || (!isHistoryMode && rawOrders.length > gridList.length)) && (
                                 <button 
@@ -448,11 +591,7 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
                                     disabled={isLoadingMore}
                                     className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 px-6 rounded-full border border-slate-600 text-sm flex items-center gap-2 transition-all active:scale-95 shadow-lg"
                                 >
-                                    {isLoadingMore ? (
-                                        <>Loading...</>
-                                    ) : (
-                                        <>👇 MORE HISTORY (+10)</>
-                                    )}
+                                    {isLoadingMore ? <>Loading...</> : <>👇 MORE HISTORY (+10)</>}
                                 </button>
                             )}
                             {isHistoryMode && !nextToken && gridList.length > 0 && (

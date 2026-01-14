@@ -16,6 +16,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.940.0",
     "@aws-sdk/client-dynamodb": "^3.948.0",
     "@aws-sdk/client-geo-routes": "^3.936.0",
+    "@aws-sdk/client-location": "^3.965.0",
     "@aws-sdk/lib-dynamodb": "^3.902.0",
     "@tanstack/react-virtual": "^3.13.12",
     "aws-amplify": "^6.15.7",

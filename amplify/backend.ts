@@ -3,7 +3,7 @@ import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { optimizeDelivery } from './functions/optimizeDelivery/resource';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { CfnMap } from 'aws-cdk-lib/aws-location';
+import { CfnMap, CfnTracker } from 'aws-cdk-lib/aws-location';
 import { createAgentUser } from './functions/createAgentUser/resource'; 
 import { generatePlanHandler } from './functions/generate-plan/resource';
 
@@ -86,6 +86,7 @@ businessTable.grantReadWriteData(backend.createAgentUser.resources.lambda);
 // 1. Create Unique Map Name
 const branchName = (process.env.AWS_BRANCH || 'sandbox').replace(/[^a-zA-Z0-9-]/g, '-');
 const uniqueMapName = `deliveryMap-${branchName}`;
+const uniqueTrackerName = `deliveryTracker-${branchName}`;
 
 // 2. Create the Map Resource
 const geoStack = backend.createStack('GeoStack');
@@ -96,6 +97,12 @@ const myMap = new CfnMap(geoStack, 'DeliveryMap', {
     style: 'VectorEsriNavigation',
   },
   pricingPlan: 'RequestBasedUsage',
+});
+
+const myTracker = new CfnTracker(geoStack, 'DeliveryTracker', {
+  trackerName: uniqueTrackerName,
+  pricingPlan: 'RequestBasedUsage',
+  positionFiltering: 'TimeBased', // Optimizes cost by ignoring jitter
 });
 
 // 3. Define the Map Access Policy
@@ -109,12 +116,37 @@ const geoPolicy = new PolicyStatement({
   resources: [myMap.attrArn],
 });
 
+const trackerPolicy = new PolicyStatement({
+  actions: [
+    'geo:BatchUpdateDevicePosition', // For Agents
+    'geo:GetDevicePosition',         // For Manager
+    'geo:ListDevicePositions',       // For Manager (Fleet View)
+    'geo:BatchGetDevicePosition'
+  ],
+  resources: [myTracker.attrArn],
+});
+
+const routesPolicy = new PolicyStatement({
+  actions: [
+    'geo-routes:CalculateRoutes', // Allows calculating A to B routes
+    'geo-routes:CalculateRouteMatrix' // (Optional) If you ever want matrix on frontend
+  ],
+  resources: ['*'], // Gen 2 Routing is a region-wide service, not a specific resource
+});
+backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(routesPolicy);
+Object.values(backend.auth.resources.groups).forEach((groupResource) => {
+  groupResource.role.addToPrincipalPolicy(routesPolicy);
+});
 // 4. Grant Map Permissions
 backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(geoPolicy);
 backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(geoPolicy);
+backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(trackerPolicy);
+
+
 
 Object.values(backend.auth.resources.groups).forEach((groupResource) => {
   groupResource.role.addToPrincipalPolicy(geoPolicy);
+  groupResource.role.addToPrincipalPolicy(trackerPolicy);
 });
 
 // 5. Export Configuration for Frontend
@@ -123,11 +155,17 @@ backend.addOutput({
     aws_region: geoStack.region,
     maps: {
       items: {
-        [uniqueMapName]: { 
-          style: 'VectorEsriNavigation',
-        },
+        [uniqueMapName]: { style: 'VectorEsriNavigation' },
       },
       default: uniqueMapName,
+    },
+  },
+  custom: {
+    amazon_location_service: {
+      trackers: {
+        items: [uniqueTrackerName],
+        default: uniqueTrackerName,
+      },
     },
   },
 });
