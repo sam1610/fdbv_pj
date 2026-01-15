@@ -362,7 +362,10 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
         orderStatus: order.orderStatus,
         gsi1pk: order.gsi1pk,
         pickupLocation: parseLocation(order.pickupLocation), // Important for optimization
-        restaurantLocation: parseLocation(businessLocation) // Fallback
+        restaurantLocation: parseLocation(businessLocation), // Fallback,
+        itemsNbr: order.itemsNbr || 1 ,
+        totalAmount: order.totalAmount || 0
+
       }))
       .filter(o => o.location !== null);
   }, [sortedOrders, businessLocation]);
