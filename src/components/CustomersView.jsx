@@ -18,39 +18,6 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // --- 2. Simple queryParam for the subscription ---
-    // const queryParam = useMemo(() => {
-    //     if (!phoneNbr) return null;
-    //     return {
-    //         filter: { 
-    //             pk: { eq: `BUSINESS#${phoneNbr}` }, 
-    //             sk: { beginsWith: 'CUSTOMER#' } 
-    //         }
-    //     };
-    // }, [phoneNbr]);
-
-    // // --- 3. observeQuery subscription logic ---
-    // useEffect(() => {
-    //     if (!queryParam) return;
-
-    //     setLoading(true);
-    //     const observer = client.models.BusinessData.observeQuery(queryParam);
-
-    //     const subscription = observer.subscribe({
-    //         next: (snapshot) => {
-    //             setCustomers([...snapshot.items]); // Use spread to force re-render
-    //             setError(null);
-    //             setLoading(false);
-    //         },
-    //         error: (err) => {
-    //             setError(err.message || 'Subscription error');
-    //             setLoading(false);
-    //             console.error('CustomersView observeQuery error:', err);
-    //         }
-    //     });
-
-    //     return () => subscription.unsubscribe();
-    // }, [queryParam]);
 
     useEffect(() => {
         if (!phoneNbr) return;

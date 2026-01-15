@@ -622,6 +622,7 @@ useEffect(() => {
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
           onAssignmentSaved={() => { /* optional refresh */ }}
+          phoneNbr={phoneNbr}
         />
       )}
     </div>
