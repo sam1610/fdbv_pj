@@ -107,16 +107,190 @@
 //   }
 // };
 
+// import { 
+//   CognitoIdentityProviderClient, 
+//   AdminCreateUserCommand, 
+//   AdminAddUserToGroupCommand 
+// } from "@aws-sdk/client-cognito-identity-provider";
+// import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+// // ✅ UPDATED IMPORTS: Added GetCommand and TransactWriteCommand
+// import { 
+//   DynamoDBDocumentClient, 
+//   PutCommand, 
+//   GetCommand, 
+//   TransactWriteCommand 
+// } from "@aws-sdk/lib-dynamodb";
+
+// const cognitoClient = new CognitoIdentityProviderClient();
+// const ddbClient = new DynamoDBClient();
+// const docClient = DynamoDBDocumentClient.from(ddbClient);
+
+// export const handler = async (event: any) => {
+//   console.log("EVENT RECEIVED:", JSON.stringify(event));
+
+//   // ✅ Extract 'maxCapacityUnit' along with other fields
+//   const { name, phone, email, businessPhone, maxCapacityUnit } = event.arguments;
+  
+//   const userPoolId = process.env.AMPLIFY_AUTH_USERPOOL_ID;
+//   const tableName = process.env.AMPLIFY_DATA_TABLE_NAME;
+
+//   if (!userPoolId || !tableName) {
+//     throw new Error("Missing Env Vars: UserPoolId or TableName");
+//   }
+
+//   // Sanitize phone & email
+//   let rawPhone = phone.replace(/\s+/g, '');
+//   rawPhone = rawPhone.replace('+', '');
+//   const formattedPhone = `+${rawPhone}`;
+//   const finalEmail = email ? email.trim() : `${rawPhone}@placeholder.com`;
+//   const username = finalEmail; 
+
+//   // Default Capacity if not provided (Default: 10)
+//   const maxCap = maxCapacityUnit ? parseInt(maxCapacityUnit) : 10;
+
+//   try {
+//     // ====================================================
+//     // 🚨 STEP 0: SAFETY CHECK (PREVENT DUPLICATES)
+//     // ====================================================
+//     // Check if this Agent is ALREADY linked to this Business
+//     const agentPk = `AGENT#${formattedPhone}`;
+//     const businessPk = `BUSINESS#${businessPhone}`;
+
+//     const existingLink = await docClient.send(new GetCommand({
+//         TableName: tableName,
+//         Key: {
+//             pk: businessPk,
+//             sk: agentPk
+//         }
+//     }));
+
+//     if (existingLink.Item) {
+//         throw new Error(`Agent ${name} is already added to this business.`);
+//     }
+
+//     // ====================================================
+//     // ✅ STEP 1: CREATE COGNITO USER (UNCHANGED)
+//     // ====================================================
+//     console.log(`Creating Cognito Identity: ${username}`);
+//     const createUserCommand = new AdminCreateUserCommand({
+//       UserPoolId: userPoolId,
+//       Username: username, 
+//       UserAttributes: [
+//         { Name: "phone_number", Value: formattedPhone },
+//         { Name: "name", Value: name },
+//         { Name: "email", Value: finalEmail },
+//         { Name: "email_verified", Value: "true" },
+//         { Name: "phone_number_verified", Value: "true" }
+//       ],
+//       TemporaryPassword: "Pa$$w0rd!", 
+//       MessageAction: "SUPPRESS"
+//     });
+
+//     try {
+//         await cognitoClient.send(createUserCommand);
+//     } catch (err: any) {
+//         if (err.name === 'UsernameExistsException') {
+//             console.log("⚠️ User exists, skipping creation.");
+//         } else {
+//             throw err; 
+//         }
+//     }
+
+//     // ====================================================
+//     // ✅ STEP 2: ADD TO GROUP (UNCHANGED)
+//     // ====================================================
+//     await cognitoClient.send(new AdminAddUserToGroupCommand({
+//       UserPoolId: userPoolId,
+//       Username: username,
+//       GroupName: "DeliveryAgents"
+//     }));
+
+//     // ====================================================
+//     // ⚡ STEP 3: TRANSACTIONAL WRITE (UPDATED)
+//     // ====================================================
+//     // We now write TWO records at once:
+//     // 1. The Business Link (so you see them in your dashboard)
+//     // 2. The Agent Profile (so they have a unique record for location/capacity)
+    
+//     console.log(`Writing Records to Table: ${tableName}`);
+//     const now = new Date().toISOString();
+
+//     await docClient.send(new TransactWriteCommand({
+//         TransactItems: [
+//             {
+//                 // RECORD 1: Link Agent to Business (Your Original Logic)
+//                 Put: {
+//                     TableName: tableName,
+//                     Item: {
+//                         pk: businessPk,
+//                         sk: agentPk,
+//                         __typename: 'BusinessData',
+//                         entityType: 'Agent', // Changed to 'AgentLink' to distinguish
+//                         name: name,
+//                         phone: formattedPhone,
+//                         email: finalEmail,
+//                         gsi1pk: agentPk, 
+//                         createdAt: now,
+//                         updatedAt: now,
+//                         itemsNbr: 0, // Load for this business specific view
+//                         status: 'ACTIVE'
+//                     }
+//                 }
+//             },
+//             {
+//                 // RECORD 2: The Agent Profile (Shared Record)
+//                 // We use 'Update' to be safe: If they exist, we just update details.
+//                 // We protect 'itemsNbr' (Current Load) so we don't reset active drivers.
+//                 Update: {
+//                     TableName: tableName,
+//                     Key: {
+//                         pk: agentPk,
+//                         sk: agentPk
+//                     },
+//                     UpdateExpression: "SET #name = :name, #email = :email, #status = :status, #type = :type, #typename = :typename, #updatedAt = :updatedAt, #maxCap = :maxCap, #gsi1pk = :gsi1pk, #itemsNbr = if_not_exists(#itemsNbr, :zero)",
+//                     ExpressionAttributeNames: {
+//                         "#name": "name",
+//                         "#email": "email",
+//                         "#status": "status",
+//                         "#type": "entityType",
+//                         "#typename": "__typename",
+//                         "#updatedAt": "updatedAt",
+//                         "#maxCap": "maxCapacityUnit", // ✅ NEW: Saving Max Capacity
+//                         "#gsi1pk": "gsi1pk",
+//                         "#itemsNbr": "itemsNbr"       // ✅ NEW: Tracks Global Current Load
+//                     },
+//                     ExpressionAttributeValues: {
+//                         ":name": name,
+//                         ":email": finalEmail,
+//                         ":status": "ACTIVE",
+//                         ":type": "Agent",
+//                         ":typename": "BusinessData",
+//                         ":updatedAt": now,
+//                         ":maxCap": maxCap,           // Save the capacity from the form
+//                         ":gsi1pk": agentPk,
+//                         ":zero": 0                   // Initialize load to 0 ONLY if new
+//                     }
+//                 }
+//             }
+//         ]
+//     }));
+
+//     return { success: true, message: `Agent ${name} created successfully.` };
+
+//   } catch (error: any) {
+//     console.error("❌ FATAL ERROR:", error);
+//     throw new Error(error.message || "Failed to create Agent");
+//   }
+// };
+
 import { 
   CognitoIdentityProviderClient, 
   AdminCreateUserCommand, 
   AdminAddUserToGroupCommand 
 } from "@aws-sdk/client-cognito-identity-provider";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-// ✅ UPDATED IMPORTS: Added GetCommand and TransactWriteCommand
 import { 
   DynamoDBDocumentClient, 
-  PutCommand, 
   GetCommand, 
   TransactWriteCommand 
 } from "@aws-sdk/lib-dynamodb";
@@ -128,7 +302,6 @@ const docClient = DynamoDBDocumentClient.from(ddbClient);
 export const handler = async (event: any) => {
   console.log("EVENT RECEIVED:", JSON.stringify(event));
 
-  // ✅ Extract 'maxCapacityUnit' along with other fields
   const { name, phone, email, businessPhone, maxCapacityUnit } = event.arguments;
   
   const userPoolId = process.env.AMPLIFY_AUTH_USERPOOL_ID;
@@ -138,30 +311,28 @@ export const handler = async (event: any) => {
     throw new Error("Missing Env Vars: UserPoolId or TableName");
   }
 
-  // Sanitize phone & email
-  let rawPhone = phone.replace(/\s+/g, '');
-  rawPhone = rawPhone.replace('+', '');
+  // --- Formatting ---
+  let rawPhone = phone.replace(/\s+/g, '').replace('+', '');
   const formattedPhone = `+${rawPhone}`;
+  // Use email if provided, otherwise create a placeholder using the phone
   const finalEmail = email ? email.trim() : `${rawPhone}@placeholder.com`;
-  const username = finalEmail; 
+  
+  // ⚠️ CRITICAL: Use the email as the input username, but capture the REAL username later
+  const inputUsername = finalEmail; 
 
-  // Default Capacity if not provided (Default: 10)
   const maxCap = maxCapacityUnit ? parseInt(maxCapacityUnit) : 10;
+  const targetGroup = "DeliveryAgents"; // Hardcoded for now
 
   try {
     // ====================================================
-    // 🚨 STEP 0: SAFETY CHECK (PREVENT DUPLICATES)
+    // 🚨 STEP 0: CHECK DUPLICATES
     // ====================================================
-    // Check if this Agent is ALREADY linked to this Business
     const agentPk = `AGENT#${formattedPhone}`;
     const businessPk = `BUSINESS#${businessPhone}`;
 
     const existingLink = await docClient.send(new GetCommand({
         TableName: tableName,
-        Key: {
-            pk: businessPk,
-            sk: agentPk
-        }
+        Key: { pk: businessPk, sk: agentPk }
     }));
 
     if (existingLink.Item) {
@@ -169,12 +340,13 @@ export const handler = async (event: any) => {
     }
 
     // ====================================================
-    // ✅ STEP 1: CREATE COGNITO USER (UNCHANGED)
+    // ✅ STEP 1: CREATE COGNITO USER
     // ====================================================
-    console.log(`Creating Cognito Identity: ${username}`);
+    console.log(`Creating Cognito Identity for: ${inputUsername}`);
+    
     const createUserCommand = new AdminCreateUserCommand({
       UserPoolId: userPoolId,
-      Username: username, 
+      Username: inputUsername, 
       UserAttributes: [
         { Name: "phone_number", Value: formattedPhone },
         { Name: "name", Value: name },
@@ -186,67 +358,70 @@ export const handler = async (event: any) => {
       MessageAction: "SUPPRESS"
     });
 
+    let realUsername = inputUsername;
+
     try {
-        await cognitoClient.send(createUserCommand);
+        const response = await cognitoClient.send(createUserCommand);
+        // 🚀 CRITICAL FIX: If Cognito uses UUIDs, get the REAL Username from the response
+        if (response.User && response.User.Username) {
+            realUsername = response.User.Username;
+            console.log("✅ User Created. Real Username:", realUsername);
+        }
     } catch (err: any) {
         if (err.name === 'UsernameExistsException') {
-            console.log("⚠️ User exists, skipping creation.");
+            console.log("⚠️ User already exists. Using input email as Username.");
+            // If user exists, we assume inputUsername is valid (or we'd need to fetch the user to get the UUID)
         } else {
             throw err; 
         }
     }
 
     // ====================================================
-    // ✅ STEP 2: ADD TO GROUP (UNCHANGED)
+    // ✅ STEP 2: ADD TO GROUP (WITH LOGGING)
     // ====================================================
+    console.log(`Adding User ${realUsername} to Group: ${targetGroup}...`);
+    
     await cognitoClient.send(new AdminAddUserToGroupCommand({
       UserPoolId: userPoolId,
-      Username: username,
-      GroupName: "DeliveryAgents"
+      Username: realUsername, // Use the resolved username (UUID or String)
+      GroupName: targetGroup
     }));
 
+    console.log(`✅ Successfully added ${realUsername} to ${targetGroup}`);
+
     // ====================================================
-    // ⚡ STEP 3: TRANSACTIONAL WRITE (UPDATED)
+    // ⚡ STEP 3: DYNAMODB WRITE
     // ====================================================
-    // We now write TWO records at once:
-    // 1. The Business Link (so you see them in your dashboard)
-    // 2. The Agent Profile (so they have a unique record for location/capacity)
-    
     console.log(`Writing Records to Table: ${tableName}`);
     const now = new Date().toISOString();
 
     await docClient.send(new TransactWriteCommand({
         TransactItems: [
             {
-                // RECORD 1: Link Agent to Business (Your Original Logic)
+                // 1. Business Link
                 Put: {
                     TableName: tableName,
                     Item: {
                         pk: businessPk,
                         sk: agentPk,
                         __typename: 'BusinessData',
-                        entityType: 'Agent', // Changed to 'AgentLink' to distinguish
+                        entityType: 'AgentLink', // Matches your shared pattern
                         name: name,
                         phone: formattedPhone,
                         email: finalEmail,
                         gsi1pk: agentPk, 
                         createdAt: now,
                         updatedAt: now,
-                        itemsNbr: 0, // Load for this business specific view
+                        itemsNbr: 0, 
                         status: 'ACTIVE'
                     }
                 }
             },
             {
-                // RECORD 2: The Agent Profile (Shared Record)
-                // We use 'Update' to be safe: If they exist, we just update details.
-                // We protect 'itemsNbr' (Current Load) so we don't reset active drivers.
+                // 2. Agent Profile
                 Update: {
                     TableName: tableName,
-                    Key: {
-                        pk: agentPk,
-                        sk: agentPk
-                    },
+                    Key: { pk: agentPk, sk: agentPk },
                     UpdateExpression: "SET #name = :name, #email = :email, #status = :status, #type = :type, #typename = :typename, #updatedAt = :updatedAt, #maxCap = :maxCap, #gsi1pk = :gsi1pk, #itemsNbr = if_not_exists(#itemsNbr, :zero)",
                     ExpressionAttributeNames: {
                         "#name": "name",
@@ -255,9 +430,9 @@ export const handler = async (event: any) => {
                         "#type": "entityType",
                         "#typename": "__typename",
                         "#updatedAt": "updatedAt",
-                        "#maxCap": "maxCapacityUnit", // ✅ NEW: Saving Max Capacity
+                        "#maxCap": "maxCapacityUnit",
                         "#gsi1pk": "gsi1pk",
-                        "#itemsNbr": "itemsNbr"       // ✅ NEW: Tracks Global Current Load
+                        "#itemsNbr": "itemsNbr"
                     },
                     ExpressionAttributeValues: {
                         ":name": name,
@@ -266,19 +441,20 @@ export const handler = async (event: any) => {
                         ":type": "Agent",
                         ":typename": "BusinessData",
                         ":updatedAt": now,
-                        ":maxCap": maxCap,           // Save the capacity from the form
+                        ":maxCap": maxCap,
                         ":gsi1pk": agentPk,
-                        ":zero": 0                   // Initialize load to 0 ONLY if new
+                        ":zero": 0
                     }
                 }
             }
         ]
     }));
 
-    return { success: true, message: `Agent ${name} created successfully.` };
+    return { success: true, message: `Agent ${name} created and added to group.` };
 
   } catch (error: any) {
-    console.error("❌ FATAL ERROR:", error);
+    console.error("❌ FATAL ERROR in CreateAgentUser:", error);
+    // Return error as string to client so they know it failed
     throw new Error(error.message || "Failed to create Agent");
   }
 };

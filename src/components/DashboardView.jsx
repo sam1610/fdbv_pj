@@ -1,3 +1,4 @@
+// DashboardView.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import * as Recharts from 'recharts';
 import { client } from '../DataHook/amplifyClient';

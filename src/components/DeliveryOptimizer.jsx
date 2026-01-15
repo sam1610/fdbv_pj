@@ -16,6 +16,9 @@ const REFRESH_RATE_MS = 10000;
 // Duration matches fetch rate to create continuous movement
 const ANIMATION_DURATION_MS = REFRESH_RATE_MS; 
 
+
+
+
 // --- HELPERS ---
 const getCleanPhone = (id) => String(id || "").replace(/[^0-9]/g, '');
 
@@ -61,7 +64,7 @@ const DeliveryOptimizer = ({
 
   const isDispatchMode = !showDelivered && !showDelivering;
   const hasPreparedOrders = orders.some(o => o.orderStatus === 'PREPARED');
-
+    const [optimizationMetrics, setOptimizationMetrics] = useState({});
   // Sync Props
   useEffect(() => {
       latestOrdersRef.current = orders;
@@ -340,6 +343,7 @@ const DeliveryOptimizer = ({
     fetchPositions();
   };
 
+
   // --- 3. ANIMATION LOOP (Interpolates 60fps) ---
   const startAnimationLoop = (map) => {
       const animate = () => {
@@ -512,55 +516,116 @@ const plotOrdersOnMap = (ordersToPlot, map, currentAssignments, activeAgentId) =
     }
   };
 
-// 4. AUTO-ASSIGN LOGIC
+// 4. AUTO-ASSIGN LOGIC (Enhanced with Local Distance Calculation)
 const runOptimization = async () => {
     setLoading(true);
     try {
-      // 1. Prepare Inputs
-      const validAgents = agents.filter(a => parseLocation(a.location)).map(a => ({
+      // 1. Init GeoRoutes Client
+      const session = await fetchAuthSession();
+      const geoClient = new GeoRoutesClient({
+          region: outputs.geo.aws_region,
+          credentials: session.credentials
+      });
+
+      // 2. Filter Valid Agents
+      const validAgents = agents.filter(a => parseLocation(a.location));
+
+      // ---------------------------------------------------------
+      // ⚡️ CORE FUNCTIONALITY: Calculate Distances Locally
+      // ---------------------------------------------------------
+      
+      // A. Leg B: Restaurant -> Customer (For all PREPARED orders)
+      const orderMetrics = {};
+      const orderPromises = orders
+        .filter(o => o.orderStatus === 'PREPARED')
+        .map(async (order) => {
+            const custLoc = parseLocation(order.location);
+            if (restaurantLocation && custLoc) {
+                try {
+                    const res = await geoClient.send(new CalculateRoutesCommand({
+                        Origin: [restaurantLocation.longitude, restaurantLocation.latitude],
+                        Destination: [custLoc.longitude, custLoc.latitude],
+                        TravelMode: "Car",
+                    }));
+                    if (res.Routes?.length) {
+                        const s = res.Routes[0].Summary;
+                        orderMetrics[order.sk] = {
+                            dist: parseFloat((s.Distance / 1000).toFixed(2)), // Convert Meters to KM
+                            dur: Math.round(s.Duration) // Seconds
+                        };
+                    }
+                } catch (e) { console.warn(`Leg B Calc Fail for ${order.sk}`, e); }
+            }
+        });
+
+      // B. Leg A: Agent -> Restaurant (For all Available Agents)
+      const agentMetrics = {};
+      const agentPromises = validAgents.map(async (agent) => {
+          const agentLoc = parseLocation(agent.location);
+          if (restaurantLocation && agentLoc) {
+              try {
+                  const res = await geoClient.send(new CalculateRoutesCommand({
+                      Origin: [agentLoc.longitude, agentLoc.latitude],
+                      Destination: [restaurantLocation.longitude, restaurantLocation.latitude],
+                      TravelMode: "Car"
+                  }));
+                  if (res.Routes?.length) {
+                      const s = res.Routes[0].Summary;
+                      agentMetrics[agent.id || agent.sk] = {
+                          dist: parseFloat((s.Distance / 1000).toFixed(2)),
+                          dur: Math.round(s.Duration)
+                      };
+                  }
+              } catch (e) { console.warn(`Leg A Calc Fail for agent ${agent.name}`, e); }
+          }
+      });
+
+      // Wait for all calculations to finish
+      await Promise.all([...orderPromises, ...agentPromises]);
+
+      // ---------------------------------------------------------
+      // 🚀 ENRICH PAYLOAD & CALL CLOUD
+      // ---------------------------------------------------------
+      
+      // Inject calculated distances into the payload so the backend has fresh data
+      const enrichedAgents = validAgents.map(a => ({
          id: a.id || a.sk, 
          name: a.name,
          location: parseLocation(a.location),
          maxCapacity: 10,
-         currentLoad: 0
+         currentLoad: 0,
+         distToRest: agentMetrics[a.id || a.sk]?.dist || 0 
       }));
 
-      // 2. Call Cloud Function
+      const enrichedOrders = orders.map(o => ({
+          ...o,
+          distFromRest: orderMetrics[o.sk]?.dist || 0 
+      }));
+
+      // Call Cloud Function
       const response = await client.queries.optimizeDelivery({
-        orders: JSON.stringify(orders),
-        agents: JSON.stringify(validAgents), 
+        orders: JSON.stringify(enrichedOrders),
+        agents: JSON.stringify(enrichedAgents), 
         restaurantLocation: JSON.stringify(restaurantLocation)
       });
 
-      // 3. Parse Response
+      // ---------------------------------------------------------
+      // 📊 PARSE & UPDATE STATE
+      // ---------------------------------------------------------
       let raw = response.data;
       if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch (e) {} }
       
       let proposal = raw.proposal;
       if (typeof proposal === 'string') { try { proposal = JSON.parse(proposal); } catch (e) { proposal = []; } }
 
-      // ---------------------------------------------------------
-      // 🎯 KEY STEP: BUILD THE METRICS MAP
-      // ---------------------------------------------------------
-      let metrics = raw.routeMetrics;
-      if (typeof metrics === 'string') { try { metrics = JSON.parse(metrics); } catch (e) { metrics = []; } }
+      // We prioritize our LOCALLY calculated metrics (most accurate)
+      // but strictly, we update the metrics map so the UI shows the distances immediately.
+      const finalMetrics = { ...orderMetrics }; // Start with local calcs
       
-      const metricsMap = {}; // This is our Lookup Table
-      
-      if (Array.isArray(metrics)) {
-          metrics.forEach(m => {
-              // We map the specific Order ID to its specific calculated values
-              metricsMap[m.orderId] = {
-                  dist: parseFloat(m.distanceKm),
-                  dur: parseInt(m.durationSeconds)
-              };
-          });
-      }
-      
-      console.log("📊 Optimized Metrics Map:", metricsMap); // Check console to verify!
-      setOptimizationMetrics(metricsMap); // Save to State
+      console.log("📊 Final Metrics (Local + Cloud):", finalMetrics);
+      setOptimizationMetrics(finalMetrics); 
 
-      // 4. Update Assignments
+      // Apply Assignments
       const newAssignments = {};
       if (Array.isArray(proposal)) {
           proposal.forEach(p => {
@@ -681,33 +746,81 @@ const runOptimization = async () => {
       {isDispatchMode && (
         <div className="h-full bg-slate-900 text-white shadow-2xl flex flex-col order-2 transition-all duration-300 w-[80px] md:w-64">
           <div className="p-4 flex flex-col items-center md:items-stretch border-b border-slate-800">
+            {/* Header */}
             <div className="flex justify-between items-center w-full mb-4">
               <h2 className="hidden md:block text-xl font-bold text-yellow-400">Dispatch</h2>
               <button onClick={onClose} className="text-3xl text-slate-400 hover:text-white mx-auto md:mx-0">×</button>
             </div>
+            
+            {/* Buttons */}
             {hasPreparedOrders ? (
               <div className="flex gap-2 w-full flex-col">
-                <button onClick={runOptimization} disabled={loading || saving} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg h-10 flex items-center justify-center text-sm">{loading ? "..." : "⚡️ Auto-Assign"}</button>
-                <button onClick={handleDispatch} disabled={loading || saving || Object.keys(assignments).length === 0} className="bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg h-10 flex items-center justify-center disabled:opacity-50 text-sm">
-                    {saving ? "..." : "📦 Confirm"}
+                <button 
+                    onClick={runOptimization} 
+                    disabled={loading || saving} 
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg h-10 flex items-center justify-center text-sm transition-all"
+                >
+                    {loading ? "Calculating..." : "⚡️ Auto-Assign"}
+                </button>
+                <button 
+                    onClick={handleDispatch} 
+                    disabled={loading || saving || Object.keys(assignments).length === 0} 
+                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg h-10 flex items-center justify-center text-sm transition-all"
+                >
+                    {saving ? "Processing..." : "📦 Confirm"}
                 </button>
               </div>
             ) : <div className="text-center py-2 text-slate-400 text-sm">No new orders.</div>}
           </div>
+
+          {/* List of Prepared Orders */}
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
               {orders.map((o, i) => {
+                  // Only show PREPARED orders in Dispatch Mode
                   if (o.orderStatus === 'DELIVERED' || o.orderStatus === 'DELIVERING') return null;
-                  const agentId = assignments[o.sk];
-                  const color = getAgentColor(agentId);
+                  
+                  // ✅ 1. Get Assigned Agent from State
+                  const assignedAgentId = assignments[o.sk];
+                  
+                  // ✅ 2. Determine Color (Gray if null, Color if assigned)
+                  const color = assignedAgentId ? getAgentColor(assignedAgentId) : '#475569'; // Default Slate-600
+
                   return (
-                  <div key={o.sk || i} onClick={() => handleOrderClick(o.sk)} className="bg-slate-800 rounded-lg border border-slate-700 hover:border-blue-400 flex items-center p-2" style={{ borderLeft: `3px solid ${color}` }}>
-                      <span className="text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: color }}>{i+1}</span>
+                  <div 
+                    key={o.sk || i} 
+                    onClick={() => handleOrderClick(o.sk)} 
+                    className="bg-slate-800 rounded-lg border border-slate-700 hover:border-blue-400 flex items-center p-2 cursor-pointer transition-colors" 
+                    // ✅ 3. Apply Border Color Dynamically
+                    style={{ borderLeft: `4px solid ${color}` }}
+                  >
+                      {/* Number Badge */}
+                      <span className="text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: color }}>
+                        {i+1}
+                      </span>
+
                       <div className="hidden md:block flex-1 ml-2 min-w-0">
-                        <p className="font-bold text-xs truncate mb-1">{o.customer || 'Unknown'}</p>
-                        <select value={assignments[o.sk] || ''} onClick={(e) => e.stopPropagation()} onChange={(e) => setAssignments(prev => ({...prev, [o.sk]: e.target.value}))} className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1">
+                        <div className="flex justify-between items-center mb-1">
+                            <p className="font-bold text-xs truncate text-slate-200">{o.customer || 'Unknown'}</p>
+                            {/* Optional: Show Distance if calculated */}
+                            {optimizationMetrics[o.sk] && (
+                                <span className="text-[10px] text-emerald-400 font-mono">
+                                    {optimizationMetrics[o.sk].dist}km
+                                </span>
+                            )}
+                        </div>
+                        
+                        {/* ✅ 4. Controlled Dropdown */}
+                        <select 
+                            value={assignments[o.sk] || ""} 
+                            onClick={(e) => e.stopPropagation()} 
+                            onChange={(e) => setAssignments(prev => ({...prev, [o.sk]: e.target.value}))} 
+                            className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1 focus:border-blue-500 outline-none"
+                        >
                           <option value="" disabled>Select Agent</option>
                           {agents.map((agent, aIndex) => (
-                              <option key={agent.id || aIndex} value={agent.id || agent.sk}>{agent.name}</option> 
+                              <option key={agent.id || aIndex} value={agent.id || agent.sk}>
+                                {agent.name}
+                              </option> 
                           ))}
                         </select>
                       </div>

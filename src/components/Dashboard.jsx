@@ -1,3 +1,5 @@
+
+// Dashboard.jsx
 import React, { useState, useMemo, useCallback } from 'react';
 import * as Recharts from 'recharts';
 import DashboardView from "./DashboardView";

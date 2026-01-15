@@ -1,4 +1,4 @@
-
+// AgentDashboard.jsx
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createMap } from 'maplibre-gl-js-amplify';
 import maplibregl from 'maplibre-gl';
@@ -69,7 +69,7 @@ const formatTime = (sec) => sec ? `${Math.round(sec / 60)} min` : '--';
 /* ------------------------------------------------------------------
    COMPONENT
 -------------------------------------------------------------------*/
-const AgentDashboard = ({ agentPhone, businessLocation }) => {
+const AgentDashboard = ({ agentPhone, businessLocation , agentName}) => {
     const mapContainerRef = useRef(null);
     const mapInstance = useRef(null);
     
@@ -102,7 +102,8 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
     
     const [agentProfileLoc, setAgentProfileLoc] = useState(null);
    
-
+        console.log( "user Name :", agentName);
+    
     // ------------------------------------------------------------
     // ✅ 1. TRACKER ID CONFIGURATION
     // ------------------------------------------------------------
@@ -496,8 +497,8 @@ const AgentDashboard = ({ agentPhone, businessLocation }) => {
             {/* Header */}
             <div className="p-3 bg-slate-800 shadow-md z-[60] flex justify-between items-center shrink-0 border-b border-slate-700">
                 <div className="flex flex-col">
-                    <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                        {focusedRestaurant ? '📍 Related Orders' : '🚀 All Deliveries'}
+                    <h1 className="text-xl font-black text-white tracking-tighter uppercase leading-none">
+                        {agentName} <span className="text-sky-500">Live</span>
                     </h1>
                     {/* ✅ Visual Feedback for GPS */}
                     {agentLocation && <span className="text-[10px] text-green-400 font-mono flex items-center gap-1">
