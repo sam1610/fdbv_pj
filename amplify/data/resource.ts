@@ -5,39 +5,10 @@ import { generatePlanHandler } from '../functions/generate-plan/resource'; // We
 // Define all necessary status enums for data consistency
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
 const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
-const itemCategories = [
-    // --- The Core Courses ---
-    'STARTERS',          // Appetizers, Wings, Dim Sum
-    'MAIN_COURSE',       // General Plates, Steaks, Rice Dishes
-    'BREAKFAST',         // Eggs, Pancakes, Morning items
-    'FASTFOOD',          // Burgers, Fries, Nuggets
-    'LUNCH_SPECIALS',    // Time-limited items
-    
-    // --- Specific Food Types (That often stand alone) ---
-    'SALADS',            // Greenery, Caesar, etc.
-    'SOUPS',             // Broths, Chowders
-    'SANDWICHES_WRAPS',  // Burgers, Paninis, Shawarma
-    'PIZZA_PASTA',       // Italian staples usually get their own category
-    
-    // --- Complements ---
-    'SIDES',             // Fries, Rice, Steamed Veggies
-    'SAUCES_EXTRAS',     // Extra Ketchup, Mayo, Bread (Crucial for upselling)
-    
-    // --- Beverages ---
-    'DRINKS_COLD',       // Sodas, Water, Juices
-    'DRINKS_HOT',        // Coffee, Tea, Hot Chocolate
-    'SMOOTHIES_SHAKES',  // Blended drinks
-    
-    // --- Special Segments ---
-    'DESSERTS',          // Cakes, Ice Cream
-    'KIDS_MEAL',         // Smaller portions, Nuggets
-    'BUNDLES_DEALS',     // Family Packs, "Meal for 2" (High Revenue Items)
-    'HEALTHY_DIET'       // Keto, Vegan specific bowls
-] as const;
 const schema = a.schema({
   OrderStatus: a.enum(orderStatus),
   StockStatus: a.enum(stockStatus),
-  ItemCategory: a.enum(itemCategories),
+ 
 
   BusinessData: a
     .model({
@@ -75,10 +46,11 @@ quantity: a.integer(),
 unitPrice: a.float(),
 imageUrl:a.string(),
 description: a.string(),
-itemCategory: a.ref('ItemCategory'),
+itemCategory: a.string(),
 stockStatus: a.ref('StockStatus'),
 businessOwnerId: a.string(),
-deliveryAgentId: a.string()
+deliveryAgentId: a.string(),
+expiration: a.integer()
     }).identifier(['pk', 'sk'])
     .secondaryIndexes((index) => [
       // list of orders assigned to a delivery agent, filtered by status

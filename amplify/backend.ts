@@ -6,7 +6,7 @@ import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { CfnMap, CfnTracker } from 'aws-cdk-lib/aws-location';
 import { createAgentUser } from './functions/createAgentUser/resource'; 
 import { generatePlanHandler } from './functions/generate-plan/resource';
-
+import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 const backend = defineBackend({
   auth,
   data,
@@ -20,7 +20,15 @@ const backend = defineBackend({
 // ====================================================
 
 const businessTable = backend.data.resources.tables['BusinessData'];
-
+if (businessTable) {
+  // ✅ 2. CORRECT WAY TO ENABLE TTL (Using CDK Escape Hatch)
+  const cfnTable = businessTable.node.defaultChild as CfnTable;
+  
+  cfnTable.timeToLiveSpecification = {
+    attributeName: 'expiration',
+    enabled: true
+  };
+}
 // 1. Give the Lambda the Table Name so it can run QueryCommands
 backend.generatePlanHandler.addEnvironment(
   'AMPLIFY_DATA_TABLE_NAME', 
