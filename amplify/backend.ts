@@ -21,13 +21,14 @@ const backend = defineBackend({
 
 const businessTable = backend.data.resources.tables['BusinessData'];
 if (businessTable) {
-  // ✅ 2. CORRECT WAY TO ENABLE TTL (Using CDK Escape Hatch)
   const cfnTable = businessTable.node.defaultChild as CfnTable;
   
-  cfnTable.timeToLiveSpecification = {
-    attributeName: 'expiration',
-    enabled: true
-  };
+  if (cfnTable) {
+    cfnTable.timeToLiveSpecification = {
+      attributeName: 'expiration',
+      enabled: true
+    };
+  }
 }
 // 1. Give the Lambda the Table Name so it can run QueryCommands
 backend.generatePlanHandler.addEnvironment(
