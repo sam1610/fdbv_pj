@@ -4,10 +4,10 @@ import { createAgentUser } from '../functions/createAgentUser/resource'; // 1. I
 import { generatePlanHandler } from '../functions/generate-plan/resource'; // We will create this next
 // Define all necessary status enums for data consistency
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
-const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
+// const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
 const schema = a.schema({
   OrderStatus: a.enum(orderStatus),
-  StockStatus: a.enum(stockStatus),
+  // StockStatus: a.enum(stockStatus),
  
 
   BusinessData: a
@@ -47,7 +47,7 @@ unitPrice: a.float(),
 imageUrl:a.string(),
 description: a.string(),
 itemCategory: a.string(),
-stockStatus: a.ref('StockStatus'),
+stockStatus: a.boolean(),
 businessOwnerId: a.string(),
 deliveryAgentId: a.string(),
 expiration: a.integer()
