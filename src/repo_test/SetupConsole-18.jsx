@@ -73,8 +73,9 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
     );
 }
 
+
+// --- FINAL ITEMS SECTION (With Image Uploader & Boolean Stock) ---
 // --- FINAL ITEMS SECTION (Image Side-by-Side with Category) ---
-// --- FINAL ITEMS SECTION (Base64 Encoding & Upload) ---
 const ItemsSection = ({ pk, onUpdate }) => {
     // Form State
     const [item, setItem] = useState({ 
@@ -83,7 +84,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
         description: '',
         quantity: '',    
         stockStatus: true, // Boolean (True = Available)
-        imageUrl: ''       // This will hold the Base64 String
+        imageUrl: ''       // Base64 String
     });
     
     // Management State
@@ -103,7 +104,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
     const [priceError, setPriceError] = useState("");
 
     // ---------------------------------------------------------
-    // 🖼️ IMAGE HANDLER: RESIZE -> BASE64 -> STATE
+    // 🖼️ IMAGE HELPER (70x70px Resize, <3KB)
     // ---------------------------------------------------------
     const handleImageUpload = (event) => {
         const file = event.target.files[0];
@@ -113,24 +114,19 @@ const ItemsSection = ({ pk, onUpdate }) => {
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-                // 1. Create a Canvas to process the image
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // 2. Force dimensions to 70x70 pixels (Square)
+                // Force 70x70 dimensions
                 canvas.width = 70;
                 canvas.height = 70;
                 
-                // 3. Draw image onto canvas (resizing it)
+                // Draw image (strech to fit square)
                 ctx.drawImage(img, 0, 0, 70, 70);
                 
-                // 4. CONVERT TO BASE64 STRING
-                // 'image/jpeg' with 0.7 quality ensures < 3KB size
-                const base64String = canvas.toDataURL('image/jpeg', 0.7);
-                
-                // 5. Save the Base64 string to State
-                console.log("Encoded Image Size:", base64String.length, "bytes");
-                setItem(prev => ({ ...prev, imageUrl: base64String }));
+                // Compress to JPEG 70% quality (~2KB size)
+                const optimizedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                setItem(prev => ({ ...prev, imageUrl: optimizedBase64 }));
             };
             img.src = e.target.result;
         };
@@ -186,7 +182,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
             description: selectedItem.description || '',
             quantity: selectedItem.quantity || '',
             stockStatus: selectedItem.stockStatus,
-            imageUrl: selectedItem.imageUrl || '' // Load Base64 string from DB
+            imageUrl: selectedItem.imageUrl || '' // Load existing image
         });
         setCategory(selectedItem.itemCategory || '');
         setShowItemSuggestions(false);
@@ -201,7 +197,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
     };
 
     // ---------------------------------------------------------
-    // 4️⃣ Submit Handler (Saves Base64 to DB)
+    // 4️⃣ Submit Handler
     // ---------------------------------------------------------
     const submit = async () => {
         if (!item.name.trim()) return alert("Item Name is required");
@@ -212,7 +208,6 @@ const ItemsSection = ({ pk, onUpdate }) => {
         setSaving(true);
         
         try {
-            // Construct Payload
             const payload = {
                 pk: pk,
                 name: item.name.trim(),
@@ -221,9 +216,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
                 description: item.description,
                 stockStatus: item.stockStatus, // Boolean
                 quantity: item.quantity ? parseInt(item.quantity) : 0,
-                
-                // ✅ HERE: The Base64 string is assigned to the 'imageUrl' attribute
-                imageUrl: item.imageUrl 
+                imageUrl: item.imageUrl
             };
 
             if (editingId) {
@@ -445,6 +438,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
         </div>
     );
 };
+
 // ... (KEEP RestaurantSection, BranchesSection, PrivacyPolicySection AS IS)
 const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
     // Identity State
