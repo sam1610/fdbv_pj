@@ -73,380 +73,11 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
     );
 }
 
-// --- FINAL ITEMS SECTION (Image Side-by-Side with Category) ---
-// const ItemsSection = ({ pk, onUpdate }) => {
-//     // Form State
-//     const [item, setItem] = useState({ 
-//         name: '', 
-//         price: '',
-//         description: '',
-//         quantity: '',    
-//         stockStatus: true, // Boolean (True = Available)
-//         imageUrl: ''       // This will hold the Base64 String
-//     });
-    
-//     // Management State
-//     const [allItems, setAllItems] = useState([]); 
-//     const [editingId, setEditingId] = useState(null); 
-    
-//     // Category State
-//     const [category, setCategory] = useState(''); 
-//     const [existingCategories, setExistingCategories] = useState([]);
-    
-//     // UI State
-//     const [showItemSuggestions, setShowItemSuggestions] = useState(false);
-//     const [showCatSuggestions, setShowCatSuggestions] = useState(false);
-    
-//     const [isLoading, setIsLoading] = useState(true);
-//     const [saving, setSaving] = useState(false);
-//     const [priceError, setPriceError] = useState("");
-
-//     // ---------------------------------------------------------
-//     // 🖼️ IMAGE HANDLER: RESIZE -> BASE64 -> STATE
-//     // ---------------------------------------------------------
-//     const handleImageUpload = (event) => {
-//         const file = event.target.files[0];
-//         if (!file) return;
-
-//         const reader = new FileReader();
-//         reader.onload = (e) => {
-//             const img = new Image();
-//             img.onload = () => {
-//                 // 1. Create a Canvas to process the image
-//                 const canvas = document.createElement('canvas');
-//                 const ctx = canvas.getContext('2d');
-                
-//                 // 2. Force dimensions to 70x70 pixels (Square)
-//                 canvas.width = 70;
-//                 canvas.height = 70;
-                
-//                 // 3. Draw image onto canvas (resizing it)
-//                 ctx.drawImage(img, 0, 0, 70, 70);
-                
-//                 // 4. CONVERT TO BASE64 STRING
-//                 // 'image/jpeg' with 0.7 quality ensures < 3KB size
-//                 const base64String = canvas.toDataURL('image/jpeg', 0.7);
-                
-//                 // 5. Save the Base64 string to State
-//                 console.log("Encoded Image Size:", base64String.length, "bytes");
-//                 setItem(prev => ({ ...prev, imageUrl: base64String }));
-//             };
-//             img.src = e.target.result;
-//         };
-//         reader.readAsDataURL(file);
-//     };
-
-//     // ---------------------------------------------------------
-//     // 1️⃣ Fetch Data
-//     // ---------------------------------------------------------
-//     const fetchItems = async () => {
-//         setIsLoading(true);
-//         try {
-//             const { data } = await client.models.BusinessData.listByBusiness({
-//                 pk: pk,
-//                 sk: { beginsWith: 'ITEM#' }
-//             });
-
-//             const sortedItems = data.sort((a, b) => a.name.localeCompare(b.name));
-//             setAllItems(sortedItems);
-
-//             const uniqueCats = [...new Set(
-//                 data.map(i => i.itemCategory).filter(c => c)
-//             )].sort();
-
-//             setExistingCategories(uniqueCats);
-//         } catch (err) {
-//             console.error("Failed to fetch items", err);
-//         } finally {
-//             setIsLoading(false);
-//         }
-//     };
-
-//     useEffect(() => { fetchItems(); }, [pk]);
-
-//     // ---------------------------------------------------------
-//     // 2️⃣ Filter Logics
-//     // ---------------------------------------------------------
-//     const filteredItems = allItems.filter(i => 
-//         i.name.toLowerCase().includes(item.name.toLowerCase())
-//     );
-//     const filteredCategories = existingCategories.filter(c => 
-//         c.toLowerCase().includes(category.toLowerCase())
-//     );
-
-//     // ---------------------------------------------------------
-//     // 3️⃣ Select Handlers
-//     // ---------------------------------------------------------
-//     const selectItemToEdit = (selectedItem) => {
-//         setEditingId(selectedItem.sk);
-//         setItem({
-//             name: selectedItem.name,
-//             price: selectedItem.unitPrice.toString(),
-//             description: selectedItem.description || '',
-//             quantity: selectedItem.quantity || '',
-//             stockStatus: selectedItem.stockStatus,
-//             imageUrl: selectedItem.imageUrl || '' // Load Base64 string from DB
-//         });
-//         setCategory(selectedItem.itemCategory || '');
-//         setShowItemSuggestions(false);
-//     };
-
-//     const resetToCreateMode = () => {
-//         setEditingId(null);
-//         setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true, imageUrl: '' });
-//         setCategory('');
-//         setShowItemSuggestions(false);
-//         setShowCatSuggestions(false);
-//     };
-
-//     // ---------------------------------------------------------
-//     // 4️⃣ Submit Handler (Saves Base64 to DB)
-//     // ---------------------------------------------------------
-//     const submit = async () => {
-//         if (!item.name.trim()) return alert("Item Name is required");
-//         if (!item.price) return alert("Unit Price is required");
-//         if (!category.trim()) return alert("Category is required");
-
-//         const finalCategory = category.trim().toUpperCase();
-//         setSaving(true);
-        
-//         try {
-//             // Construct Payload
-//             const payload = {
-//                 pk: pk,
-//                 name: item.name.trim(),
-//                 unitPrice: parseFloat(item.price),
-//                 itemCategory: finalCategory,
-//                 description: item.description,
-//                 stockStatus: item.stockStatus, // Boolean
-//                 quantity: item.quantity ? parseInt(item.quantity) : 0,
-                
-//                 // ✅ HERE: The Base64 string is assigned to the 'imageUrl' attribute
-//                 imageUrl: item.imageUrl 
-//             };
-
-//             if (editingId) {
-//                 // UPDATE
-//                 await client.models.BusinessData.update({ ...payload, sk: editingId });
-//                 alert(`✅ Updated: ${item.name}`);
-//             } else {
-//                 // CREATE
-//                 const maxId = allItems.reduce((max, currentItem) => {
-//                     const parts = currentItem.sk.split('#'); 
-//                     const num = parseInt(parts[1], 10);      
-//                     return !isNaN(num) && num > max ? num : max;
-//                 }, 0);
-
-//                 const formattedId = `ITEM#${String(maxId + 1).padStart(3, '0')}`;
-                
-//                 await client.models.BusinessData.create({
-//                     ...payload,
-//                     sk: formattedId,
-//                     entityType: 'ITEM'
-//                 });
-//                 alert(`✅ Created: ${item.name}`);
-//             }
-//             await fetchItems();
-//             if (onUpdate) onUpdate(); 
-//             resetToCreateMode();
-//         } catch (err) {
-//             console.error("Error saving item:", err);
-//             alert("Failed to save. Check console.");
-//         } finally {
-//             setSaving(false);
-//         }
-//     };
-
-//     return (
-//         <div className="space-y-4 max-w-sm mx-auto pt-4 animate-fade-in pb-20">
-//             {/* Header */}
-//             <header className="flex justify-between items-end border-b border-indigo-500 pb-2 mb-2">
-//                 <div>
-//                     <h2 className="text-indigo-400 font-bold uppercase text-xs tracking-widest">Menu Manager</h2>
-//                     <p className="text-[10px] text-slate-500 italic">
-//                         {editingId ? "✏️ Updating Item" : "✨ Creating New Item"}
-//                     </p>
-//                 </div>
-//                 {editingId && (
-//                     <button onClick={resetToCreateMode} className="text-[9px] bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors">✕ Cancel</button>
-//                 )}
-//             </header>
-
-//             {/* 1. Item Name (Search/Create) */}
-//             <div className="space-y-1 relative">
-//                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Item Name <span className="text-red-500">*</span></label>
-//                 <div className="relative">
-//                     <input 
-//                         className={`w-full bg-slate-800 p-3 rounded-lg text-white border outline-none text-sm transition-all ${
-//                             editingId ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700 focus:border-indigo-500'
-//                         }`}
-//                         placeholder="Type to search or create..." 
-//                         value={item.name}
-//                         onChange={(e) => {
-//                             setItem({...item, name: e.target.value});
-//                             if(!editingId) setShowItemSuggestions(true);
-//                         }}
-//                         onFocus={() => { if(!editingId) setShowItemSuggestions(true); }}
-//                         onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
-//                         autoComplete="off"
-//                     />
-//                     {showItemSuggestions && filteredItems.length > 0 && item.name && (
-//                         <div className="absolute z-50 w-full bg-slate-800 border border-slate-600 rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto custom-scrollbar">
-//                             {filteredItems.map((suggestion) => (
-//                                 <button
-//                                     key={suggestion.sk}
-//                                     onMouseDown={() => selectItemToEdit(suggestion)}
-//                                     className="w-full text-left px-4 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-300 text-xs border-b border-slate-700/50 flex justify-between"
-//                                 >
-//                                     <span className="font-bold">{suggestion.name}</span>
-//                                     <span className="text-[9px] opacity-50">{suggestion.unitPrice} BD</span>
-//                                 </button>
-//                             ))}
-//                         </div>
-//                     )}
-//                 </div>
-//             </div>
-
-//             {/* 2. IMAGE + CATEGORY ROW (SIDE BY SIDE) */}
-//             <div className="flex gap-2 items-end">
-                
-//                 {/* A. Image Uploader (Square 70x70) */}
-//                 <div className="shrink-0">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1 mb-1 block">Image</label>
-//                     <div className="relative w-[70px] h-[70px] bg-slate-800 rounded-lg border border-slate-700 overflow-hidden hover:border-indigo-500 cursor-pointer group shadow-sm transition-all">
-//                         <input 
-//                             type="file" 
-//                             accept="image/*" 
-//                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
-//                             onChange={handleImageUpload}
-//                         />
-//                         {item.imageUrl ? (
-//                             <img src={item.imageUrl} alt="Item" className="w-full h-full object-cover" />
-//                         ) : (
-//                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 group-hover:text-indigo-400 bg-slate-800/50">
-//                                 <span className="text-xl font-light">+</span>
-//                             </div>
-//                         )}
-//                     </div>
-//                 </div>
-
-//                 {/* B. Category Input (Takes remaining width) */}
-//                 <div className="flex-1 space-y-1 relative">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Category <span className="text-red-500">*</span></label>
-//                     <div className="relative h-[70px] flex items-end"> 
-//                         <input 
-//                             className="w-full bg-slate-800 p-3 h-full rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm transition-all placeholder-slate-500"
-//                             placeholder="Select or Type New..." 
-//                             value={category}
-//                             onChange={(e) => {
-//                                 setCategory(e.target.value);
-//                                 setShowCatSuggestions(true);
-//                             }}
-//                             onFocus={() => setShowCatSuggestions(true)}
-//                             onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)}
-//                             autoComplete="off"
-//                         />
-//                         {/* Suggestions */}
-//                         {showCatSuggestions && (
-//                             <div className="absolute top-full z-50 w-full bg-slate-800 border border-slate-600 rounded-xl shadow-2xl mt-1 max-h-40 overflow-y-auto custom-scrollbar">
-//                                 {filteredCategories.map((cat) => (
-//                                     <button
-//                                         key={cat}
-//                                         onMouseDown={() => { setCategory(cat); setShowCatSuggestions(false); }}
-//                                         className="w-full text-left px-4 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-300 text-xs border-b border-slate-700/50 last:border-0"
-//                                     >
-//                                         {cat}
-//                                     </button>
-//                                 ))}
-//                                 {filteredCategories.length === 0 && category && (
-//                                     <div className="px-4 py-2 text-[9px] text-emerald-400 bg-emerald-900/10 border-t border-emerald-500/20">
-//                                         New: "{category.toUpperCase()}"
-//                                     </div>
-//                                 )}
-//                             </div>
-//                         )}
-//                     </div>
-//                 </div>
-//             </div>
-
-//             {/* 3. Price & Quantity */}
-//             <div className="flex gap-2">
-//                 <div className="flex-1 space-y-1">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Price (BD) <span className="text-red-500">*</span></label>
-//                     <input 
-//                         className={`w-full bg-slate-800 p-3 rounded-lg text-white border outline-none text-sm ${
-//                             priceError ? 'border-red-500' : 'border-slate-700 focus:border-indigo-500'
-//                         }`}
-//                         placeholder="0.000" 
-//                         value={item.price}
-//                         onChange={e => {
-//                             const val = e.target.value;
-//                             if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
-//                                 setPriceError("");
-//                                 setItem({ ...item, price: val });
-//                             } else {
-//                                 setPriceError("Num only");
-//                             }
-//                         }} 
-//                     />
-//                 </div>
-                
-//                 <div className="flex-1 space-y-1">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Qty (Opt)</label>
-//                     <input 
-//                         type="number"
-//                         className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm"
-//                         placeholder="0" 
-//                         value={item.quantity}
-//                         onChange={e => setItem({ ...item, quantity: e.target.value })} 
-//                     />
-//                 </div>
-//             </div>
-
-//             {/* 4. Description */}
-//             <div className="space-y-1">
-//                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Description</label>
-//                 <textarea 
-//                     className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 text-xs h-16 focus:border-indigo-500 outline-none resize-none" 
-//                     placeholder="Ingredients..." 
-//                     value={item.description}
-//                     onChange={e => setItem({...item, description: e.target.value})} 
-//                 />
-//             </div>
-
-//             {/* 5. Stock Toggle */}
-//             <div className="flex items-center justify-between bg-slate-800 p-2 px-3 rounded-lg border border-slate-700">
-//                 <span className="text-[10px] font-bold text-slate-300">
-//                     {item.stockStatus ? "✅ Available In Stock" : "❌ Out of Stock"}
-//                 </span>
-//                 <button 
-//                     onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
-//                     className={`relative w-10 h-5 rounded-full transition-colors duration-200 ease-in-out ${
-//                         item.stockStatus ? 'bg-emerald-500' : 'bg-slate-600'
-//                     }`}
-//                 >
-//                     <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-md ${item.stockStatus ? 'translate-x-5' : 'translate-x-0'}`} />
-//                 </button>
-//             </div>
-
-//             {/* Submit Button */}
-//             <button 
-//                 onClick={submit} 
-//                 disabled={saving}
-//                 className={`w-full py-3 rounded-xl font-black text-white text-xs mt-4 shadow-lg transition active:scale-95 flex items-center justify-center gap-2 ${
-//                     editingId 
-//                     ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20' 
-//                     : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20'
-//                 }`}
-//             >
-//                 {saving ? "SAVING..." : (editingId ? "UPDATE ITEM" : "ADD NEW ITEM")}
-//             </button>
-//         </div>
-//     );
-// };
-
-// --- FINAL ITEMS SECTION (No Alerts + Image Preview Fix) ---
+// --- FINAL ITEMS SECTION (Strip Base64 Header on Save / Restore on Load) ---
 const ItemsSection = ({ pk, onUpdate }) => {
+    // Constant for the header to strip/add
+    const BASE64_HEADER = "data:image/jpeg;base64,";
+
     // Form State
     const [item, setItem] = useState({ 
         name: '', 
@@ -454,7 +85,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
         description: '',
         quantity: '',    
         stockStatus: true, 
-        imageUrl: ''       // Base64 String
+        imageUrl: ''       // Holds Full String (with Header) for Preview
     });
     
     // Management State
@@ -471,17 +102,15 @@ const ItemsSection = ({ pk, onUpdate }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     
-    // ✅ NEW: Feedback State (Replaces Alerts)
-    const [feedback, setFeedback] = useState({ msg: '', type: '' }); // type: 'success' | 'error'
+    const [feedback, setFeedback] = useState({ msg: '', type: '' }); 
 
-    // Helper: Show temporary message
     const showMessage = (msg, type = 'success') => {
         setFeedback({ msg, type });
-        setTimeout(() => setFeedback({ msg: '', type: '' }), 4000); // Hide after 4s
+        setTimeout(() => setFeedback({ msg: '', type: '' }), 4000);
     };
 
     // ---------------------------------------------------------
-    // 🖼️ IMAGE HANDLER
+    // 🖼️ IMAGE HANDLER (Generates Full String for Preview)
     // ---------------------------------------------------------
     const handleImageUpload = (event) => {
         const file = event.target.files[0];
@@ -496,8 +125,10 @@ const ItemsSection = ({ pk, onUpdate }) => {
                 canvas.width = 70;
                 canvas.height = 70;
                 ctx.drawImage(img, 0, 0, 70, 70);
-                const optimizedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                setItem(prev => ({ ...prev, imageUrl: optimizedBase64 }));
+                
+                // Full string (Standard Base64 with header)
+                const fullBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                setItem(prev => ({ ...prev, imageUrl: fullBase64 }));
             };
             img.src = e.target.result;
         };
@@ -544,24 +175,29 @@ const ItemsSection = ({ pk, onUpdate }) => {
     );
 
     // ---------------------------------------------------------
-    // 3️⃣ Select Handlers
+    // 3️⃣ Select Handlers (RESTORE HEADER HERE)
     // ---------------------------------------------------------
     const selectItemToEdit = (selectedItem) => {
         setEditingId(selectedItem.sk);
         
-        // ✅ Populate Form & Image
+        // ✅ RE-ATTACH HEADER for Preview
+        // If DB has "abc...", we make it "data:image/jpeg;base64,abc..."
+        const previewImage = selectedItem.imageUrl 
+            ? (selectedItem.imageUrl.startsWith('data:') ? selectedItem.imageUrl : BASE64_HEADER + selectedItem.imageUrl)
+            : '';
+
         setItem({
             name: selectedItem.name,
             price: selectedItem.unitPrice.toString(),
             description: selectedItem.description || '',
             quantity: selectedItem.quantity || '',
             stockStatus: selectedItem.stockStatus,
-            imageUrl: selectedItem.imageUrl || '' // ✅ Loads existing Base64 image
+            imageUrl: previewImage 
         });
         
         setCategory(selectedItem.itemCategory || '');
         setShowItemSuggestions(false);
-        setFeedback({ msg: '', type: '' }); // Clear any old messages
+        setFeedback({ msg: '', type: '' });
     };
 
     const resetToCreateMode = () => {
@@ -574,17 +210,21 @@ const ItemsSection = ({ pk, onUpdate }) => {
     };
 
     // ---------------------------------------------------------
-    // 4️⃣ Submit Handler (No Alerts)
+    // 4️⃣ Submit Handler (STRIP HEADER HERE)
     // ---------------------------------------------------------
     const submit = async () => {
-        // Validation (Inline Feedback)
         if (!item.name.trim()) return showMessage("Item Name is required.", "error");
         if (!item.price) return showMessage("Unit Price is required.", "error");
         if (!category.trim()) return showMessage("Category is required.", "error");
 
         const finalCategory = category.trim().toUpperCase();
+        
+        // ✅ STRIP HEADER before Saving
+        // If "data:image/jpeg;base64,abc...", it becomes "abc..."
+        const dbImageString = item.imageUrl.replace(BASE64_HEADER, '');
+
         setSaving(true);
-        setFeedback({ msg: '', type: '' }); // Clear previous
+        setFeedback({ msg: '', type: '' });
         
         try {
             const payload = {
@@ -595,7 +235,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
                 description: item.description,
                 stockStatus: item.stockStatus,
                 quantity: item.quantity ? parseInt(item.quantity) : 0,
-                imageUrl: item.imageUrl 
+                imageUrl: dbImageString // ✅ Saved without header
             };
 
             if (editingId) {
@@ -622,9 +262,6 @@ const ItemsSection = ({ pk, onUpdate }) => {
             
             await fetchItems();
             if (onUpdate) onUpdate(); 
-            
-            // Optional: Reset form only if Creating (allows rapid entry)
-            // If Updating, keep form visible to show success state
             if (!editingId) resetToCreateMode();
 
         } catch (err) {
@@ -698,7 +335,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
                             onChange={handleImageUpload}
                         />
-                        {/* ✅ DISPLAY IMAGE: Shows uploaded OR DB image */}
+                        {/* Preview uses item.imageUrl which always has header in state */}
                         {item.imageUrl ? (
                             <img src={item.imageUrl} alt="Item" className="w-full h-full object-cover" />
                         ) : (
@@ -830,6 +467,392 @@ const ItemsSection = ({ pk, onUpdate }) => {
         </div>
     );
 };
+
+// --- FINAL ITEMS SECTION (No Alerts + Image Preview Fix) ---
+// const ItemsSection = ({ pk, onUpdate }) => {
+//     // Form State
+//     const [item, setItem] = useState({ 
+//         name: '', 
+//         price: '',
+//         description: '',
+//         quantity: '',    
+//         stockStatus: true, 
+//         imageUrl: ''       // Base64 String
+//     });
+    
+//     // Management State
+//     const [allItems, setAllItems] = useState([]); 
+//     const [editingId, setEditingId] = useState(null); 
+    
+//     // Category State
+//     const [category, setCategory] = useState(''); 
+//     const [existingCategories, setExistingCategories] = useState([]);
+    
+//     // UI State
+//     const [showItemSuggestions, setShowItemSuggestions] = useState(false);
+//     const [showCatSuggestions, setShowCatSuggestions] = useState(false);
+//     const [isLoading, setIsLoading] = useState(true);
+//     const [saving, setSaving] = useState(false);
+    
+//     // ✅ NEW: Feedback State (Replaces Alerts)
+//     const [feedback, setFeedback] = useState({ msg: '', type: '' }); // type: 'success' | 'error'
+
+//     // Helper: Show temporary message
+//     const showMessage = (msg, type = 'success') => {
+//         setFeedback({ msg, type });
+//         setTimeout(() => setFeedback({ msg: '', type: '' }), 4000); // Hide after 4s
+//     };
+
+//     // ---------------------------------------------------------
+//     // 🖼️ IMAGE HANDLER
+//     // ---------------------------------------------------------
+//     const handleImageUpload = (event) => {
+//         const file = event.target.files[0];
+//         if (!file) return;
+
+//         const reader = new FileReader();
+//         reader.onload = (e) => {
+//             const img = new Image();
+//             img.onload = () => {
+//                 const canvas = document.createElement('canvas');
+//                 const ctx = canvas.getContext('2d');
+//                 canvas.width = 70;
+//                 canvas.height = 70;
+//                 ctx.drawImage(img, 0, 0, 70, 70);
+//                 const optimizedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+//                 setItem(prev => ({ ...prev, imageUrl: optimizedBase64 }));
+//             };
+//             img.src = e.target.result;
+//         };
+//         reader.readAsDataURL(file);
+//     };
+
+//     // ---------------------------------------------------------
+//     // 1️⃣ Fetch Data
+//     // ---------------------------------------------------------
+//     const fetchItems = async () => {
+//         setIsLoading(true);
+//         try {
+//             const { data } = await client.models.BusinessData.listByBusiness({
+//                 pk: pk,
+//                 sk: { beginsWith: 'ITEM#' }
+//             });
+
+//             const sortedItems = data.sort((a, b) => a.name.localeCompare(b.name));
+//             setAllItems(sortedItems);
+
+//             const uniqueCats = [...new Set(
+//                 data.map(i => i.itemCategory).filter(c => c)
+//             )].sort();
+
+//             setExistingCategories(uniqueCats);
+//         } catch (err) {
+//             console.error("Failed to fetch items", err);
+//             showMessage("Failed to load menu items.", "error");
+//         } finally {
+//             setIsLoading(false);
+//         }
+//     };
+
+//     useEffect(() => { fetchItems(); }, [pk]);
+
+//     // ---------------------------------------------------------
+//     // 2️⃣ Filter Logics
+//     // ---------------------------------------------------------
+//     const filteredItems = allItems.filter(i => 
+//         i.name.toLowerCase().includes(item.name.toLowerCase())
+//     );
+//     const filteredCategories = existingCategories.filter(c => 
+//         c.toLowerCase().includes(category.toLowerCase())
+//     );
+
+//     // ---------------------------------------------------------
+//     // 3️⃣ Select Handlers
+//     // ---------------------------------------------------------
+//     const selectItemToEdit = (selectedItem) => {
+//         setEditingId(selectedItem.sk);
+        
+//         // ✅ Populate Form & Image
+//         setItem({
+//             name: selectedItem.name,
+//             price: selectedItem.unitPrice.toString(),
+//             description: selectedItem.description || '',
+//             quantity: selectedItem.quantity || '',
+//             stockStatus: selectedItem.stockStatus,
+//             imageUrl: selectedItem.imageUrl || '' // ✅ Loads existing Base64 image
+//         });
+        
+//         setCategory(selectedItem.itemCategory || '');
+//         setShowItemSuggestions(false);
+//         setFeedback({ msg: '', type: '' }); // Clear any old messages
+//     };
+
+//     const resetToCreateMode = () => {
+//         setEditingId(null);
+//         setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true, imageUrl: '' });
+//         setCategory('');
+//         setShowItemSuggestions(false);
+//         setShowCatSuggestions(false);
+//         setFeedback({ msg: '', type: '' });
+//     };
+
+//     // ---------------------------------------------------------
+//     // 4️⃣ Submit Handler (No Alerts)
+//     // ---------------------------------------------------------
+//     const submit = async () => {
+//         // Validation (Inline Feedback)
+//         if (!item.name.trim()) return showMessage("Item Name is required.", "error");
+//         if (!item.price) return showMessage("Unit Price is required.", "error");
+//         if (!category.trim()) return showMessage("Category is required.", "error");
+
+//         const finalCategory = category.trim().toUpperCase();
+//         setSaving(true);
+//         setFeedback({ msg: '', type: '' }); // Clear previous
+        
+//         try {
+//             const payload = {
+//                 pk: pk,
+//                 name: item.name.trim(),
+//                 unitPrice: parseFloat(item.price),
+//                 itemCategory: finalCategory,
+//                 description: item.description,
+//                 stockStatus: item.stockStatus,
+//                 quantity: item.quantity ? parseInt(item.quantity) : 0,
+//                 imageUrl: item.imageUrl 
+//             };
+
+//             if (editingId) {
+//                 // UPDATE
+//                 await client.models.BusinessData.update({ ...payload, sk: editingId });
+//                 showMessage(`✅ Updated: ${item.name}`);
+//             } else {
+//                 // CREATE
+//                 const maxId = allItems.reduce((max, currentItem) => {
+//                     const parts = currentItem.sk.split('#'); 
+//                     const num = parseInt(parts[1], 10);      
+//                     return !isNaN(num) && num > max ? num : max;
+//                 }, 0);
+
+//                 const formattedId = `ITEM#${String(maxId + 1).padStart(3, '0')}`;
+                
+//                 await client.models.BusinessData.create({
+//                     ...payload,
+//                     sk: formattedId,
+//                     entityType: 'ITEM'
+//                 });
+//                 showMessage(`✅ Created: ${item.name}`);
+//             }
+            
+//             await fetchItems();
+//             if (onUpdate) onUpdate(); 
+            
+//             // Optional: Reset form only if Creating (allows rapid entry)
+//             // If Updating, keep form visible to show success state
+//             if (!editingId) resetToCreateMode();
+
+//         } catch (err) {
+//             console.error("Error saving item:", err);
+//             showMessage("Failed to save item. See console.", "error");
+//         } finally {
+//             setSaving(false);
+//         }
+//     };
+
+//     return (
+//         <div className="space-y-4 max-w-sm mx-auto pt-4 animate-fade-in pb-20">
+//             {/* Header */}
+//             <header className="flex justify-between items-end border-b border-indigo-500 pb-2 mb-2">
+//                 <div>
+//                     <h2 className="text-indigo-400 font-bold uppercase text-xs tracking-widest">Menu Manager</h2>
+//                     <p className="text-[10px] text-slate-500 italic">
+//                         {editingId ? "✏️ Updating Item" : "✨ Creating New Item"}
+//                     </p>
+//                 </div>
+//                 {editingId && (
+//                     <button onClick={resetToCreateMode} className="text-[9px] bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors">✕ Cancel</button>
+//                 )}
+//             </header>
+
+//             {/* 1. Item Name (Search/Create) */}
+//             <div className="space-y-1 relative">
+//                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Item Name <span className="text-red-500">*</span></label>
+//                 <div className="relative">
+//                     <input 
+//                         className={`w-full bg-slate-800 p-3 rounded-lg text-white border outline-none text-sm transition-all ${
+//                             editingId ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700 focus:border-indigo-500'
+//                         }`}
+//                         placeholder="Type to search or create..." 
+//                         value={item.name}
+//                         onChange={(e) => {
+//                             setItem({...item, name: e.target.value});
+//                             if(!editingId) setShowItemSuggestions(true);
+//                         }}
+//                         onFocus={() => { if(!editingId) setShowItemSuggestions(true); }}
+//                         onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
+//                         autoComplete="off"
+//                     />
+//                     {showItemSuggestions && filteredItems.length > 0 && item.name && (
+//                         <div className="absolute z-50 w-full bg-slate-800 border border-slate-600 rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto custom-scrollbar">
+//                             {filteredItems.map((suggestion) => (
+//                                 <button
+//                                     key={suggestion.sk}
+//                                     onMouseDown={() => selectItemToEdit(suggestion)}
+//                                     className="w-full text-left px-4 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-300 text-xs border-b border-slate-700/50 flex justify-between"
+//                                 >
+//                                     <span className="font-bold">{suggestion.name}</span>
+//                                     <span className="text-[9px] opacity-50">{suggestion.unitPrice} BD</span>
+//                                 </button>
+//                             ))}
+//                         </div>
+//                     )}
+//                 </div>
+//             </div>
+
+//             {/* 2. IMAGE + CATEGORY ROW */}
+//             <div className="flex gap-2 items-end">
+                
+//                 {/* A. Image Uploader */}
+//                 <div className="shrink-0">
+//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1 mb-1 block">Image</label>
+//                     <div className="relative w-[70px] h-[70px] bg-slate-800 rounded-lg border border-slate-700 overflow-hidden hover:border-indigo-500 cursor-pointer group shadow-sm transition-all">
+//                         <input 
+//                             type="file" 
+//                             accept="image/*" 
+//                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
+//                             onChange={handleImageUpload}
+//                         />
+//                         {/* ✅ DISPLAY IMAGE: Shows uploaded OR DB image */}
+//                         {item.imageUrl ? (
+//                             <img src={item.imageUrl} alt="Item" className="w-full h-full object-cover" />
+//                         ) : (
+//                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 group-hover:text-indigo-400 bg-slate-800/50">
+//                                 <span className="text-xl font-light">+</span>
+//                             </div>
+//                         )}
+//                     </div>
+//                 </div>
+
+//                 {/* B. Category Input */}
+//                 <div className="flex-1 space-y-1 relative">
+//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Category <span className="text-red-500">*</span></label>
+//                     <div className="relative h-[70px] flex items-end"> 
+//                         <input 
+//                             className="w-full bg-slate-800 p-3 h-full rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm transition-all placeholder-slate-500"
+//                             placeholder="Select or Type New..." 
+//                             value={category}
+//                             onChange={(e) => {
+//                                 setCategory(e.target.value);
+//                                 setShowCatSuggestions(true);
+//                             }}
+//                             onFocus={() => setShowCatSuggestions(true)}
+//                             onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)}
+//                             autoComplete="off"
+//                         />
+//                         {/* Suggestions */}
+//                         {showCatSuggestions && (
+//                             <div className="absolute top-full z-50 w-full bg-slate-800 border border-slate-600 rounded-xl shadow-2xl mt-1 max-h-40 overflow-y-auto custom-scrollbar">
+//                                 {filteredCategories.map((cat) => (
+//                                     <button
+//                                         key={cat}
+//                                         onMouseDown={() => { setCategory(cat); setShowCatSuggestions(false); }}
+//                                         className="w-full text-left px-4 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-300 text-xs border-b border-slate-700/50 last:border-0"
+//                                     >
+//                                         {cat}
+//                                     </button>
+//                                 ))}
+//                                 {filteredCategories.length === 0 && category && (
+//                                     <div className="px-4 py-2 text-[9px] text-emerald-400 bg-emerald-900/10 border-t border-emerald-500/20">
+//                                         New: "{category.toUpperCase()}"
+//                                     </div>
+//                                 )}
+//                             </div>
+//                         )}
+//                     </div>
+//                 </div>
+//             </div>
+
+//             {/* 3. Price & Quantity */}
+//             <div className="flex gap-2">
+//                 <div className="flex-1 space-y-1">
+//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Price (BD) <span className="text-red-500">*</span></label>
+//                     <input 
+//                         className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm"
+//                         placeholder="0.000" 
+//                         value={item.price}
+//                         onChange={e => {
+//                             const val = e.target.value;
+//                             if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
+//                                 setItem({ ...item, price: val });
+//                             }
+//                         }} 
+//                     />
+//                 </div>
+                
+//                 <div className="flex-1 space-y-1">
+//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Qty (Opt)</label>
+//                     <input 
+//                         type="number"
+//                         className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm"
+//                         placeholder="0" 
+//                         value={item.quantity}
+//                         onChange={e => setItem({ ...item, quantity: e.target.value })} 
+//                     />
+//                 </div>
+//             </div>
+
+//             {/* 4. Description */}
+//             <div className="space-y-1">
+//                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Description</label>
+//                 <textarea 
+//                     className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 text-xs h-16 focus:border-indigo-500 outline-none resize-none" 
+//                     placeholder="Ingredients..." 
+//                     value={item.description}
+//                     onChange={e => setItem({...item, description: e.target.value})} 
+//                 />
+//             </div>
+
+//             {/* 5. Stock Toggle */}
+//             <div className="flex items-center justify-between bg-slate-800 p-2 px-3 rounded-lg border border-slate-700">
+//                 <span className="text-[10px] font-bold text-slate-300">
+//                     {item.stockStatus ? "✅ Available In Stock" : "❌ Out of Stock"}
+//                 </span>
+//                 <button 
+//                     onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
+//                     className={`relative w-10 h-5 rounded-full transition-colors duration-200 ease-in-out ${
+//                         item.stockStatus ? 'bg-emerald-500' : 'bg-slate-600'
+//                     }`}
+//                 >
+//                     <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-md ${item.stockStatus ? 'translate-x-5' : 'translate-x-0'}`} />
+//                 </button>
+//             </div>
+
+//             {/* Submit Button & Feedback */}
+//             <div className="space-y-2 pt-2">
+//                 {/* ✅ FEEDBACK MESSAGE AREA */}
+//                 {feedback.msg && (
+//                     <div className={`text-center text-[10px] font-bold py-1 px-2 rounded ${
+//                         feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border border-red-500/30' 
+//                         : 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30'
+//                     }`}>
+//                         {feedback.msg}
+//                     </div>
+//                 )}
+
+//                 <button 
+//                     onClick={submit} 
+//                     disabled={saving}
+//                     className={`w-full py-3 rounded-xl font-black text-white text-xs shadow-lg transition active:scale-95 flex items-center justify-center gap-2 ${
+//                         editingId 
+//                         ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20' 
+//                         : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20'
+//                     }`}
+//                 >
+//                     {saving ? "SAVING..." : (editingId ? "UPDATE ITEM" : "ADD NEW ITEM")}
+//                 </button>
+//             </div>
+//         </div>
+//     );
+// };
 // ... (KEEP RestaurantSection, BranchesSection, PrivacyPolicySection AS IS)
 const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
     // Identity State
