@@ -4,7 +4,12 @@ import AgentsView from './AgentsView';
 
 const TABS = ['Restaurant', 'Branches', 'Items', 'Agents', 'ⓘ'];
 
-// 🗑️ REMOVED: const ITEM_CATEGORIES = [...] (User defines them now)
+const ITEM_CATEGORIES = [
+    'STARTERS', 'MAIN_COURSE', 'BREAKFAST', 'FASTFOOD', 'LUNCH_SPECIALS',
+    'SALADS', 'SOUPS', 'SANDWICHES_WRAPS', 'PIZZA_PASTA', 'SIDES',
+    'SAUCES_EXTRAS', 'DRINKS_COLD', 'DRINKS_HOT', 'SMOOTHIES_SHAKES',
+    'DESSERTS', 'KIDS_MEAL', 'BUNDLES_DEALS', 'HEALTHY_DIET'
+];
 
 export default function SetupConsole({ phoneNbr, onDataChange, businessLocation, setModal }) {
     const [activeTab, setActiveTab] = useState('Restaurant');
@@ -52,15 +57,13 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
                 {activeTab === 'Restaurant' && (
                     <RestaurantSection 
                         pk={businessPk} 
-                        phoneNbr={phoneNbr} 
+                        phoneNbr={phoneNbr} // Pass phone for testing
                         onShowPrivacy={() => setActiveTab('ⓘ')} 
                     />
                 )}
                 
                 {activeTab === 'Branches' && <BranchesSection pk={businessPk} />}
-                {/* ✅ UPDATED ITEMS SECTION */}
                 {activeTab === 'Items' && <ItemsSection pk={businessPk} onUpdate={onDataChange} />}
-                
                 {activeTab === 'Agents' && (
                     <div className="animate-fade-in">
                         <AgentsView phoneNbr={phoneNbr} setModal={setModal} onAgentAdded={onDataChange} businessLocation={businessLocation} />
@@ -73,362 +76,7 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
     );
 }
 
-// --- FINAL ITEMS SECTION (Boolean Stock, No Visible Field) ---
-// --- UPDATED ITEMS SECTION (Search-to-Edit / Type-to-Create) ---
-const ItemsSection = ({ pk, onUpdate }) => {
-    // Form State
-    const [item, setItem] = useState({ 
-        name: '', 
-        price: '',
-        description: '',
-        quantity: '',    
-        stockStatus: true 
-    });
-    
-    // Management State
-    const [allItems, setAllItems] = useState([]); 
-    const [editingId, setEditingId] = useState(null); 
-    const [showSuggestions, setShowSuggestions] = useState(false); // Controls dropdown visibility
-
-    // Category State
-    const [categoryInput, setCategoryInput] = useState({
-        mode: 'SELECT',
-        selected: '',
-        new: ''
-    });
-    const [existingCategories, setExistingCategories] = useState([]);
-    
-    const [isLoading, setIsLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [priceError, setPriceError] = useState("");
-
-    // 1️⃣ Fetch Items
-    const fetchItems = async () => {
-        setIsLoading(true);
-        try {
-            const { data } = await client.models.BusinessData.listByBusiness({
-                pk: pk,
-                sk: { beginsWith: 'ITEM#' }
-            });
-
-            const sortedItems = data.sort((a, b) => a.name.localeCompare(b.name));
-            setAllItems(sortedItems);
-
-            const uniqueCats = [...new Set(
-                data.map(i => i.itemCategory).filter(c => c)
-            )].sort();
-
-            setExistingCategories(uniqueCats);
-            
-            if (!editingId && uniqueCats.length > 0) {
-                setCategoryInput(prev => ({ ...prev, mode: 'SELECT', selected: uniqueCats[0] }));
-            }
-        } catch (err) {
-            console.error("Failed to fetch items", err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchItems();
-    }, [pk]);
-
-    // 2️⃣ Filter Logic
-    // Only show suggestions if user is typing (not empty) and NOT currently editing a specific ID
-    // (Or you can allow filtering while editing to switch items, but usually typing means renaming)
-    const filteredSuggestions = allItems.filter(i => 
-        i.name.toLowerCase().includes(item.name.toLowerCase())
-    );
-
-    // 3️⃣ handlers
-    const handleNameChange = (e) => {
-        const val = e.target.value;
-        setItem(prev => ({ ...prev, name: val }));
-        
-        // If we are NOT editing, show suggestions as they type
-        // If we ARE editing, user might be renaming, so we don't necessarily pop up the list 
-        // unless you want them to be able to switch items mid-edit. 
-        // Let's stick to: If editing, hide suggestions (assume renaming). 
-        // If creating, show suggestions (search).
-        if (!editingId) {
-            setShowSuggestions(true);
-        }
-    };
-
-    const selectItemToEdit = (selectedItem) => {
-        setEditingId(selectedItem.sk);
-        setItem({
-            name: selectedItem.name,
-            price: selectedItem.unitPrice.toString(),
-            description: selectedItem.description || '',
-            quantity: selectedItem.quantity || '',
-            stockStatus: selectedItem.stockStatus 
-        });
-        setCategoryInput({ mode: 'SELECT', selected: selectedItem.itemCategory, new: '' });
-        setShowSuggestions(false); // Hide dropdown
-    };
-
-    const resetToCreateMode = () => {
-        setEditingId(null);
-        setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true });
-        setShowSuggestions(false);
-    };
-
-    // 4️⃣ Submit Handler
-    const submit = async () => {
-        if (!item.name.trim()) return alert("Item Name is required");
-        if (!item.price) return alert("Unit Price is required");
-        
-        let finalCategory = '';
-        if (categoryInput.mode === 'CREATE') {
-            finalCategory = categoryInput.new.trim().toUpperCase();
-            if (!finalCategory) return alert("Please enter a new Category Name");
-        } else {
-            finalCategory = categoryInput.selected;
-        }
-
-        setSaving(true);
-        try {
-            if (editingId) {
-                // 🅰️ UPDATE EXISTING
-                await client.models.BusinessData.update({
-                    pk: pk,
-                    sk: editingId,
-                    name: item.name.trim(),
-                    unitPrice: parseFloat(item.price),
-                    itemCategory: finalCategory,
-                    description: item.description,
-                    stockStatus: item.stockStatus,
-                    quantity: item.quantity ? parseInt(item.quantity) : 0,
-                });
-                alert(`✅ Updated: ${item.name}`);
-            } else {
-                // 🅱️ CREATE NEW
-                const maxId = allItems.reduce((max, currentItem) => {
-                    const parts = currentItem.sk.split('#'); 
-                    const num = parseInt(parts[1], 10);      
-                    return !isNaN(num) && num > max ? num : max;
-                }, 0);
-
-                const nextNumber = maxId + 1;
-                const formattedId = `ITEM#${String(nextNumber).padStart(3, '0')}`;
-
-                await client.models.BusinessData.create({
-                    pk, 
-                    sk: formattedId,
-                    name: item.name.trim(),
-                    unitPrice: parseFloat(item.price),
-                    itemCategory: finalCategory,     
-                    description: item.description,
-                    stockStatus: item.stockStatus, 
-                    quantity: item.quantity ? parseInt(item.quantity) : 0, 
-                    entityType: 'ITEM',
-                    imageUrl: "" 
-                });
-                alert(`✅ Created: ${item.name}`);
-            }
-            
-            await fetchItems();
-            if (onUpdate) onUpdate(); 
-            // Optional: Reset after save or keep allowing edits? Usually reset is safer.
-            resetToCreateMode();
-
-        } catch (err) {
-            console.error("Error saving item:", err);
-            alert("Failed to save. Check console.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <div className="space-y-4 max-w-sm mx-auto pt-4 animate-fade-in pb-20">
-            <header className="flex justify-between items-end border-b border-indigo-500 pb-2 mb-4">
-                <div>
-                    <h2 className="text-indigo-400 font-bold uppercase text-xs tracking-widest">Menu Manager</h2>
-                    <p className="text-[10px] text-slate-500 italic">
-                        {editingId ? "✏️ Mode: Updating Item" : "✨ Mode: Creating New Item"}
-                    </p>
-                </div>
-                {editingId && (
-                    <button 
-                        onClick={resetToCreateMode}
-                        className="text-[9px] bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors"
-                    >
-                        ✕ Cancel Edit
-                    </button>
-                )}
-            </header>
-
-            {/* 1. Item Name (Filter / Input) */}
-            <div className="space-y-1 relative">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Item Name <span className="text-red-500">*</span></label>
-                
-                {/* Input Field */}
-                <div className="relative">
-                    <input 
-                        className={`w-full bg-slate-800 p-4 rounded-xl text-white border outline-none transition-all ${
-                            editingId ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700 focus:border-indigo-500'
-                        }`}
-                        placeholder="Type to search or create..." 
-                        value={item.name}
-                        onChange={handleNameChange}
-                        onFocus={() => { if(!editingId && item.name) setShowSuggestions(true); }}
-                        // Delay blur to allow clicking suggestions
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        autoComplete="off"
-                    />
-                    {editingId && (
-                        <span className="absolute right-3 top-4 text-xs" title="Editing Existing Item">✏️</span>
-                    )}
-                </div>
-
-                {/* Suggestions Dropdown (Absolute) */}
-                {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full bg-slate-800 border border-slate-600 rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto custom-scrollbar">
-                        {filteredSuggestions.map((suggestion) => (
-                            <button
-                                key={suggestion.sk}
-                                onMouseDown={() => selectItemToEdit(suggestion)} // onMouseDown fires before onBlur
-                                className="w-full text-left px-4 py-3 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-300 text-xs border-b border-slate-700/50 last:border-0 transition-colors flex justify-between group"
-                            >
-                                <span className="font-bold group-hover:translate-x-1 transition-transform">{suggestion.name}</span>
-                                <span className="text-[10px] opacity-50">{suggestion.unitPrice} BD</span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-                 {showSuggestions && item.name && filteredSuggestions.length === 0 && (
-                     <div className="absolute z-50 w-full bg-slate-800/90 border border-slate-700 rounded-xl p-3 mt-1 text-center">
-                         <p className="text-[10px] text-emerald-400">✨ New Item detected. Press Submit to create.</p>
-                     </div>
-                 )}
-            </div>
-
-            {/* 2. Category Selection */}
-            <div className="space-y-1">
-                <div className="flex justify-between items-center ml-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase">Category <span className="text-red-500">*</span></label>
-                    {existingCategories.length > 0 && (
-                        <button 
-                            onClick={() => setCategoryInput(prev => ({ 
-                                ...prev, 
-                                mode: prev.mode === 'SELECT' ? 'CREATE' : 'SELECT' 
-                            }))}
-                            className="text-[9px] font-bold text-indigo-400 hover:text-white hover:underline uppercase"
-                        >
-                            {categoryInput.mode === 'SELECT' ? '+ Create New' : '← Select Existing'}
-                        </button>
-                    )}
-                </div>
-
-                {isLoading ? (
-                    <div className="p-4 bg-slate-800 rounded-xl text-xs text-slate-500 text-center animate-pulse">Loading...</div>
-                ) : (
-                    categoryInput.mode === 'SELECT' ? (
-                        <select 
-                            className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 outline-none focus:ring-2 ring-indigo-500 appearance-none font-bold text-sm"
-                            value={categoryInput.selected}
-                            onChange={e => setCategoryInput({...categoryInput, selected: e.target.value})}
-                        >
-                            {existingCategories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    ) : (
-                        <input 
-                            className="w-full bg-indigo-900/20 p-4 rounded-xl text-white border border-indigo-500/50 focus:border-indigo-500 outline-none placeholder-indigo-300/30"
-                            placeholder="NEW CATEGORY NAME (e.g. BURGERS)"
-                            value={categoryInput.new}
-                            onChange={e => setCategoryInput({...categoryInput, new: e.target.value.toUpperCase()})}
-                            autoFocus
-                        />
-                    )
-                )}
-            </div>
-
-            {/* 3. Price & Quantity */}
-            <div className="flex gap-2">
-                <div className="flex-1 space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Price (BD) <span className="text-red-500">*</span></label>
-                    <input 
-                        className={`w-full bg-slate-800 p-4 rounded-xl text-white border outline-none ${
-                            priceError ? 'border-red-500' : 'border-slate-700 focus:border-indigo-500'
-                        }`}
-                        placeholder="0.000" 
-                        value={item.price}
-                        onChange={e => {
-                            const val = e.target.value;
-                            if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
-                                setPriceError("");
-                                setItem({ ...item, price: val });
-                            } else {
-                                setPriceError("Numbers only");
-                            }
-                        }} 
-                    />
-                </div>
-                
-                <div className="flex-1 space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Qty (Opt)</label>
-                    <input 
-                        type="number"
-                        className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:border-indigo-500 outline-none"
-                        placeholder="0" 
-                        value={item.quantity}
-                        onChange={e => setItem({ ...item, quantity: e.target.value })} 
-                    />
-                </div>
-            </div>
-
-            {/* 4. Description */}
-            <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Description</label>
-                <textarea 
-                    className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 text-sm h-20 focus:border-indigo-500 outline-none resize-none" 
-                    placeholder="Ingredients..." 
-                    value={item.description}
-                    onChange={e => setItem({...item, description: e.target.value})} 
-                />
-            </div>
-
-            {/* 5. Stock Status Toggle (Boolean) */}
-            <div className="flex items-center justify-between bg-slate-800 p-3 rounded-xl border border-slate-700">
-                <span className="text-xs font-bold text-slate-300">
-                    {item.stockStatus ? "✅ Available In Stock" : "❌ Out of Stock"}
-                </span>
-                <button 
-                    onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
-                    className={`relative w-12 h-6 rounded-full transition-colors duration-200 ease-in-out ${
-                        item.stockStatus ? 'bg-emerald-500' : 'bg-slate-600'
-                    }`}
-                >
-                    <span 
-                        className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-md ${
-                            item.stockStatus ? 'translate-x-6' : 'translate-x-0'
-                        }`} 
-                    />
-                </button>
-            </div>
-
-            {/* Submit Button */}
-            <button 
-                onClick={submit} 
-                disabled={saving}
-                className={`w-full py-4 rounded-xl font-black text-white mt-6 shadow-lg transition active:scale-95 flex items-center justify-center gap-2 ${
-                    editingId 
-                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20' 
-                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20'
-                }`}
-            >
-                {saving ? "SAVING..." : (editingId ? "UPDATE ITEM" : "ADD NEW ITEM")}
-            </button>
-        </div>
-    );
-};
-
-// ... (KEEP RestaurantSection, BranchesSection, PrivacyPolicySection AS IS)
+// --- UPDATED RESTAURANT SECTION ---
 const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
     // Identity State
     const [name, setName] = useState('');
@@ -610,7 +258,140 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
         </div>
     );
 };
+// --- SUB-SECTION: ITEMS ---
+const ItemsSection = ({ pk, onUpdate }) => {
+    const [item, setItem] = useState({ 
+        name: '', 
+        category: 'MAIN_COURSE', 
+        price: '',
+        description: '' 
+    });
+    const [saving, setSaving] = useState(false);
+    const [priceError, setPriceError] = useState("");
 
+    const submit = async () => {
+        if (!item.name || !item.price) return alert("Please enter name and price");
+        
+        setSaving(true);
+        try {
+            // 1️⃣ Step 1: Query existing items to determine the next ID
+            const { data: existingItems } = await client.models.BusinessData.listByBusiness({
+                pk: pk,
+                sk: { beginsWith: 'ITEM#' }
+            });
+
+            // 2️⃣ Step 2: Calculate the new number (e.g., 5 items exist -> next is 6)
+            const nextNumber = existingItems.length + 1;
+            
+            // 3️⃣ Step 3: Format as ITEM#00X (e.g., ITEM#006)
+            const formattedId = `ITEM#${String(nextNumber).padStart(3, '0')}`;
+            
+            console.log(`Creating item with sequenced ID: ${formattedId}`);
+
+            // 4️⃣ Step 4: Create the record
+            await client.models.BusinessData.create({
+                pk, 
+                sk: formattedId,
+                name: item.name,
+                unitPrice: parseFloat(item.price),
+                itemCategory: item.category,
+                description: item.description,
+                stockStatus: 'IN_STOCK',
+                entityType: 'Product'
+            });
+            
+            if (onUpdate) onUpdate(); 
+            alert(`Success! ${item.name} saved as ${formattedId}`);
+            
+            // Reset form
+            setItem({ name: '', category: 'MAIN_COURSE', price: '', description: '' });
+        } catch (err) {
+            console.error("Error adding sequenced item:", err);
+            alert("Error: Could not determine next item ID.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4 max-w-sm mx-auto pt-4">
+            <h2 className="text-indigo-400 font-bold uppercase text-xs tracking-widest">Add Item ({pk})</h2>
+            
+            <input 
+                className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700" 
+                placeholder="Meal Name" 
+                value={item.name}
+                onChange={e => setItem({...item, name: e.target.value})} 
+            />
+            <textarea 
+                className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 text-sm h-24 focus:ring-2 ring-indigo-500 outline-none resize-none" 
+                placeholder="Brief Description (e.g., 200g Beef, Cheddar, Special Sauce...)" 
+                value={item.description}
+                onChange={e => setItem({...item, description: e.target.value})} 
+            />
+
+            <div className="flex gap-2">
+    <div className="flex flex-col flex-1 gap-1">
+    <input 
+        className={`w-full bg-slate-800 p-4 rounded-xl text-white border transition-all outline-none ${
+            priceError ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-700 focus:ring-2 ring-indigo-500'
+        }`}
+        type="text" // Use text to allow manual validation of the string
+        placeholder="Price (BD)" 
+        value={item.price}
+        onChange={e => {
+            const val = e.target.value;
+            
+            // 1. Allow empty input (user deleting)
+            if (val === "") {
+                setPriceError("");
+                setItem({ ...item, price: "" });
+                return;
+            }
+
+            // 2. Regex check: Is it a valid positive number/decimal?
+            const isNumeric = /^[0-9]*\.?[0-9]*$/.test(val);
+
+            if (!isNumeric) {
+                setPriceError("Please enter numbers only");
+            } else {
+                setPriceError("");
+                setItem({ ...item, price: val });
+            }
+        }} 
+    />
+    {/* ⚠️ Warning Message under the field */}
+    {priceError && (
+        <span className="text-[10px] text-red-400 font-bold ml-2 animate-pulse">
+            {priceError}
+        </span>
+    )}
+</div>
+                
+                <select 
+                    className="flex-1 bg-slate-800 p-4 rounded-xl text-white border border-slate-700 text-xs font-bold"
+                    value={item.category}
+                    onChange={e => setItem({...item, category: e.target.value})}
+                >
+                    {ITEM_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                            {cat.replace(/_/g, ' ')}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            <button 
+                onClick={submit} 
+                disabled={saving}
+                className="w-full bg-indigo-600 py-4 rounded-xl font-bold text-white mt-6 shadow-lg shadow-indigo-900/20 disabled:opacity-50 transition active:scale-95"
+            >
+                {saving ? "CALCULATING ID..." : "SUBMIT TO MENU"}
+            </button>
+        </div>
+    );
+};
+// --- SUB-SECTION: BRANCHES ---
 const BranchesSection = ({ pk }) => {
     const [branchName, setBranchName] = useState('');
     const [coords, setCoords] = useState({ lat: '', lng: '' });
