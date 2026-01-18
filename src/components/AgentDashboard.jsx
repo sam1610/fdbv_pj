@@ -492,6 +492,42 @@ const AgentDashboard = ({ agentPhone, businessLocation , agentName}) => {
         if (nextToken) fetchOrders(nextToken); 
     };
 
+    // ------------------------------------------------------------
+    // ✅ 12. WAKE LOCK (Prevents Screen Sleep & Throttling)
+    // ------------------------------------------------------------
+   useEffect(() => {
+        let wakeLock = null;
+
+        const requestWakeLock = async () => {
+            try {
+                // Check if the browser supports Wake Lock
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('💡 Screen Wake Lock active: Tracking ensured');
+                }
+            } catch (err) {
+                console.warn(`⚠️ Wake Lock failed: ${err.name}, ${err.message}`);
+            }
+        };
+
+        // 1. Request lock immediately on component load
+        requestWakeLock();
+
+        // 2. Re-acquire lock if the user switches tabs/apps and comes back
+        // (Browsers automatically release the lock when visibility changes)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                requestWakeLock();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (wakeLock) wakeLock.release();
+        };
+    }, []);
     return (
         <div className="h-screen flex flex-col bg-slate-900 relative overflow-hidden">
             {/* Header */}
