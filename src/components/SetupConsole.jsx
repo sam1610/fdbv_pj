@@ -602,7 +602,7 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
                 showMessage("Connection cancelled.", "error");
             }
         }, {
-            config_id: '', 
+            config_id: '875468518461256', 
             response_type: 'code',
             override_default_response_type: true,
             extras: {

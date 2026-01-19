@@ -419,9 +419,6 @@ const AgentDashboard = ({ agentPhone, businessLocation , agentName}) => {
                                 <b>${shortId}</b> <span style="float:right">${isDelivered ? '✅' : '🚚'}</span>
                             </div>
                             <div style="max-height:150px; overflow-y:auto;">${itemsHtml}</div>
-                            <div style="margin-top:5px; font-size:10px; color:#64748b;">
-                                Customer: ${order.customer || 'N/A'}
-                            </div>
                         </div>
                       `);
                   } catch (err) {
