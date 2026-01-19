@@ -10,9 +10,9 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { LocationClient, ListDevicePositionsCommand } from "@aws-sdk/client-location";
 
 // --- CONFIG ---
-const REFRESH_RATE_MS = 10000; 
+const REFRESH_RATE_MS = 5000; // 5 Seconds refresh
 const ANIMATION_DURATION_MS = REFRESH_RATE_MS; 
-const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 Minutes = Stale
+const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 Mins = Stale
 
 // --- HELPERS ---
 const getCleanPhone = (id) => String(id || "").replace(/[^0-9]/g, '');
@@ -41,14 +41,12 @@ const DeliveryOptimizer = ({
   const mapInstance = useRef(null);
   const animationFrameId = useRef(null);
   
-  // Stores Start/End positions AND Last Update Time
+  // State
   const agentAnimationState = useRef({}); 
-  
   const latestOrdersRef = useRef(orders);
   const latestAgentsRef = useRef(agents);
   const markersRef = useRef({});          
 
-  // State
   const [showDelivered, setShowDelivered] = useState(true);
   const [showDelivering, setShowDelivering] = useState(true);
   const [assignments, setAssignments] = useState({});
@@ -78,7 +76,7 @@ const DeliveryOptimizer = ({
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');
       style.id = styleId;
-      style.innerHTML = `.maplibregl-popup { z-index: 2000 !important; }`;
+      style.innerHTML = `.maplibregl-popup { z-index: 2000 !important; } summary { list-style: none; } summary::-webkit-details-marker { display: none; }`;
       document.head.appendChild(style);
     }
   }, []);
@@ -106,7 +104,6 @@ const DeliveryOptimizer = ({
         map.on('load', () => {
             if (!isMounted) return;
 
-            // A. Sources
             if (!map.getSource('agents-source')) {
                 map.addSource('agents-source', {
                     type: 'geojson',
@@ -114,7 +111,7 @@ const DeliveryOptimizer = ({
                 });
             }
 
-            // B. GLOW LAYER (Visualizes status)
+            // Glow Layer
             if (!map.getLayer('agents-glow-layer')) {
                 map.addLayer({
                     id: 'agents-glow-layer',
@@ -122,19 +119,14 @@ const DeliveryOptimizer = ({
                     source: 'agents-source',
                     paint: {
                         'circle-radius': 20,
-                        // Logic: If Stale -> Grey Glow. If Active -> Blue Glow
-                        'circle-color': [
-                            'case',
-                            ['get', 'isStale'], '#94a3b8', 
-                            '#3b82f6'
-                        ],
+                        'circle-color': ['case', ['get', 'isStale'], '#94a3b8', '#3b82f6'],
                         'circle-opacity': 0.3,
                         'circle-blur': 0.5
                     }
                 });
             }
 
-            // C. CORE DOT LAYER
+            // Core Layer
             if (!map.getLayer('agents-layer')) {
                 map.addLayer({
                     id: 'agents-layer',
@@ -142,27 +134,18 @@ const DeliveryOptimizer = ({
                     source: 'agents-source',
                     paint: {
                         'circle-radius': 8,
-                        // Logic: If Stale -> Dark Grey. If Active -> Bright Blue
-                        'circle-color': [
-                            'case',
-                            ['get', 'isStale'], '#64748b', 
-                            '#3b82f6'
-                        ],
+                        'circle-color': ['case', ['get', 'isStale'], '#64748b', '#3b82f6'],
                         'circle-stroke-width': 2,
                         'circle-stroke-color': '#ffffff', 
                     }
                 });
             }
 
-            // D. Map Interactions
             map.on('click', () => setFocusedAgentId(null));
-
             map.on('click', 'agents-layer', (e) => handleAgentClick(e, map));
-            
             map.on('mouseenter', 'agents-layer', () => map.getCanvas().style.cursor = 'pointer');
             map.on('mouseleave', 'agents-layer', () => map.getCanvas().style.cursor = '');
 
-            // START LOOPS
             startFetchLoop();
             startAnimationLoop(map);
         });
@@ -193,7 +176,7 @@ const DeliveryOptimizer = ({
     };
   }, []);
 
-  // --- 2. AGENT POPUP HANDLER (Shows "Last Seen") ---
+  // --- 2. AGENT POPUP HANDLER (RESTORED <DETAILS> SLIDE DOWN) ---
   const handleAgentClick = async (e, map) => {
       if (!e.features || !e.features.length) return;
       e.originalEvent.stopPropagation(); 
@@ -202,95 +185,119 @@ const DeliveryOptimizer = ({
       const props = e.features[0].properties; 
       const cleanTrackerId = getCleanPhone(props.id);
       
-      // Calculate Time Since Last Update
       const lastSeenMins = props.lastSeen ? Math.floor((Date.now() - props.lastSeen) / 60000) : 0;
       const statusText = props.isStale ? `🕒 Offline (${lastSeenMins}m ago)` : `⚡ Live Now`;
       const statusColor = props.isStale ? '#64748b' : '#22c55e';
 
       setFocusedAgentId(cleanTrackerId); 
 
-      // Agent Info
       const agentProfile = latestAgentsRef.current.find(a => getCleanPhone(a.id || a.sk) === cleanTrackerId);
       const agentName = agentProfile ? agentProfile.name : (props.name || 'Unknown Agent');
       const agentPhone = agentProfile ? (agentProfile.phone || cleanTrackerId) : cleanTrackerId;
 
-      // Identify Relevant Orders
       const relevantOrders = latestOrdersRef.current.filter(o => {
           const orderAgentId = getCleanPhone(o.gsi1pk || o.deliveryAgentId);
           if (orderAgentId !== cleanTrackerId) return false;
           return ['DELIVERING', 'DELIVERED'].includes(o.orderStatus);
       });
 
-      // Init Popup
       const popup = new maplibregl.Popup({ maxWidth: '280px' })
           .setLngLat(coordinates)
           .setHTML(`
               <div style="font-family: sans-serif; padding: 10px; color: #64748b; font-size: 12px; text-align: center;">
                   <div style="margin-bottom:4px;"><strong>${agentName}</strong></div>
-                  <div class="animate-pulse">Loading order details...</div>
+                  <div class="animate-pulse">Loading orders...</div>
               </div>
           `)
           .addTo(map);
 
        try {
-            // Build Content
+            // Fetch Items
+            const enrichedOrders = await Promise.all(relevantOrders.map(async (order) => {
+                try {
+                    const phoneNbr = order.pk.split('#')[1];
+                    const orderIdPart = order.sk.split('#')[1];
+                    const { data: lineItems } = await client.models.BusinessData.listByBusiness({
+                        pk: `ORDER#${phoneNbr}#${orderIdPart}`,
+                        sk: { beginsWith: 'ITEM#' },
+                        sortDirection: 'DESC'
+                    });
+                    return { ...order, itemsList: lineItems };
+                } catch { return { ...order, itemsList: [] }; }
+            }));
+
+            // ✅ RESTORED <DETAILS> TAGS FOR SLIDE DOWN EFFECT
             let contentHtml = '';
-            if (relevantOrders.length > 0) {
-                // ... (Use same enrichedOrders logic as before if needed, simplified here for length)
-                contentHtml = `<div style="padding:5px; font-weight:bold; color:#3b82f6;">${relevantOrders.length} Active Orders</div>`;
+            if (enrichedOrders.length > 0) {
+                contentHtml = enrichedOrders.map(o => {
+                    const isDelivering = o.orderStatus === 'DELIVERING';
+                    const icon = isDelivering ? '🚚' : '✅';
+                    const shortId = (o.sk || "").replace('ORDER#', '').slice(0, 10);
+                    const statusColor = isDelivering ? '#3b82f6' : '#22c55e';
+                    const bg = isDelivering ? '#eff6ff' : '#f0fdf4';
+                    
+                    const detailsHtml = (o.itemsList || []).map(i => `
+                        <div style="display:flex;justify-content:space-between;font-size:10px;color:#475569;padding:4px 0;border-bottom:1px dashed #cbd5e1;">
+                            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px;">${i.name}</span>
+                            <span style="font-weight:600;">x${i.quantity || 1}</span>
+                        </div>
+                    `).join('');
+
+                    // ⚠️ KEY RESTORATION: <details> and <summary>
+                    return `<details style="background:${bg};margin-bottom:4px;border-radius:4px;border-left:3px solid ${statusColor};overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                        <summary style="display:flex;align-items:center;font-size:11px;padding:8px 6px;cursor:pointer;outline:none;">
+                            <span style="font-weight:700;color:#334155;margin-right:6px;">${icon} ${shortId}</span>
+                            <span style="color:#64748b;font-size:10px;">(${o.itemsNbr||o.itemsList.length})</span>
+                            <span style="margin-left:auto;font-weight:600;color:${statusColor};font-size:10px;">${o.orderStatus}</span>
+                        </summary>
+                        <div style="padding:2px 8px 8px 8px;background:rgba(255,255,255,0.6);border-top:1px dashed #e2e8f0;">${detailsHtml || 'No Items'}</div>
+                    </details>`;
+                }).join('');
             } else {
-                contentHtml = `<div style="font-size:11px;color:#94a3b8;padding:6px;">No active orders.</div>`;
+                contentHtml = `<div style="font-size:11px;color:#94a3b8;padding:6px;text-align:center;">No active orders.</div>`;
             }
             
             popup.setHTML(`
-                <div style="font-family:sans-serif;min-width:220px;">
-                    <div style="border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:8px;">
-                        <div style="font-weight:bold;font-size:14px;color:#0f172a;">${agentName}</div>
-                        <div style="font-size:12px;color:#64748b; margin-bottom: 2px;">📞 +${agentPhone}</div>
-                        <div style="font-size:11px;color:${statusColor};font-weight:bold;">${statusText}</div>
+                <div style="font-family:sans-serif;min-width:220px;max-width:260px;">
+                    <div style="border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:bold;font-size:13px;color:#0f172a;">${agentName}</div>
+                            <div style="font-size:11px;color:#64748b;">+${agentPhone}</div>
+                        </div>
+                        <span style="font-size:9px; font-weight:bold; color:${statusColor}; background:${props.isStale?'#f1f5f9':'#dcfce7'}; padding:2px 5px; rounded:99px;">${statusText}</span>
                     </div>
-                    <div style="max-height:200px;overflow-y:auto;">${contentHtml}</div>
+                    <div style="max-height:200px;overflow-y:auto;padding-right:2px;">${contentHtml}</div>
                 </div>
             `);
-       } catch (err) {}
+       } catch (err) {
+           popup.setHTML('<div style="padding:5px;color:red;font-size:10px;">Failed to load data</div>');
+       }
   };
 
-  // --- 3. FETCH LOOP (Captures SampleTime) ---
+  // --- 3. FETCH LOOP (5 SECONDS) ---
   const startFetchLoop = () => {
     const fetchPositions = async () => {
       try {
         const session = await fetchAuthSession();
         const client = new LocationClient({ region: outputs.geo.aws_region, credentials: session.credentials });
-        
         let token = undefined;
         do {
           const response = await client.send(new ListDevicePositionsCommand({
             TrackerName: outputs.custom.amazon_location_service.trackers.default,
             NextToken: token, MaxResults: 100 
           }));
-
           if (response.Entries) {
             response.Entries.forEach(entry => {
                 if (entry.Position && entry.DeviceId) {
                     const id = entry.DeviceId;
                     const newPos = entry.Position; 
-                    const sampleTime = new Date(entry.SampleTime).getTime(); // ✅ Capture Time
-
+                    const sampleTime = entry.SampleTime ? new Date(entry.SampleTime).getTime() : Date.now();
                     const current = agentAnimationState.current[id];
                     
                     if (!current) {
-                        agentAnimationState.current[id] = {
-                            start: newPos, end: newPos, startTime: Date.now(),
-                            lastSeen: sampleTime // ✅ Store Time
-                        };
-                    } else {
-                        // Only update if it's a newer point
-                        if (sampleTime >= current.lastSeen) {
-                            agentAnimationState.current[id] = {
-                                start: current.end, end: newPos, startTime: Date.now(),
-                                lastSeen: sampleTime
-                            };
-                        }
+                        agentAnimationState.current[id] = { start: newPos, end: newPos, startTime: Date.now(), lastSeen: sampleTime };
+                    } else if (sampleTime >= current.lastSeen) {
+                        agentAnimationState.current[id] = { start: current.end, end: newPos, startTime: Date.now(), lastSeen: sampleTime };
                     }
                 }
             });
@@ -303,45 +310,32 @@ const DeliveryOptimizer = ({
     fetchPositions();
   };
 
-  // --- 4. ANIMATION LOOP (Calculates Staleness) ---
+  // --- 4. ANIMATION LOOP ---
   const startAnimationLoop = (map) => {
       const animate = () => {
           const now = Date.now();
           const features = [];
-
           Object.entries(agentAnimationState.current).forEach(([id, state]) => {
               const elapsed = now - state.startTime;
               let t = elapsed / ANIMATION_DURATION_MS;
               if (t > 1) t = 1;
-
               const currentLng = state.start[0] + (state.end[0] - state.start[0]) * t;
               const currentLat = state.start[1] + (state.end[1] - state.start[1]) * t;
-
-              // ✅ Check Staleness (Is data older than 5 mins?)
               const isStale = (now - state.lastSeen) > STALE_THRESHOLD_MS;
-
               features.push({
                   type: 'Feature',
                   geometry: { type: 'Point', coordinates: [currentLng, currentLat] },
-                  properties: { 
-                      id: id, 
-                      name: `Agent ${id.slice(-4)}`,
-                      isStale: isStale, // ✅ Pass to Mapbox Layer
-                      lastSeen: state.lastSeen 
-                  }
+                  properties: { id: id, name: `Agent ${id.slice(-4)}`, isStale: isStale, lastSeen: state.lastSeen }
               });
           });
-
           const source = map.getSource('agents-source');
-          if (source && features.length > 0) {
-              source.setData({ type: 'FeatureCollection', features: features });
-          }
+          if (source && features.length > 0) source.setData({ type: 'FeatureCollection', features: features });
           animationFrameId.current = requestAnimationFrame(animate);
       };
       animate();
   };
 
-  // --- 5. ORDER PLOTTING (Standard) ---
+  // --- 5. ORDER PLOTTING ---
   useEffect(() => { 
       if (mapInstance.current) plotOrdersOnMap(orders, mapInstance.current, assignments, focusedAgentId); 
   }, [assignments, orders, showDelivered, showDelivering, focusedAgentId]);
@@ -361,7 +355,6 @@ const DeliveryOptimizer = ({
               const assignedAgentId = currentAssignments[order.sk] || order.gsi1pk; 
               let agentName = null;
               let hasAgent = false;
-
               if (assignedAgentId) {
                   const agentProfile = agents.find(a => getCleanPhone(a.id || a.sk) === getCleanPhone(assignedAgentId));
                   if (agentProfile) { agentName = agentProfile.name; hasAgent = true; }
@@ -370,7 +363,6 @@ const DeliveryOptimizer = ({
               const isHighlighted = activeAgentId && hasAgent && getCleanPhone(assignedAgentId) === getCleanPhone(activeAgentId);
               const isDimmed = activeAgentId && !isHighlighted;
               const markerColor = getAgentColor(assignedAgentId); 
-              
               let iconContent = '📦'; 
               if (status === 'DELIVERING') iconContent = '🚚'; 
               if (status === 'DELIVERED') iconContent = '✅'; 
@@ -378,39 +370,63 @@ const DeliveryOptimizer = ({
               const el = document.createElement('div');
               el.className = 'marker-order';
               el.innerHTML = `<span style="color:white;font-weight:bold;font-size:12px;">${iconContent}</span>`;
-              
-              const scale = isHighlighted ? 'scale(1.5)' : 'scale(1)';
-              const zIndex = isHighlighted ? '50' : '10';
-              const opacity = isDimmed ? '0.4' : '1';
-              const border = isHighlighted ? '3px solid white' : '2px solid white';
-              const boxShadow = isHighlighted ? `0 0 15px ${markerColor}` : '0 2px 4px rgba(0,0,0,0.3)';
-
               Object.assign(el.style, {
                   backgroundColor: markerColor, width: '24px', height: '24px', borderRadius: '50%',
                   display: 'flex', justifyContent: 'center', alignItems: 'center',
-                  border: border, boxShadow: boxShadow, cursor: 'pointer',
-                  zIndex: zIndex, transform: scale, opacity: opacity,
-                  transition: 'all 0.3s ease'
+                  border: isHighlighted ? '3px solid white' : '2px solid white', 
+                  boxShadow: isHighlighted ? `0 0 15px ${markerColor}` : '0 2px 4px rgba(0,0,0,0.3)', 
+                  cursor: 'pointer', zIndex: isHighlighted ? '50' : '10', 
+                  transform: isHighlighted ? 'scale(1.5)' : 'scale(1)', 
+                  opacity: isDimmed ? '0.4' : '1', transition: 'all 0.3s ease'
               });
 
-              // Popup
+              // Initial Popup
               const shortId = (order.sk || "").replace('ORDER#', '').split('-').slice(0, 3).join('-');
-              const popupHTML = `
-                <div style="font-family: sans-serif; font-size: 12px; min-width: 140px; color: #334155;">
-                    <b>${shortId}</b> <br/>
-                    ${hasAgent ? `<span style="color:#3b82f6;">${agentName}</span>` : '<span style="color:#94a3b8">Unassigned</span>'}
+              const popup = new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(`
+                <div style="font-family: sans-serif; font-size: 12px; color: #64748b; padding: 5px;">
+                    <b>${shortId}</b><br/>Loading items...
                 </div>
-              `;
+              `);
 
               const marker = new maplibregl.Marker({ element: el })
                   .setLngLat([loc.longitude, loc.latitude])
-                  .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(popupHTML))
+                  .setPopup(popup)
                   .addTo(map);
 
-              el.addEventListener('click', (e) => {
+              // Click Handler (Fetch Items)
+              el.addEventListener('click', async (e) => {
                   e.stopPropagation(); 
                   map.flyTo({ center: [loc.longitude, loc.latitude], zoom: 15 });
                   marker.togglePopup();
+
+                  try {
+                      const phoneNbr = order.pk.split('#')[1];
+                      const orderIdPart = order.sk.split('#')[1];
+                      const { data: lineItems } = await client.models.BusinessData.listByBusiness({
+                          pk: `ORDER#${phoneNbr}#${orderIdPart}`,
+                          sk: { beginsWith: 'ITEM#' }
+                      });
+
+                      const itemsHtml = lineItems.length ? lineItems.map(i => `
+                        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #eee;padding:2px 0;">
+                            <span>${i.name}</span><strong>x${i.quantity || 1}</strong>
+                        </div>
+                      `).join('') : 'No items found';
+
+                      popup.setHTML(`
+                        <div style="font-family: sans-serif; font-size: 12px; min-width: 160px; color: #334155;">
+                            <div style="background:${status === 'DELIVERING' ? '#eff6ff' : '#f0fdf4'}; padding:5px; border-radius:4px; margin-bottom:5px;">
+                                <b>${shortId}</b> <span style="float:right">${status === 'DELIVERING' ? '🚚' : '✅'}</span>
+                            </div>
+                            <div style="max-height:150px; overflow-y:auto;">${itemsHtml}</div>
+                            <div style="margin-top:5px; font-size:10px; color:#64748b;">
+                                Agent: ${hasAgent ? agentName : 'Unassigned'}
+                            </div>
+                        </div>
+                      `);
+                  } catch (err) {
+                      popup.setHTML(`<div style="color:red;padding:5px;">Error loading items</div>`);
+                  }
               });
 
               markersRef.current[order.sk] = marker;
@@ -423,10 +439,11 @@ const DeliveryOptimizer = ({
     if (marker) {
       marker.togglePopup(); 
       mapInstance.current.flyTo({ center: marker.getLngLat(), zoom: 14 });
+      marker.getElement().click(); // Programmatic click to fetch items
     }
   };
 
-  // --- 6. AUTO-ASSIGN & DISPATCH LOGIC ---
+  // --- 6. OPTIMIZATION LOGIC ---
   const runOptimization = async () => {
     setLoading(true);
     try {
@@ -434,7 +451,6 @@ const DeliveryOptimizer = ({
       const geoClient = new GeoRoutesClient({ region: outputs.geo.aws_region, credentials: session.credentials });
       const validAgents = agents.filter(a => parseLocation(a.location));
 
-      // A. Leg B: Restaurant -> Customer
       const orderMetrics = {};
       const orderPromises = orders.filter(o => o.orderStatus === 'PREPARED').map(async (order) => {
             const custLoc = parseLocation(order.location);
@@ -453,7 +469,6 @@ const DeliveryOptimizer = ({
             }
         });
 
-      // B. Leg A: Agent -> Restaurant
       const agentMetrics = {};
       const agentPromises = validAgents.map(async (agent) => {
           const agentLoc = parseLocation(agent.location);

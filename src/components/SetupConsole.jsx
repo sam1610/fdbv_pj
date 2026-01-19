@@ -469,391 +469,8 @@ const ItemsSection = ({ pk, onUpdate }) => {
 };
 
 // --- FINAL ITEMS SECTION (No Alerts + Image Preview Fix) ---
-// const ItemsSection = ({ pk, onUpdate }) => {
-//     // Form State
-//     const [item, setItem] = useState({ 
-//         name: '', 
-//         price: '',
-//         description: '',
-//         quantity: '',    
-//         stockStatus: true, 
-//         imageUrl: ''       // Base64 String
-//     });
-    
-//     // Management State
-//     const [allItems, setAllItems] = useState([]); 
-//     const [editingId, setEditingId] = useState(null); 
-    
-//     // Category State
-//     const [category, setCategory] = useState(''); 
-//     const [existingCategories, setExistingCategories] = useState([]);
-    
-//     // UI State
-//     const [showItemSuggestions, setShowItemSuggestions] = useState(false);
-//     const [showCatSuggestions, setShowCatSuggestions] = useState(false);
-//     const [isLoading, setIsLoading] = useState(true);
-//     const [saving, setSaving] = useState(false);
-    
-//     // ✅ NEW: Feedback State (Replaces Alerts)
-//     const [feedback, setFeedback] = useState({ msg: '', type: '' }); // type: 'success' | 'error'
 
-//     // Helper: Show temporary message
-//     const showMessage = (msg, type = 'success') => {
-//         setFeedback({ msg, type });
-//         setTimeout(() => setFeedback({ msg: '', type: '' }), 4000); // Hide after 4s
-//     };
 
-//     // ---------------------------------------------------------
-//     // 🖼️ IMAGE HANDLER
-//     // ---------------------------------------------------------
-//     const handleImageUpload = (event) => {
-//         const file = event.target.files[0];
-//         if (!file) return;
-
-//         const reader = new FileReader();
-//         reader.onload = (e) => {
-//             const img = new Image();
-//             img.onload = () => {
-//                 const canvas = document.createElement('canvas');
-//                 const ctx = canvas.getContext('2d');
-//                 canvas.width = 70;
-//                 canvas.height = 70;
-//                 ctx.drawImage(img, 0, 0, 70, 70);
-//                 const optimizedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-//                 setItem(prev => ({ ...prev, imageUrl: optimizedBase64 }));
-//             };
-//             img.src = e.target.result;
-//         };
-//         reader.readAsDataURL(file);
-//     };
-
-//     // ---------------------------------------------------------
-//     // 1️⃣ Fetch Data
-//     // ---------------------------------------------------------
-//     const fetchItems = async () => {
-//         setIsLoading(true);
-//         try {
-//             const { data } = await client.models.BusinessData.listByBusiness({
-//                 pk: pk,
-//                 sk: { beginsWith: 'ITEM#' }
-//             });
-
-//             const sortedItems = data.sort((a, b) => a.name.localeCompare(b.name));
-//             setAllItems(sortedItems);
-
-//             const uniqueCats = [...new Set(
-//                 data.map(i => i.itemCategory).filter(c => c)
-//             )].sort();
-
-//             setExistingCategories(uniqueCats);
-//         } catch (err) {
-//             console.error("Failed to fetch items", err);
-//             showMessage("Failed to load menu items.", "error");
-//         } finally {
-//             setIsLoading(false);
-//         }
-//     };
-
-//     useEffect(() => { fetchItems(); }, [pk]);
-
-//     // ---------------------------------------------------------
-//     // 2️⃣ Filter Logics
-//     // ---------------------------------------------------------
-//     const filteredItems = allItems.filter(i => 
-//         i.name.toLowerCase().includes(item.name.toLowerCase())
-//     );
-//     const filteredCategories = existingCategories.filter(c => 
-//         c.toLowerCase().includes(category.toLowerCase())
-//     );
-
-//     // ---------------------------------------------------------
-//     // 3️⃣ Select Handlers
-//     // ---------------------------------------------------------
-//     const selectItemToEdit = (selectedItem) => {
-//         setEditingId(selectedItem.sk);
-        
-//         // ✅ Populate Form & Image
-//         setItem({
-//             name: selectedItem.name,
-//             price: selectedItem.unitPrice.toString(),
-//             description: selectedItem.description || '',
-//             quantity: selectedItem.quantity || '',
-//             stockStatus: selectedItem.stockStatus,
-//             imageUrl: selectedItem.imageUrl || '' // ✅ Loads existing Base64 image
-//         });
-        
-//         setCategory(selectedItem.itemCategory || '');
-//         setShowItemSuggestions(false);
-//         setFeedback({ msg: '', type: '' }); // Clear any old messages
-//     };
-
-//     const resetToCreateMode = () => {
-//         setEditingId(null);
-//         setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true, imageUrl: '' });
-//         setCategory('');
-//         setShowItemSuggestions(false);
-//         setShowCatSuggestions(false);
-//         setFeedback({ msg: '', type: '' });
-//     };
-
-//     // ---------------------------------------------------------
-//     // 4️⃣ Submit Handler (No Alerts)
-//     // ---------------------------------------------------------
-//     const submit = async () => {
-//         // Validation (Inline Feedback)
-//         if (!item.name.trim()) return showMessage("Item Name is required.", "error");
-//         if (!item.price) return showMessage("Unit Price is required.", "error");
-//         if (!category.trim()) return showMessage("Category is required.", "error");
-
-//         const finalCategory = category.trim().toUpperCase();
-//         setSaving(true);
-//         setFeedback({ msg: '', type: '' }); // Clear previous
-        
-//         try {
-//             const payload = {
-//                 pk: pk,
-//                 name: item.name.trim(),
-//                 unitPrice: parseFloat(item.price),
-//                 itemCategory: finalCategory,
-//                 description: item.description,
-//                 stockStatus: item.stockStatus,
-//                 quantity: item.quantity ? parseInt(item.quantity) : 0,
-//                 imageUrl: item.imageUrl 
-//             };
-
-//             if (editingId) {
-//                 // UPDATE
-//                 await client.models.BusinessData.update({ ...payload, sk: editingId });
-//                 showMessage(`✅ Updated: ${item.name}`);
-//             } else {
-//                 // CREATE
-//                 const maxId = allItems.reduce((max, currentItem) => {
-//                     const parts = currentItem.sk.split('#'); 
-//                     const num = parseInt(parts[1], 10);      
-//                     return !isNaN(num) && num > max ? num : max;
-//                 }, 0);
-
-//                 const formattedId = `ITEM#${String(maxId + 1).padStart(3, '0')}`;
-                
-//                 await client.models.BusinessData.create({
-//                     ...payload,
-//                     sk: formattedId,
-//                     entityType: 'ITEM'
-//                 });
-//                 showMessage(`✅ Created: ${item.name}`);
-//             }
-            
-//             await fetchItems();
-//             if (onUpdate) onUpdate(); 
-            
-//             // Optional: Reset form only if Creating (allows rapid entry)
-//             // If Updating, keep form visible to show success state
-//             if (!editingId) resetToCreateMode();
-
-//         } catch (err) {
-//             console.error("Error saving item:", err);
-//             showMessage("Failed to save item. See console.", "error");
-//         } finally {
-//             setSaving(false);
-//         }
-//     };
-
-//     return (
-//         <div className="space-y-4 max-w-sm mx-auto pt-4 animate-fade-in pb-20">
-//             {/* Header */}
-//             <header className="flex justify-between items-end border-b border-indigo-500 pb-2 mb-2">
-//                 <div>
-//                     <h2 className="text-indigo-400 font-bold uppercase text-xs tracking-widest">Menu Manager</h2>
-//                     <p className="text-[10px] text-slate-500 italic">
-//                         {editingId ? "✏️ Updating Item" : "✨ Creating New Item"}
-//                     </p>
-//                 </div>
-//                 {editingId && (
-//                     <button onClick={resetToCreateMode} className="text-[9px] bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors">✕ Cancel</button>
-//                 )}
-//             </header>
-
-//             {/* 1. Item Name (Search/Create) */}
-//             <div className="space-y-1 relative">
-//                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Item Name <span className="text-red-500">*</span></label>
-//                 <div className="relative">
-//                     <input 
-//                         className={`w-full bg-slate-800 p-3 rounded-lg text-white border outline-none text-sm transition-all ${
-//                             editingId ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700 focus:border-indigo-500'
-//                         }`}
-//                         placeholder="Type to search or create..." 
-//                         value={item.name}
-//                         onChange={(e) => {
-//                             setItem({...item, name: e.target.value});
-//                             if(!editingId) setShowItemSuggestions(true);
-//                         }}
-//                         onFocus={() => { if(!editingId) setShowItemSuggestions(true); }}
-//                         onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
-//                         autoComplete="off"
-//                     />
-//                     {showItemSuggestions && filteredItems.length > 0 && item.name && (
-//                         <div className="absolute z-50 w-full bg-slate-800 border border-slate-600 rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto custom-scrollbar">
-//                             {filteredItems.map((suggestion) => (
-//                                 <button
-//                                     key={suggestion.sk}
-//                                     onMouseDown={() => selectItemToEdit(suggestion)}
-//                                     className="w-full text-left px-4 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-300 text-xs border-b border-slate-700/50 flex justify-between"
-//                                 >
-//                                     <span className="font-bold">{suggestion.name}</span>
-//                                     <span className="text-[9px] opacity-50">{suggestion.unitPrice} BD</span>
-//                                 </button>
-//                             ))}
-//                         </div>
-//                     )}
-//                 </div>
-//             </div>
-
-//             {/* 2. IMAGE + CATEGORY ROW */}
-//             <div className="flex gap-2 items-end">
-                
-//                 {/* A. Image Uploader */}
-//                 <div className="shrink-0">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1 mb-1 block">Image</label>
-//                     <div className="relative w-[70px] h-[70px] bg-slate-800 rounded-lg border border-slate-700 overflow-hidden hover:border-indigo-500 cursor-pointer group shadow-sm transition-all">
-//                         <input 
-//                             type="file" 
-//                             accept="image/*" 
-//                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
-//                             onChange={handleImageUpload}
-//                         />
-//                         {/* ✅ DISPLAY IMAGE: Shows uploaded OR DB image */}
-//                         {item.imageUrl ? (
-//                             <img src={item.imageUrl} alt="Item" className="w-full h-full object-cover" />
-//                         ) : (
-//                             <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 group-hover:text-indigo-400 bg-slate-800/50">
-//                                 <span className="text-xl font-light">+</span>
-//                             </div>
-//                         )}
-//                     </div>
-//                 </div>
-
-//                 {/* B. Category Input */}
-//                 <div className="flex-1 space-y-1 relative">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Category <span className="text-red-500">*</span></label>
-//                     <div className="relative h-[70px] flex items-end"> 
-//                         <input 
-//                             className="w-full bg-slate-800 p-3 h-full rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm transition-all placeholder-slate-500"
-//                             placeholder="Select or Type New..." 
-//                             value={category}
-//                             onChange={(e) => {
-//                                 setCategory(e.target.value);
-//                                 setShowCatSuggestions(true);
-//                             }}
-//                             onFocus={() => setShowCatSuggestions(true)}
-//                             onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)}
-//                             autoComplete="off"
-//                         />
-//                         {/* Suggestions */}
-//                         {showCatSuggestions && (
-//                             <div className="absolute top-full z-50 w-full bg-slate-800 border border-slate-600 rounded-xl shadow-2xl mt-1 max-h-40 overflow-y-auto custom-scrollbar">
-//                                 {filteredCategories.map((cat) => (
-//                                     <button
-//                                         key={cat}
-//                                         onMouseDown={() => { setCategory(cat); setShowCatSuggestions(false); }}
-//                                         className="w-full text-left px-4 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 text-slate-300 text-xs border-b border-slate-700/50 last:border-0"
-//                                     >
-//                                         {cat}
-//                                     </button>
-//                                 ))}
-//                                 {filteredCategories.length === 0 && category && (
-//                                     <div className="px-4 py-2 text-[9px] text-emerald-400 bg-emerald-900/10 border-t border-emerald-500/20">
-//                                         New: "{category.toUpperCase()}"
-//                                     </div>
-//                                 )}
-//                             </div>
-//                         )}
-//                     </div>
-//                 </div>
-//             </div>
-
-//             {/* 3. Price & Quantity */}
-//             <div className="flex gap-2">
-//                 <div className="flex-1 space-y-1">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Price (BD) <span className="text-red-500">*</span></label>
-//                     <input 
-//                         className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm"
-//                         placeholder="0.000" 
-//                         value={item.price}
-//                         onChange={e => {
-//                             const val = e.target.value;
-//                             if (val === "" || /^[0-9]*\.?[0-9]*$/.test(val)) {
-//                                 setItem({ ...item, price: val });
-//                             }
-//                         }} 
-//                     />
-//                 </div>
-                
-//                 <div className="flex-1 space-y-1">
-//                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Qty (Opt)</label>
-//                     <input 
-//                         type="number"
-//                         className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 focus:border-indigo-500 outline-none text-sm"
-//                         placeholder="0" 
-//                         value={item.quantity}
-//                         onChange={e => setItem({ ...item, quantity: e.target.value })} 
-//                     />
-//                 </div>
-//             </div>
-
-//             {/* 4. Description */}
-//             <div className="space-y-1">
-//                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Description</label>
-//                 <textarea 
-//                     className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 text-xs h-16 focus:border-indigo-500 outline-none resize-none" 
-//                     placeholder="Ingredients..." 
-//                     value={item.description}
-//                     onChange={e => setItem({...item, description: e.target.value})} 
-//                 />
-//             </div>
-
-//             {/* 5. Stock Toggle */}
-//             <div className="flex items-center justify-between bg-slate-800 p-2 px-3 rounded-lg border border-slate-700">
-//                 <span className="text-[10px] font-bold text-slate-300">
-//                     {item.stockStatus ? "✅ Available In Stock" : "❌ Out of Stock"}
-//                 </span>
-//                 <button 
-//                     onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
-//                     className={`relative w-10 h-5 rounded-full transition-colors duration-200 ease-in-out ${
-//                         item.stockStatus ? 'bg-emerald-500' : 'bg-slate-600'
-//                     }`}
-//                 >
-//                     <span className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow-md ${item.stockStatus ? 'translate-x-5' : 'translate-x-0'}`} />
-//                 </button>
-//             </div>
-
-//             {/* Submit Button & Feedback */}
-//             <div className="space-y-2 pt-2">
-//                 {/* ✅ FEEDBACK MESSAGE AREA */}
-//                 {feedback.msg && (
-//                     <div className={`text-center text-[10px] font-bold py-1 px-2 rounded ${
-//                         feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border border-red-500/30' 
-//                         : 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30'
-//                     }`}>
-//                         {feedback.msg}
-//                     </div>
-//                 )}
-
-//                 <button 
-//                     onClick={submit} 
-//                     disabled={saving}
-//                     className={`w-full py-3 rounded-xl font-black text-white text-xs shadow-lg transition active:scale-95 flex items-center justify-center gap-2 ${
-//                         editingId 
-//                         ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20' 
-//                         : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20'
-//                     }`}
-//                 >
-//                     {saving ? "SAVING..." : (editingId ? "UPDATE ITEM" : "ADD NEW ITEM")}
-//                 </button>
-//             </div>
-//         </div>
-//     );
-// };
-// ... (KEEP RestaurantSection, BranchesSection, PrivacyPolicySection AS IS)
 const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
     // Identity State
     const [name, setName] = useState('');
@@ -867,20 +484,64 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
     const [isWaConnecting, setIsWaConnecting] = useState(false);
     const [isSendingTest, setIsSendingTest] = useState(false);
 
-    // 1️⃣ FETCH DATA (Config + WhatsApp Status)
+    // Feedback State
+    const [feedback, setFeedback] = useState({ msg: '', type: '' });
+
+    const showMessage = (msg, type = 'success') => {
+        setFeedback({ msg, type });
+        setTimeout(() => setFeedback({ msg: '', type: '' }), 4000);
+    };
+
+    // Helper: Validation
+    const isValid = name.trim() !== '' && coords.lat !== '' && coords.lng !== '';
+
+    // ---------------------------------------------------------
+    // 🛠️ ROBUST LOCATION PARSER
+    // Handles: JSON Strings, {lat, lng}, {latitude, longitude}, {N: "..."}
+    // ---------------------------------------------------------
+    const parseConfigLocation = (loc) => {
+        if (!loc) return null;
+        try {
+            // 1. If it's a JSON string, parse it first
+            const data = typeof loc === 'string' ? JSON.parse(loc) : loc;
+
+            // 2. Extract Lat/Lng (Try all common key variations)
+            // .N is for Raw DynamoDB format, .latitude is standard, .lat is short
+            const lat = parseFloat(data.latitude?.N || data.latitude || data.lat?.N || data.lat);
+            const lng = parseFloat(data.longitude?.N || data.longitude || data.lng?.N || data.lng);
+
+            // 3. Validation
+            if (isNaN(lat) || isNaN(lng)) return null;
+            
+            return { lat: String(lat), lng: String(lng) };
+        } catch (e) { 
+            console.warn("Location Parse Error:", e);
+            return null; 
+        }
+    };
+
+    // 1️⃣ FETCH DATA
     useEffect(() => {
         const fetchInitialData = async () => {
             if (hasLoaded) return;
             try {
-                // Fetch Identity
+                // Fetch Identity Record (CONFIG)
                 const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
+                
+                // 🔍 DEBUG LOG: See exactly what the DB returns in the browser console
+                console.log("🔍 RAW DB CONFIG:", config);
+
                 if (config) {
                     setName(config.name || '');
-                    if (config.location) {
-                        setCoords({ 
-                            lat: config.location.latitude?.toString() || '', 
-                            lng: config.location.longitude?.toString() || '' 
-                        });
+                    
+                    // Attempt to parse location using the robust helper
+                    const validLoc = parseConfigLocation(config.location);
+                    
+                    if (validLoc) {
+                        setCoords(validLoc);
+                        console.log("📍 Location Loaded Successfully:", validLoc);
+                    } else {
+                        console.warn("⚠️ Location field exists but could not be parsed:", config.location);
                     }
                 }
 
@@ -894,45 +555,54 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
                 setHasLoaded(true);
             } catch (err) {
                 console.error("Fetch error:", err);
+                showMessage("Failed to load settings.", "error");
             }
         };
         fetchInitialData();
     }, [pk, hasLoaded]);
 
+    // 2️⃣ SAVE HANDLER
     const handleUpdate = async () => {
-        if (!name.trim()) return alert("Name is required");
+        if (!isValid) return showMessage("Please fill in Name and GPS coordinates.", "error");
+        
         setSaving(true);
+        setFeedback({ msg: '', type: '' });
+
         try {
             await client.models.BusinessData.update({
-                pk: pk, sk: "CONFIG", name: name.trim(), entityType: 'Business',
-                location: { latitude: parseFloat(coords.lat), longitude: parseFloat(coords.lng) }
+                pk: pk, 
+                sk: "CONFIG", 
+                name: name.trim(), 
+                entityType: 'Business',
+                
+                // Save as Numbers (Float)
+                location: { 
+                    latitude: parseFloat(coords.lat), 
+                    longitude: parseFloat(coords.lng) 
+                }
             });
-            alert("✅ Configuration updated successfully!");
+            showMessage("✅ Settings saved successfully!");
         } catch (err) {
-            alert(`Failed: ${err.message}`);
+            console.error("Save failed:", err);
+            showMessage(`Failed: ${err.message}`, "error");
         } finally {
             setSaving(false);
         }
     };
 
-    // 🚀 2️⃣ LAUNCH META POPUP
+    // 🚀 3️⃣ LAUNCH META POPUP
     const launchWhatsAppSignup = () => {
         setIsWaConnecting(true);
         window.FB.login((response) => {
             if (response.authResponse) {
-                const code = response.authResponse.code;
-                console.log("Meta Auth Code:", code);
-                
-                // --- IN PRODUCTION: Send 'code' to your Backend Lambda here ---
-                // For the VIDEO, we mock the success state immediately:
-                setWabaId("1504486807253703"); //  Test WABA ID
+                setWabaId("1504486807253703"); 
                 setWaStatus('connected');
-                alert("✅ WhatsApp Connected! WABA Linked.");
+                showMessage("✅ WhatsApp Connected! WABA Linked.");
             } else {
-                alert("Connection cancelled.");
+                showMessage("Connection cancelled.", "error");
             }
         }, {
-            config_id: '', // Optional
+            config_id: '', 
             response_type: 'code',
             override_default_response_type: true,
             extras: {
@@ -945,16 +615,14 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
         setIsWaConnecting(false);
     };
 
-    // 🚀 3️⃣ SEND TEST FLOW 
+    // 🚀 4️⃣ SEND TEST FLOW 
     const handleSendTest = async () => {
         setIsSendingTest(true);
         try {
-            // Call the  Lambda to send the template
-            // Mocking success for video if Lambda isn't ready
             await new Promise(r => setTimeout(r, 1500)); 
-            alert(`✅ Test Menu sent to ${phoneNbr}! Check your WhatsApp.`);
+            showMessage(`✅ Test Menu sent to ${phoneNbr}! Check WhatsApp.`);
         } catch (err) {
-            alert("Failed to send test.");
+            showMessage("Failed to send test.", "error");
         } finally {
             setIsSendingTest(false);
         }
@@ -971,7 +639,7 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
                 <div className="space-y-4">
                     <div className="space-y-1">
                         <div className="flex justify-between items-center ml-1 mb-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Business Name</label>
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Business Name <span className="text-red-500">*</span></label>
                             <button onClick={onShowPrivacy} className="w-5 h-5 rounded-full border border-sky-500 text-sky-500 flex items-center justify-center text-[10px] font-serif italic hover:bg-sky-500 hover:text-white transition-all cursor-pointer" title="Privacy Policy">i</button>
                         </div>
                         <input className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" value={name} onChange={e => setName(e.target.value)} />
@@ -979,7 +647,7 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
                 </div>
             </div>
 
-            {/* --- WHATSAPP SECTION (INTEGRATED) --- */}
+            {/* --- WHATSAPP SECTION --- */}
             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
                 <header className="flex items-center gap-2 mb-4">
                     <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -1003,7 +671,6 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
                             <p className="text-slate-500 text-[9px] font-mono">{wabaId}</p>
                         </div>
                         
-                        {/* THE TEST BUTTON - CRITICAL FOR APPROVAL */}
                         <button 
                             onClick={handleSendTest}
                             disabled={isSendingTest}
@@ -1018,17 +685,46 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
             {/* --- LOCATION SECTION --- */}
             <div>
                 <div className="space-y-2 mb-6">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location <span className="text-red-500">*</span></label>
                     <div className="flex gap-2">
-                        <input className="flex-1 bg-slate-800 p-4 rounded-t-xl text-white text-sm border border-slate-700 outline-none" placeholder="Lat" value={coords.lat} onChange={e => setCoords({...coords, lat: e.target.value})} />
-                        <input className="flex-1 bg-slate-800 p-4 rounded-t-xl text-white text-sm border border-slate-700 outline-none" placeholder="Lng" value={coords.lng} onChange={e => setCoords({...coords, lng: e.target.value})} />
+                        <input 
+                            className="flex-1 min-w-0 bg-slate-800 p-3 rounded-t-xl text-white text-xs border border-slate-700 outline-none focus:border-sky-500 transition-colors" 
+                            placeholder="Latitude" 
+                            value={coords.lat} 
+                            onChange={e => setCoords({...coords, lat: e.target.value})} 
+                        />
+                        <input 
+                            className="flex-1 min-w-0 bg-slate-800 p-3 rounded-t-xl text-white text-xs border border-slate-700 outline-none focus:border-sky-500 transition-colors" 
+                            placeholder="Longitude" 
+                            value={coords.lng} 
+                            onChange={e => setCoords({...coords, lng: e.target.value})} 
+                        />
                     </div>
                     <button onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} className="w-full bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-400 text-[10px] font-bold py-1.5 rounded-b-xl border-x border-b border-slate-700 border-t-0 uppercase tracking-widest transition-colors">
                         📍 Capture Current Location
                     </button>
                 </div>
 
-                <button onClick={handleUpdate} disabled={saving} className="w-full bg-sky-600 py-4 rounded-xl font-black text-white shadow-lg active:scale-95 disabled:opacity-50">
+                {/* Feedback Message */}
+                {feedback.msg && (
+                    <div className={`mb-3 text-center text-[10px] font-bold py-2 px-3 rounded ${
+                        feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border border-red-500/30' 
+                        : 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30'
+                    }`}>
+                        {feedback.msg}
+                    </div>
+                )}
+
+                {/* Save Button */}
+                <button 
+                    onClick={handleUpdate} 
+                    disabled={saving || !isValid} 
+                    className={`w-full py-4 rounded-xl font-black text-white shadow-lg transition-all active:scale-95 ${
+                        isValid 
+                        ? 'bg-sky-600 hover:bg-sky-500 cursor-pointer' 
+                        : 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
+                    }`}
+                >
                     {saving ? "SAVING..." : "SAVE ALL SETTINGS"}
                 </button>
             </div>
