@@ -639,7 +639,7 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
         const PHONE_NUMBER_ID = "812378515295003"; // Matches your shell command
         
         // Target Configuration
-        const targetPhone = "97333787388"; // Matches your shell command
+        const targetPhone = "97333351887"; // Matches your shell command
         const FLOW_ID = "3734528046844025"; 
         const bizPhone = "+15556337947";
        
