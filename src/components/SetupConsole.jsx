@@ -633,11 +633,68 @@ const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
     // 🚀 4️⃣ SEND TEST FLOW 
     const handleSendTest = async () => {
         setIsSendingTest(true);
+
+        // ⚠️ VIDEO ONLY: Paste the credentials that worked in your shell script
+        const TEMP_ACCESS_TOKEN = "EAGqCVBCUVhwBPxKs8axYLM4pWSEb3QZA7Vxg443OZC7izFkD6uviZBYWnttuOY6rVGZC4GjOSVj44qAYnWsxk0RK3gDMGBn5nwHTZCkTykGwCkev3oisKUuFQSc4f1bZAhLwPDsb7XF0sbY7ScoUVDSnrqueoRoekIwNfa77MHX7ttEN6rLIvmZAZCmXNi2etMJs2wZDZD"; 
+        const PHONE_NUMBER_ID = "812378515295003"; // Matches your shell command
+        
+        // Target Configuration
+        const targetPhone = "97333787388"; // Matches your shell command
+        const FLOW_ID = "3734528046844025"; 
+        const bizPhone = "+15556337947";
+       
+
+        // The Payload (Exact match of your successful curl command)
+        const flowToken = `flow_${Date.now()}---ph_${targetPhone}---biz_${bizPhone}`;
+        const payload = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: targetPhone,
+            type: "interactive",
+            interactive: {
+                type: "flow",
+                header: { type: "text", text: "CloudMeal Menu" },
+                body: { text: "Hungry? Order your favorites now!" },
+                footer: { text: "CloudMeal Delivery" },
+                action: {
+                    name: "flow",
+                    parameters: {
+                        mode: "published",
+                        flow_message_version: "3",
+                        flow_token: flowToken,
+                        flow_id: FLOW_ID,
+                        flow_cta: "Open Menu",
+                        flow_action: "data_exchange",
+                    }
+                }
+            }
+        };
+
         try {
-            await new Promise(r => setTimeout(r, 1500)); 
-            showMessage(`✅ Test Menu sent to ${phoneNbr}! Check WhatsApp.`);
+            console.log("Sending Flow via React...");
+            
+            // Note: Using v18.0 to match your curl command
+            const response = await fetch(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${TEMP_ACCESS_TOKEN}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                console.log("✅ Success:", data);
+                showMessage(`✅ Test Menu sent to ${targetPhone}! Check WhatsApp.`);
+            } else {
+                console.error("❌ Meta API Error:", data);
+                showMessage(`Error: ${data.error?.message || "Failed to send"}`, "error");
+            }
         } catch (err) {
-            showMessage("Failed to send test.", "error");
+            console.error("❌ Network Error:", err);
+            showMessage("Failed to send test. Check console.", "error");
         } finally {
             setIsSendingTest(false);
         }
