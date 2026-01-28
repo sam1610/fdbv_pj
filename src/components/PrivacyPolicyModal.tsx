@@ -120,10 +120,21 @@ export const PrivacyPolicyModal = ({ onClose }: { onClose: () => void }) => {
                     </div>
                 </section>
 
-                {/* 6. Security */}
+                {/* 6. Security (UPDATED) */}
                 <section className="mt-6">
-                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">6. Security</h3>
-                    <p>We implement industry-standard security measures including encryption in transit (TLS/SSL) and strict IAM access controls to protect Platform Data.</p>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">6. Security: How We Protect Your Data</h3>
+                    <p className="mb-2">We take your security seriously. We use advanced "Bank-Grade" technology to ensure your personal information is safe at every step of the journey:</p>
+                    <ul className="list-disc pl-5 space-y-2 text-slate-400">
+                        <li>
+                            <strong className="text-white">Data in Motion (In Transit):</strong> Whenever data moves—like when you send an order or when we send it to the restaurant—it is scrambled using <strong>SSL/TLS Encryption</strong>. Think of this like sending your message in a locked, armored truck. Even if someone intercepts the message on the internet, they cannot unlock or read it.
+                        </li>
+                        <li>
+                            <strong className="text-white">Data in Storage (At Rest):</strong> When your data is sitting in our databases (hosted on AWS), it is <strong>Encrypted at Rest</strong>. This means your information is stored as unreadable code. Even in the unlikely event that someone physically stole the hard drives from the server, they would see nothing but gibberish.
+                        </li>
+                        <li>
+                            <strong className="text-white">Strict Access Control:</strong> We operate on a "Zero Trust" model using <strong>Identity & Access Management (IAM)</strong>. This means only the specific computer programs that <em>need</em> to process your order are given a digital key to touch your data. No unauthorized employees or outside systems can access your personal details.
+                        </li>
+                    </ul>
                 </section>
 
                 {/* 9. Contact */}
