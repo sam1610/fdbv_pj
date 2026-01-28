@@ -120,31 +120,31 @@ export const PrivacyPolicyModal = ({ onClose }: { onClose: () => void }) => {
                     </div>
                 </section>
 
-                {/* 6. Security (UPDATED) */}
+               {/* 6. Security (SIMPLIFIED) */}
                 <section className="mt-6">
-                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">6. Security: How We Protect Your Data</h3>
-                    <p className="mb-2">We take your security seriously. We use advanced "Bank-Grade" technology to ensure your personal information is safe at every step of the journey:</p>
+                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">6. Security</h3>
+                    <p className="mb-2">We use industry-standard security measures to keep your data safe.</p>
                     <ul className="list-disc pl-5 space-y-2 text-slate-400">
                         <li>
-                            <strong className="text-white">Data in Motion (In Transit):</strong> Whenever data moves—like when you send an order or when we send it to the restaurant—it is scrambled using <strong>SSL/TLS Encryption</strong>. Think of this like sending your message in a locked, armored truck. Even if someone intercepts the message on the internet, they cannot unlock or read it.
+                            <strong className="text-white">Secure Transmission:</strong> We use SSL/TLS encryption to protect your data whenever it is sent over the internet. This ensures that your orders and personal details cannot be intercepted or read while being transmitted.
                         </li>
                         <li>
-                            <strong className="text-white">Data in Storage (At Rest):</strong> When your data is sitting in our databases (hosted on AWS), it is <strong>Encrypted at Rest</strong>. This means your information is stored as unreadable code. Even in the unlikely event that someone physically stole the hard drives from the server, they would see nothing but gibberish.
+                            <strong className="text-white">Secure Storage:</strong> Your data is stored securely on Amazon Web Services (AWS) servers. We use encryption to ensure that your stored information remains private and unreadable to unauthorized parties.
                         </li>
                         <li>
-                            <strong className="text-white">Strict Access Control:</strong> We operate on a "Zero Trust" model using <strong>Identity & Access Management (IAM)</strong>. This means only the specific computer programs that <em>need</em> to process your order are given a digital key to touch your data. No unauthorized employees or outside systems can access your personal details.
+                            <strong className="text-white">Access Control:</strong> We strictly limit who can access your data. Only the specific systems and authorized personnel necessary to process your orders are granted access to your personal details.
                         </li>
                     </ul>
                 </section>
 
                 {/* 9. Contact */}
                 <section className="mt-6">
-                    <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">9. Contact Us</h3>
                     <div className="text-slate-400 text-xs space-y-1">
-                        <p>Email: <a href="mailto:info@1st-hub.com" className="text-sky-400 hover:underline">info@1st-hub.com</a></p>
-                        <p>Website: <a href="https://1st-hub.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">https://1st-hub.com</a></p>
-                        <p>Address: Manama, Bahrain</p>
-                    </div>
+    <p>Email: <a href="mailto:info@1st-hub.com" className="text-sky-400 hover:underline">info@1st-hub.com</a></p>
+    <p>Phone: <a href="tel:+97333787388" className="text-sky-400 hover:underline">+973 33787388</a></p>
+    <p>Website: <a href="https://1st-hub.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">https://1st-hub.com</a></p>
+    <p>Address: Manama, Bahrain</p>
+</div>
                 </section>
             </div>
             
