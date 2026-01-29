@@ -53,12 +53,10 @@ import {
 import '@aws-amplify/ui-react/styles.css';
 import outputs from '../amplify_outputs.json'; 
 import App from './App.tsx';
-import { PrivacyPolicyModal } from './components/PrivacyPolicyModal'; // ✅ Make sure you created this file!
+import { PrivacyPolicyModal } from './components/PrivacyPolicyModal'; 
 
-// 1. Configure Amplify
 Amplify.configure(outputs);
 
-// 2. Form Fields Config
 const formFields: AuthenticatorProps['formFields'] = {
   signUp: {
     phone_number: {
@@ -73,13 +71,10 @@ const formFields: AuthenticatorProps['formFields'] = {
   },
 };
 
-// 3. Custom Footer Component (Contains Forgot Password & Privacy Link)
 const CustomSignInFooter = ({ onOpenPrivacy }: { onOpenPrivacy: () => void }) => {
   const { toForgotPassword } = useAuthenticator();
-
   return (
     <View textAlign="center" padding="1rem" display="flex" flexDirection="column" gap="0.5rem">
-      {/* Restore Forgot Password Button */}
       <Button
         variation="link"
         onClick={toForgotPassword}
@@ -88,8 +83,6 @@ const CustomSignInFooter = ({ onOpenPrivacy }: { onOpenPrivacy: () => void }) =>
       >
         Forgot your password?
       </Button>
-
-      {/* ✅ The New Privacy Policy Button */}
       <Button 
         variation="link" 
         onClick={onOpenPrivacy}
@@ -101,21 +94,17 @@ const CustomSignInFooter = ({ onOpenPrivacy }: { onOpenPrivacy: () => void }) =>
   );
 };
 
-// 4. Wrapper Component (Manages Modal State)
 const AuthWrapper = () => {
   const [showPrivacy, setShowPrivacy] = useState(false);
 
   return (
     <>
-      {/* The Privacy Modal (Hidden by default) */}
       {showPrivacy && <PrivacyPolicyModal onClose={() => setShowPrivacy(false)} />}
-
       <Authenticator 
         formFields={formFields} 
         hideSignUp={true}
         components={{
           SignIn: {
-            // Inject our custom footer into the Sign In slot
             Footer: () => <CustomSignInFooter onOpenPrivacy={() => setShowPrivacy(true)} />
           }
         }}
@@ -128,9 +117,22 @@ const AuthWrapper = () => {
   );
 };
 
-// 5. Render
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AuthWrapper />
-  </React.StrictMode>
-);
+// 🔥 THE FIX: CHECK URL BEFORE RENDERING
+// If the URL is exactly "/privacy.html", we skip the App/Login and just show the Policy.
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+
+if (window.location.pathname === '/privacy.html') {
+  root.render(
+    <React.StrictMode>
+       {/* Redirect to home when they close the modal */}
+       <PrivacyPolicyModal onClose={() => window.location.href = '/'} />
+    </React.StrictMode>
+  );
+} else {
+  // Normal App Load
+  root.render(
+    <React.StrictMode>
+      <AuthWrapper />
+    </React.StrictMode>
+  );
+}
