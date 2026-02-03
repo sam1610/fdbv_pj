@@ -578,10 +578,10 @@ const AgentDashboard = ({ agentPhone, businessLocation , agentName}) => {
                             </div>
                             
                             {/* Close Button (Absolute Top Right of Card) */}
-                            <button 
+                            {/* <button 
                                 onClick={(e) => { e.stopPropagation(); setSelectedOrder(null); }} 
                                 className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-100 text-slate-400 hover:bg-red-100 hover:text-red-500 flex items-center justify-center text-xs font-bold transition-colors z-10"
-                            >✕</button>
+                            >✕</button> */}
                         </div>
                     </div>
                 )}

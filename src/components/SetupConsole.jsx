@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import AgentsView from './AgentsView'; 
 
-const TABS = ['Restaurant', 'Branches', 'Items', 'Agents', 'ⓘ'];
+const TABS = ['Restaurant', 'Branches', 'Items', 'Agents'];
 
 // 🗑️ REMOVED: const ITEM_CATEGORIES = [...] (User defines them now)
 
@@ -37,11 +37,13 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`flex-1 min-w-[80px] py-3 px-2 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all whitespace-nowrap ${
-                            activeTab === tab 
-                            ? (tab === 'ⓘ' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-sky-600 text-white shadow-lg') 
+                        className={`flex-1 min-w-[80px] py-3 px-2 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all whitespace-nowrap 
+                            ${activeTab === tab 
+                            ?  'bg-sky-600 text-white shadow-lg'
                             : 'text-slate-400 hover:bg-slate-700'
-                        }`}>
+                        }`
+                    }
+                        >
                         {tab}
                     </button>
                 ))}
