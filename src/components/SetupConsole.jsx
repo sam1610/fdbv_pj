@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import AgentsView from './AgentsView'; 
 
-const TABS = ['Restaurant', 'Branches', 'Items', 'Agents'];
+const TABS = ['Restaurant', 'Branches', 'Items', 'Agents', 'Templates'];
 
 // 🗑️ REMOVED: const ITEM_CATEGORIES = [...] (User defines them now)
 
@@ -12,14 +12,6 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
 
     // 1️⃣ INITIALIZE META SDK (Global)
     useEffect(() => {
-        // window.fbAsyncInit = function() {
-        //     window.FB.init({
-        //         appId: '29979645098350108', // App ID
-        //         cookie: true,
-        //         xfbml: true,
-        //         version: 'v20.0'
-        //     });
-        // };
         (function(d, s, id){
             var js, fjs = d.getElementsByTagName(s)[0];
             if (d.getElementById(id)) {return;}
@@ -68,7 +60,7 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
                         <AgentsView phoneNbr={phoneNbr} setModal={setModal} onAgentAdded={onDataChange} businessLocation={businessLocation} />
                     </div>
                 )}
-                
+                {activeTab === 'Templates' && <TemplatesSection />}
                 {activeTab === 'ⓘ' && <PrivacyPolicySection />}
             </div>
         </div>
@@ -1053,6 +1045,144 @@ const PrivacyPolicySection = () => {
             
             <div className="text-center pt-6 pb-4">
                 <p className="text-xs text-slate-500">© 2026 1st-Hub. All rights reserved.</p>
+            </div>
+        </div>
+    );
+};
+
+
+//  LAMBDA FUNCTION URL  👇
+const API_URL = "https://gl2yhmcz3p7pwufurreqigtpf40gjihi.lambda-url.us-east-1.on.aws/"; 
+
+const TemplatesSection = () => {
+    const [templates, setTemplates] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [name, setName] = useState('');
+    const [bodyText, setBodyText] = useState('');
+
+    // 1️⃣ ON LOAD: Fetch Real Data from Meta
+    useEffect(() => {
+        fetchTemplates();
+    }, []);
+
+    const fetchTemplates = async () => {
+        setIsLoading(true);
+        try {
+            console.log("Fetching templates...");
+            const res = await fetch(API_URL);
+            const data = await res.json();
+            
+            // Meta returns data array inside 'data'
+            if (data.data) {
+                setTemplates(data.data);
+            } else {
+                console.warn("No data found:", data);
+            }
+        } catch (e) {
+            console.error("API Error:", e);
+            alert("Failed to load templates. Check console.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // 2️⃣ ON CLICK: Create Real Template
+    const handleCreate = async () => {
+        if (!name || !bodyText) return alert("Please fill in all fields.");
+        
+        setIsLoading(true);
+        try {
+            const res = await fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    name: name.toLowerCase().replace(/\s/g, '_'), // Format: my_template_name
+                    textBody: bodyText 
+                })
+            });
+            
+            const result = await res.json();
+
+            if (result.id) {
+                alert(`✅ SUCCESS! Template Created.\nID: ${result.id}\nStatus: ${result.status}`);
+                fetchTemplates(); // Refresh list to show new item
+                setName('');
+                setBodyText('');
+            } else {
+                alert(`❌ Meta Error: ${result.error?.message || JSON.stringify(result)}`);
+            }
+        } catch (e) {
+            alert("Network Error: " + e.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="max-w-sm mx-auto pt-4 space-y-6 pb-24">
+            <header className="border-l-4 border-purple-500 pl-3">
+                <h2 className="text-purple-400 font-bold uppercase text-xs tracking-widest">
+                    Template Manager (Live API)
+                </h2>
+                <p className="text-[10px] text-slate-500 italic">
+                    {isLoading ? "⏳ Connecting to Meta..." : `✅ Connected: ${templates.length} Templates Found`}
+                </p>
+            </header>
+
+            {/* CREATE FORM */}
+            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3">
+                <h3 className="text-white text-xs font-bold uppercase">New Utility Template</h3>
+                
+                <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400">Template Name (Snake Case)</label>
+                    <input 
+                        className="w-full bg-slate-900 p-3 rounded-lg text-white text-xs border border-slate-600 focus:border-purple-500 outline-none"
+                        placeholder="e.g. order_update_v5" 
+                        value={name} 
+                        onChange={e => setName(e.target.value)} 
+                    />
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400">Body Text</label>
+                    <textarea 
+                        className="w-full bg-slate-900 p-3 rounded-lg text-white text-xs border border-slate-600 h-20 focus:border-purple-500 outline-none resize-none"
+                        placeholder="Hello {{1}}, your order status is: {{2}}."
+                        value={bodyText} 
+                        onChange={e => setBodyText(e.target.value)}
+                    />
+                </div>
+
+                <button 
+                    onClick={handleCreate} 
+                    disabled={isLoading}
+                    className="w-full bg-purple-600 hover:bg-purple-500 py-3 rounded-lg font-bold text-white text-xs transition-all shadow-lg flex justify-center"
+                >
+                    {isLoading ? "PROCESSING..." : "SUBMIT TO META"}
+                </button>
+            </div>
+
+            {/* LIST VIEW */}
+            <div className="space-y-2">
+                <h3 className="text-slate-500 text-[10px] font-bold uppercase border-b border-slate-800 pb-1">Meta Templates</h3>
+                {templates.length === 0 && !isLoading && (
+                    <p className="text-center text-slate-600 text-[10px] py-4">No templates found.</p>
+                )}
+                {templates.map((t) => (
+                    <div key={t.id} className="bg-slate-800/40 p-3 rounded-lg border border-slate-700/50 flex justify-between items-center hover:bg-slate-800 transition-colors">
+                        <div>
+                            <p className="text-white text-xs font-bold mb-0.5">{t.name}</p>
+                            <p className="text-slate-500 text-[9px] font-mono">{t.id}</p>
+                        </div>
+                        <span className={`text-[9px] font-bold px-2 py-1 rounded border ${
+                            t.status === 'APPROVED' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-500/20' : 
+                            t.status === 'REJECTED' ? 'bg-red-900/20 text-red-400 border-red-500/20' : 
+                            'bg-amber-900/20 text-amber-400 border-amber-500/20'
+                        }`}>
+                            {t.status}
+                        </span>
+                    </div>
+                ))}
             </div>
         </div>
     );

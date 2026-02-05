@@ -15,9 +15,6 @@ const backend = defineBackend({
   generatePlanHandler,
 });
 
-// ====================================================
-// A. KITCHEN PREP AI CONFIGURATION
-// ====================================================
 
 const businessTable = backend.data.resources.tables['BusinessData'];
 if (businessTable) {
@@ -63,10 +60,6 @@ backend.generatePlanHandler.resources.lambda.addToRolePolicy(
   })
 );
 
-// ====================================================
-// B. AGENT USER CONFIGURATION
-// ====================================================
-
 // 1. Configure Create Agent Function (Env Vars & Permissions)
 backend.createAgentUser.addEnvironment(
   "AMPLIFY_AUTH_USERPOOL_ID",
@@ -108,10 +101,14 @@ const myMap = new CfnMap(geoStack, 'DeliveryMap', {
   pricingPlan: 'RequestBasedUsage',
 });
 
+// const myTracker = new CfnTracker(geoStack, 'DeliveryTracker', {
+//   trackerName: uniqueTrackerName,
+//   pricingPlan: 'RequestBasedUsage',
+//   positionFiltering: 'TimeBased', // Optimizes cost by ignoring jitter
+// });
 const myTracker = new CfnTracker(geoStack, 'DeliveryTracker', {
-  trackerName: uniqueTrackerName,
-  pricingPlan: 'RequestBasedUsage',
-  positionFiltering: 'TimeBased', // Optimizes cost by ignoring jitter
+  trackerName: uniqueTrackerName, 
+  positionFiltering: 'TimeBased', // (Optional) Keeps cost low by filtering jitter
 });
 
 // 3. Define the Map Access Policy
