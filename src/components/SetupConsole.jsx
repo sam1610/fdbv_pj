@@ -465,338 +465,338 @@ const ItemsSection = ({ pk, onUpdate }) => {
 // --- FINAL ITEMS SECTION (No Alerts + Image Preview Fix) ---
 
 
-const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
-    // Identity State
-    const [name, setName] = useState('');
-    const [coords, setCoords] = useState({ lat: '', lng: '' });
-    const [saving, setSaving] = useState(false);
-    const [hasLoaded, setHasLoaded] = useState(false);
+// const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
+//     // Identity State
+//     const [name, setName] = useState('');
+//     const [coords, setCoords] = useState({ lat: '', lng: '' });
+//     const [saving, setSaving] = useState(false);
+//     const [hasLoaded, setHasLoaded] = useState(false);
     
-    // WhatsApp State
-    const [waStatus, setWaStatus] = useState('not_connected');
-    const [wabaId, setWabaId] = useState('');
-    const [isWaConnecting, setIsWaConnecting] = useState(false);
-    const [isSendingTest, setIsSendingTest] = useState(false);
+//     // WhatsApp State
+//     const [waStatus, setWaStatus] = useState('not_connected');
+//     const [wabaId, setWabaId] = useState('');
+//     const [isWaConnecting, setIsWaConnecting] = useState(false);
+//     const [isSendingTest, setIsSendingTest] = useState(false);
 
-    // Feedback State
-    const [feedback, setFeedback] = useState({ msg: '', type: '' });
+//     // Feedback State
+//     const [feedback, setFeedback] = useState({ msg: '', type: '' });
 
-    const showMessage = (msg, type = 'success') => {
-        setFeedback({ msg, type });
-        setTimeout(() => setFeedback({ msg: '', type: '' }), 4000);
-    };
+//     const showMessage = (msg, type = 'success') => {
+//         setFeedback({ msg, type });
+//         setTimeout(() => setFeedback({ msg: '', type: '' }), 4000);
+//     };
 
-    // Helper: Validation
-    const isValid = name.trim() !== '' && coords.lat !== '' && coords.lng !== '';
+//     // Helper: Validation
+//     const isValid = name.trim() !== '' && coords.lat !== '' && coords.lng !== '';
 
-    // ---------------------------------------------------------
-    // 🛠️ ROBUST LOCATION PARSER
-    // Handles: JSON Strings, {lat, lng}, {latitude, longitude}, {N: "..."}
-    // ---------------------------------------------------------
-    const parseConfigLocation = (loc) => {
-        if (!loc) return null;
-        try {
-            // 1. If it's a JSON string, parse it first
-            const data = typeof loc === 'string' ? JSON.parse(loc) : loc;
+//     // ---------------------------------------------------------
+//     // 🛠️ ROBUST LOCATION PARSER
+//     // Handles: JSON Strings, {lat, lng}, {latitude, longitude}, {N: "..."}
+//     // ---------------------------------------------------------
+//     const parseConfigLocation = (loc) => {
+//         if (!loc) return null;
+//         try {
+//             // 1. If it's a JSON string, parse it first
+//             const data = typeof loc === 'string' ? JSON.parse(loc) : loc;
 
-            // 2. Extract Lat/Lng (Try all common key variations)
-            // .N is for Raw DynamoDB format, .latitude is standard, .lat is short
-            const lat = parseFloat(data.latitude?.N || data.latitude || data.lat?.N || data.lat);
-            const lng = parseFloat(data.longitude?.N || data.longitude || data.lng?.N || data.lng);
+//             // 2. Extract Lat/Lng (Try all common key variations)
+//             // .N is for Raw DynamoDB format, .latitude is standard, .lat is short
+//             const lat = parseFloat(data.latitude?.N || data.latitude || data.lat?.N || data.lat);
+//             const lng = parseFloat(data.longitude?.N || data.longitude || data.lng?.N || data.lng);
 
-            // 3. Validation
-            if (isNaN(lat) || isNaN(lng)) return null;
+//             // 3. Validation
+//             if (isNaN(lat) || isNaN(lng)) return null;
             
-            return { lat: String(lat), lng: String(lng) };
-        } catch (e) { 
-            console.warn("Location Parse Error:", e);
-            return null; 
-        }
-    };
+//             return { lat: String(lat), lng: String(lng) };
+//         } catch (e) { 
+//             console.warn("Location Parse Error:", e);
+//             return null; 
+//         }
+//     };
 
-    // 1️⃣ FETCH DATA
-    useEffect(() => {
-        const fetchInitialData = async () => {
-            if (hasLoaded) return;
-            try {
-                // Fetch Identity Record (CONFIG)
-                const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
+//     // 1️⃣ FETCH DATA
+//     useEffect(() => {
+//         const fetchInitialData = async () => {
+//             if (hasLoaded) return;
+//             try {
+//                 // Fetch Identity Record (CONFIG)
+//                 const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
                 
-                // 🔍 DEBUG LOG: See exactly what the DB returns in the browser console
-                console.log("🔍 RAW DB CONFIG:", config);
+//                 // 🔍 DEBUG LOG: See exactly what the DB returns in the browser console
+//                 console.log("🔍 RAW DB CONFIG:", config);
 
-                if (config) {
-                    setName(config.name || '');
+//                 if (config) {
+//                     setName(config.name || '');
                     
-                    // Attempt to parse location using the robust helper
-                    const validLoc = parseConfigLocation(config.location);
+//                     // Attempt to parse location using the robust helper
+//                     const validLoc = parseConfigLocation(config.location);
                     
-                    if (validLoc) {
-                        setCoords(validLoc);
-                        console.log("📍 Location Loaded Successfully:", validLoc);
-                    } else {
-                        console.warn("⚠️ Location field exists but could not be parsed:", config.location);
-                    }
-                }
+//                     if (validLoc) {
+//                         setCoords(validLoc);
+//                         console.log("📍 Location Loaded Successfully:", validLoc);
+//                     } else {
+//                         console.warn("⚠️ Location field exists but could not be parsed:", config.location);
+//                     }
+//                 }
 
-                // Fetch WhatsApp Config
-                const { data: waConfig } = await client.models.BusinessData.get({ pk, sk: 'WHATSAPP_CONFIG' });
-                if (waConfig && waConfig.wabaId) {
-                    setWabaId(waConfig.wabaId);
-                    setWaStatus('connected');
-                }
+//                 // Fetch WhatsApp Config
+//                 const { data: waConfig } = await client.models.BusinessData.get({ pk, sk: 'WHATSAPP_CONFIG' });
+//                 if (waConfig && waConfig.wabaId) {
+//                     setWabaId(waConfig.wabaId);
+//                     setWaStatus('connected');
+//                 }
                 
-                setHasLoaded(true);
-            } catch (err) {
-                console.error("Fetch error:", err);
-                showMessage("Failed to load settings.", "error");
-            }
-        };
-        fetchInitialData();
-    }, [pk, hasLoaded]);
+//                 setHasLoaded(true);
+//             } catch (err) {
+//                 console.error("Fetch error:", err);
+//                 showMessage("Failed to load settings.", "error");
+//             }
+//         };
+//         fetchInitialData();
+//     }, [pk, hasLoaded]);
 
-    // 2️⃣ SAVE HANDLER
-    const handleUpdate = async () => {
-        if (!isValid) return showMessage("Please fill in Name and GPS coordinates.", "error");
+//     // 2️⃣ SAVE HANDLER
+//     const handleUpdate = async () => {
+//         if (!isValid) return showMessage("Please fill in Name and GPS coordinates.", "error");
         
-        setSaving(true);
-        setFeedback({ msg: '', type: '' });
+//         setSaving(true);
+//         setFeedback({ msg: '', type: '' });
 
-        try {
-            await client.models.BusinessData.update({
-                pk: pk, 
-                sk: "CONFIG", 
-                name: name.trim(), 
-                entityType: 'Business',
+//         try {
+//             await client.models.BusinessData.update({
+//                 pk: pk, 
+//                 sk: "CONFIG", 
+//                 name: name.trim(), 
+//                 entityType: 'Business',
                 
-                // Save as Numbers (Float)
-                location: { 
-                    latitude: parseFloat(coords.lat), 
-                    longitude: parseFloat(coords.lng) 
-                }
-            });
-            showMessage("✅ Settings saved successfully!");
-        } catch (err) {
-            console.error("Save failed:", err);
-            showMessage(`Failed: ${err.message}`, "error");
-        } finally {
-            setSaving(false);
-        }
-    };
+//                 // Save as Numbers (Float)
+//                 location: { 
+//                     latitude: parseFloat(coords.lat), 
+//                     longitude: parseFloat(coords.lng) 
+//                 }
+//             });
+//             showMessage("✅ Settings saved successfully!");
+//         } catch (err) {
+//             console.error("Save failed:", err);
+//             showMessage(`Failed: ${err.message}`, "error");
+//         } finally {
+//             setSaving(false);
+//         }
+//     };
 
-// 🚀 3️⃣ LAUNCH META POPUP (VIDEO SIMULATION MODE)
-    const launchWhatsAppSignup = () => {
-        setIsWaConnecting(true);
+// // 🚀 3️⃣ LAUNCH META POPUP (VIDEO SIMULATION MODE)
+//     const launchWhatsAppSignup = () => {
+//         setIsWaConnecting(true);
         
-        // Safety check
-        if (!window.FB) {
-            alert("Facebook SDK loading... please wait 2 seconds and try again.");
-            setIsWaConnecting(false);
-            return;
-        }
+//         // Safety check
+//         if (!window.FB) {
+//             alert("Facebook SDK loading... please wait 2 seconds and try again.");
+//             setIsWaConnecting(false);
+//             return;
+//         }
 
-        window.FB.login((response) => {
-            // --- 🎥 VIDEO TRICK START ---
-            // We ignore the actual response because we are in 'Business' mode 
-            // and don't have BSP status yet. We simulate success for the demo.
-            console.log("Popup Closed. Simulating Backend Connection...");
+//         window.FB.login((response) => {
+//             // --- 🎥 VIDEO TRICK START ---
+//             // We ignore the actual response because we are in 'Business' mode 
+//             // and don't have BSP status yet. We simulate success for the demo.
+//             console.log("Popup Closed. Simulating Backend Connection...");
 
-            // Wait 1.5 seconds then turn Green
-            setTimeout(() => {
-                setWabaId("1504486807253703"); 
-                setWaStatus('connected');
-                setIsWaConnecting(false);
-                showMessage("✅ WhatsApp Connected! WABA Linked.");
-            }, 1500);
-            // --- 🎥 VIDEO TRICK END ---
+//             // Wait 1.5 seconds then turn Green
+//             setTimeout(() => {
+//                 setWabaId("1504486807253703"); 
+//                 setWaStatus('connected');
+//                 setIsWaConnecting(false);
+//                 showMessage("✅ WhatsApp Connected! WABA Linked.");
+//             }, 1500);
+//             // --- 🎥 VIDEO TRICK END ---
 
-        }, {
-            // Your Real Config ID
-            config_id: '875468518461256', 
-            response_type: 'code',
-            override_default_response_type: true,
-            extras: {
-                feature: 'whatsapp_embedded_signup',
-                version: 2,
-                sessionInfoVersion: 2,
-                setup: { business: { name: name } }
-            }
-        });
-    };
+//         }, {
+//             // Your Real Config ID
+//             config_id: '875468518461256', 
+//             response_type: 'code',
+//             override_default_response_type: true,
+//             extras: {
+//                 feature: 'whatsapp_embedded_signup',
+//                 version: 2,
+//                 sessionInfoVersion: 2,
+//                 setup: { business: { name: name } }
+//             }
+//         });
+//     };
 
-    // 🚀 4️⃣ SEND TEST FLOW 
-    const handleSendTest = async () => {
-        setIsSendingTest(true);
+//     // 🚀 4️⃣ SEND TEST FLOW 
+//     const handleSendTest = async () => {
+//         setIsSendingTest(true);
 
-        // ⚠️ VIDEO ONLY: Paste the credentials that worked in your shell script
-        const TEMP_ACCESS_TOKEN = "EAGqCVBCUVhwBPxKs8axYLM4pWSEb3QZA7Vxg443OZC7izFkD6uviZBYWnttuOY6rVGZC4GjOSVj44qAYnWsxk0RK3gDMGBn5nwHTZCkTykGwCkev3oisKUuFQSc4f1bZAhLwPDsb7XF0sbY7ScoUVDSnrqueoRoekIwNfa77MHX7ttEN6rLIvmZAZCmXNi2etMJs2wZDZD"; 
-        const PHONE_NUMBER_ID = "812378515295003"; // Matches your shell command
+//         // ⚠️ VIDEO ONLY: Paste the credentials that worked in your shell script
+//         const TEMP_ACCESS_TOKEN = "EAGqCVBCUVhwBPxKs8axYLM4pWSEb3QZA7Vxg443OZC7izFkD6uviZBYWnttuOY6rVGZC4GjOSVj44qAYnWsxk0RK3gDMGBn5nwHTZCkTykGwCkev3oisKUuFQSc4f1bZAhLwPDsb7XF0sbY7ScoUVDSnrqueoRoekIwNfa77MHX7ttEN6rLIvmZAZCmXNi2etMJs2wZDZD"; 
+//         const PHONE_NUMBER_ID = "812378515295003"; // Matches your shell command
         
-        // Target Configuration
-        const targetPhone = "97333351887"; // Matches your shell command
-        const FLOW_ID = "3734528046844025"; 
-        const bizPhone = "+15556337947";
+//         // Target Configuration
+//         const targetPhone = "97333351887"; // Matches your shell command
+//         const FLOW_ID = "3734528046844025"; 
+//         const bizPhone = "+15556337947";
        
 
-        // The Payload (Exact match of your successful curl command)
-        const flowToken = `flow_${Date.now()}---ph_${targetPhone}---biz_${bizPhone}`;
-        const payload = {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: targetPhone,
-            type: "interactive",
-            interactive: {
-                type: "flow",
-                header: { type: "text", text: "CloudMeal Menu" },
-                body: { text: "Hungry? Order your favorites now!" },
-                footer: { text: "CloudMeal Delivery" },
-                action: {
-                    name: "flow",
-                    parameters: {
-                        mode: "published",
-                        flow_message_version: "3",
-                        flow_token: flowToken,
-                        flow_id: FLOW_ID,
-                        flow_cta: "Open Menu",
-                        flow_action: "data_exchange",
-                    }
-                }
-            }
-        };
+//         // The Payload (Exact match of your successful curl command)
+//         const flowToken = `flow_${Date.now()}---ph_${targetPhone}---biz_${bizPhone}`;
+//         const payload = {
+//             messaging_product: "whatsapp",
+//             recipient_type: "individual",
+//             to: targetPhone,
+//             type: "interactive",
+//             interactive: {
+//                 type: "flow",
+//                 header: { type: "text", text: "CloudMeal Menu" },
+//                 body: { text: "Hungry? Order your favorites now!" },
+//                 footer: { text: "CloudMeal Delivery" },
+//                 action: {
+//                     name: "flow",
+//                     parameters: {
+//                         mode: "published",
+//                         flow_message_version: "3",
+//                         flow_token: flowToken,
+//                         flow_id: FLOW_ID,
+//                         flow_cta: "Open Menu",
+//                         flow_action: "data_exchange",
+//                     }
+//                 }
+//             }
+//         };
 
-        try {
-            console.log("Sending Flow via React...");
+//         try {
+//             console.log("Sending Flow via React...");
             
-            // Note: Using v18.0 to match your curl command
-            const response = await fetch(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${TEMP_ACCESS_TOKEN}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
+//             // Note: Using v18.0 to match your curl command
+//             const response = await fetch(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
+//                 method: "POST",
+//                 headers: {
+//                     "Authorization": `Bearer ${TEMP_ACCESS_TOKEN}`,
+//                     "Content-Type": "application/json",
+//                 },
+//                 body: JSON.stringify(payload),
+//             });
 
-            const data = await response.json();
+//             const data = await response.json();
             
-            if (response.ok) {
-                console.log("✅ Success:", data);
-                showMessage(`✅ Test Menu sent to ${targetPhone}! Check WhatsApp.`);
-            } else {
-                console.error("❌ Meta API Error:", data);
-                showMessage(`Error: ${data.error?.message || "Failed to send"}`, "error");
-            }
-        } catch (err) {
-            console.error("❌ Network Error:", err);
-            showMessage("Failed to send test. Check console.", "error");
-        } finally {
-            setIsSendingTest(false);
-        }
-    };
+//             if (response.ok) {
+//                 console.log("✅ Success:", data);
+//                 showMessage(`✅ Test Menu sent to ${targetPhone}! Check WhatsApp.`);
+//             } else {
+//                 console.error("❌ Meta API Error:", data);
+//                 showMessage(`Error: ${data.error?.message || "Failed to send"}`, "error");
+//             }
+//         } catch (err) {
+//             console.error("❌ Network Error:", err);
+//             showMessage("Failed to send test. Check console.", "error");
+//         } finally {
+//             setIsSendingTest(false);
+//         }
+//     };
 
-    return (
-        <div className="space-y-8 max-w-sm mx-auto pt-4">
+//     return (
+//         <div className="space-y-8 max-w-sm mx-auto pt-4">
             
-            {/* --- IDENTITY SECTION --- */}
-            <div>
-                <header className="border-l-4 border-sky-500 pl-3 mb-4">
-                    <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">Business Identity</h2>
-                </header>
-                <div className="space-y-4">
-                    <div className="space-y-1">
-                        <div className="flex justify-between items-center ml-1 mb-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Business Name <span className="text-red-500">*</span></label>
-                            <button onClick={onShowPrivacy} className="w-5 h-5 rounded-full border border-sky-500 text-sky-500 flex items-center justify-center text-[10px] font-serif italic hover:bg-sky-500 hover:text-white transition-all cursor-pointer" title="Privacy Policy">i</button>
-                        </div>
-                        <input className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" value={name} onChange={e => setName(e.target.value)} />
-                    </div>
-                </div>
-            </div>
+//             {/* --- IDENTITY SECTION --- */}
+//             <div>
+//                 <header className="border-l-4 border-sky-500 pl-3 mb-4">
+//                     <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">Business Identity</h2>
+//                 </header>
+//                 <div className="space-y-4">
+//                     <div className="space-y-1">
+//                         <div className="flex justify-between items-center ml-1 mb-1">
+//                             <label className="text-[10px] font-black text-slate-400 uppercase">Business Name <span className="text-red-500">*</span></label>
+//                             <button onClick={onShowPrivacy} className="w-5 h-5 rounded-full border border-sky-500 text-sky-500 flex items-center justify-center text-[10px] font-serif italic hover:bg-sky-500 hover:text-white transition-all cursor-pointer" title="Privacy Policy">i</button>
+//                         </div>
+//                         <input className="w-full bg-slate-800 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" value={name} onChange={e => setName(e.target.value)} />
+//                     </div>
+//                 </div>
+//             </div>
 
-            {/* --- WHATSAPP SECTION --- */}
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                <header className="flex items-center gap-2 mb-4">
-                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 4.187 1.213 4.435c.149.248 2.095 3.197 5.077 4.483.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
-                    </div>
-                    <h3 className="text-white text-xs font-bold uppercase tracking-wider">WhatsApp Connection</h3>
-                </header>
+//             {/* --- WHATSAPP SECTION --- */}
+//             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+//                 <header className="flex items-center gap-2 mb-4">
+//                     <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+//                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 4.187 1.213 4.435c.149.248 2.095 3.197 5.077 4.483.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+//                     </div>
+//                     <h3 className="text-white text-xs font-bold uppercase tracking-wider">WhatsApp Connection</h3>
+//                 </header>
 
-                {waStatus === 'not_connected' ? (
-                    <button 
-                        onClick={launchWhatsAppSignup}
-                        disabled={isWaConnecting}
-                        className="w-full bg-[#1877F2] hover:bg-[#166fe5] py-3 rounded-lg font-bold text-white text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
-                    >
-                        {isWaConnecting ? "Connecting..." : "Connect via Facebook"}
-                    </button>
-                ) : (
-                    <div className="space-y-3">
-                        <div className="text-center p-2 bg-green-900/20 rounded-lg">
-                            <p className="text-green-400 text-xs font-bold mb-1">✅ Connected</p>
-                            <p className="text-slate-500 text-[9px] font-mono">{wabaId}</p>
-                        </div>
+//                 {waStatus === 'not_connected' ? (
+//                     <button 
+//                         onClick={launchWhatsAppSignup}
+//                         disabled={isWaConnecting}
+//                         className="w-full bg-[#1877F2] hover:bg-[#166fe5] py-3 rounded-lg font-bold text-white text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
+//                     >
+//                         {isWaConnecting ? "Connecting..." : "Connect via Facebook"}
+//                     </button>
+//                 ) : (
+//                     <div className="space-y-3">
+//                         <div className="text-center p-2 bg-green-900/20 rounded-lg">
+//                             <p className="text-green-400 text-xs font-bold mb-1">✅ Connected</p>
+//                             <p className="text-slate-500 text-[9px] font-mono">{wabaId}</p>
+//                         </div>
                         
-                        <button 
-                            onClick={handleSendTest}
-                            disabled={isSendingTest}
-                            className="w-full bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-[10px] font-bold transition-all flex justify-center items-center gap-2 border border-slate-600"
-                        >
-                            {isSendingTest ? "Sending..." : "🚀 Send Test Menu Flow"}
-                        </button>
-                    </div>
-                )}
-            </div>
+//                         <button 
+//                             onClick={handleSendTest}
+//                             disabled={isSendingTest}
+//                             className="w-full bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg text-[10px] font-bold transition-all flex justify-center items-center gap-2 border border-slate-600"
+//                         >
+//                             {isSendingTest ? "Sending..." : "🚀 Send Test Menu Flow"}
+//                         </button>
+//                     </div>
+//                 )}
+//             </div>
 
-            {/* --- LOCATION SECTION --- */}
-            <div>
-                <div className="space-y-2 mb-6">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location <span className="text-red-500">*</span></label>
-                    <div className="flex gap-2">
-                        <input 
-                            className="flex-1 min-w-0 bg-slate-800 p-3 rounded-t-xl text-white text-xs border border-slate-700 outline-none focus:border-sky-500 transition-colors" 
-                            placeholder="Latitude" 
-                            value={coords.lat} 
-                            onChange={e => setCoords({...coords, lat: e.target.value})} 
-                        />
-                        <input 
-                            className="flex-1 min-w-0 bg-slate-800 p-3 rounded-t-xl text-white text-xs border border-slate-700 outline-none focus:border-sky-500 transition-colors" 
-                            placeholder="Longitude" 
-                            value={coords.lng} 
-                            onChange={e => setCoords({...coords, lng: e.target.value})} 
-                        />
-                    </div>
-                    <button onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} className="w-full bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-400 text-[10px] font-bold py-1.5 rounded-b-xl border-x border-b border-slate-700 border-t-0 uppercase tracking-widest transition-colors">
-                        📍 Capture Current Location
-                    </button>
-                </div>
+//             {/* --- LOCATION SECTION --- */}
+//             <div>
+//                 <div className="space-y-2 mb-6">
+//                     <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location <span className="text-red-500">*</span></label>
+//                     <div className="flex gap-2">
+//                         <input 
+//                             className="flex-1 min-w-0 bg-slate-800 p-3 rounded-t-xl text-white text-xs border border-slate-700 outline-none focus:border-sky-500 transition-colors" 
+//                             placeholder="Latitude" 
+//                             value={coords.lat} 
+//                             onChange={e => setCoords({...coords, lat: e.target.value})} 
+//                         />
+//                         <input 
+//                             className="flex-1 min-w-0 bg-slate-800 p-3 rounded-t-xl text-white text-xs border border-slate-700 outline-none focus:border-sky-500 transition-colors" 
+//                             placeholder="Longitude" 
+//                             value={coords.lng} 
+//                             onChange={e => setCoords({...coords, lng: e.target.value})} 
+//                         />
+//                     </div>
+//                     <button onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} className="w-full bg-indigo-900/40 hover:bg-indigo-900/60 text-indigo-400 text-[10px] font-bold py-1.5 rounded-b-xl border-x border-b border-slate-700 border-t-0 uppercase tracking-widest transition-colors">
+//                         📍 Capture Current Location
+//                     </button>
+//                 </div>
 
-                {/* Feedback Message */}
-                {feedback.msg && (
-                    <div className={`mb-3 text-center text-[10px] font-bold py-2 px-3 rounded ${
-                        feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border border-red-500/30' 
-                        : 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30'
-                    }`}>
-                        {feedback.msg}
-                    </div>
-                )}
+//                 {/* Feedback Message */}
+//                 {feedback.msg && (
+//                     <div className={`mb-3 text-center text-[10px] font-bold py-2 px-3 rounded ${
+//                         feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border border-red-500/30' 
+//                         : 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30'
+//                     }`}>
+//                         {feedback.msg}
+//                     </div>
+//                 )}
 
-                {/* Save Button */}
-                <button 
-                    onClick={handleUpdate} 
-                    disabled={saving || !isValid} 
-                    className={`w-full py-4 rounded-xl font-black text-white shadow-lg transition-all active:scale-95 ${
-                        isValid 
-                        ? 'bg-sky-600 hover:bg-sky-500 cursor-pointer' 
-                        : 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
-                    }`}
-                >
-                    {saving ? "SAVING..." : "SAVE ALL SETTINGS"}
-                </button>
-            </div>
-        </div>
-    );
-};
+//                 {/* Save Button */}
+//                 <button 
+//                     onClick={handleUpdate} 
+//                     disabled={saving || !isValid} 
+//                     className={`w-full py-4 rounded-xl font-black text-white shadow-lg transition-all active:scale-95 ${
+//                         isValid 
+//                         ? 'bg-sky-600 hover:bg-sky-500 cursor-pointer' 
+//                         : 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
+//                     }`}
+//                 >
+//                     {saving ? "SAVING..." : "SAVE ALL SETTINGS"}
+//                 </button>
+//             </div>
+//         </div>
+//     );
+// };
 
 const BranchesSection = ({ pk }) => {
     const [branchName, setBranchName] = useState('');
@@ -1051,7 +1051,7 @@ const PrivacyPolicySection = () => {
 };
 
 
-//  LAMBDA FUNCTION URL  👇
+//  LAMBDA FUNCTION URL
 const API_URL = "https://gl2yhmcz3p7pwufurreqigtpf40gjihi.lambda-url.us-east-1.on.aws/"; 
 
 const TemplatesSection = () => {
@@ -1184,6 +1184,260 @@ const TemplatesSection = () => {
                     </div>
                 ))}
             </div>
+        </div>
+    );
+};
+
+
+
+const RestaurantSection = ({ pk, phoneNbr, onShowPrivacy }) => {
+    // Identity State
+    const [name, setName] = useState('');
+    const [coords, setCoords] = useState({ lat: '', lng: '' });
+    const [saving, setSaving] = useState(false);
+    const [hasLoaded, setHasLoaded] = useState(false);
+    
+    // ✅ NEW: Meta Registration Data
+    const [metaData, setMetaData] = useState({
+      metaBusinessAccountId: '',
+      metaBusinessAccessToken: '',
+      phoneNumber: '',
+      phoneNumberId: '',
+      registrationStatus: 'PENDING'
+    });
+    
+    const [isRegisteringMeta, setIsRegisteringMeta] = useState(false);
+    const [feedback, setFeedback] = useState({ msg: '', type: '' });
+
+    const showMessage = (msg, type = 'success') => {
+        setFeedback({ msg, type });
+        setTimeout(() => setFeedback({ msg: '', type: '' }), 4000);
+    };
+
+    // ---------------------------------------------------------
+    // 1️⃣ FETCH: Check if Meta is already registered
+    // ---------------------------------------------------------
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            if (hasLoaded) return;
+            try {
+                // Fetch Identity Record (CONFIG)
+                const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
+                if (config) {
+                    setName(config.name || '');
+                    const validLoc = parseConfigLocation(config.location);
+                    if (validLoc) setCoords(validLoc);
+                }
+
+                // ✅ NEW: Check if Meta Account exists
+                const { data: metaRecord } = await client.models.RestaurantMetaAccount.get({ 
+                  restaurantId: phoneNbr 
+                });
+                
+                if (metaRecord) {
+                    setMetaData({
+                        metaBusinessAccountId: metaRecord.metaBusinessAccountId,
+                        metaBusinessAccessToken: metaRecord.metaBusinessAccessToken,
+                        phoneNumber: metaRecord.phoneNumber,
+                        phoneNumberId: metaRecord.phoneNumberId,
+                        registrationStatus: metaRecord.registrationStatus
+                    });
+                    console.log("✅ Meta Account Found:", metaRecord.phoneNumber);
+                }
+                
+                setHasLoaded(true);
+            } catch (err) {
+                console.error("Fetch error:", err);
+            }
+        };
+        fetchInitialData();
+    }, [pk, phoneNbr, hasLoaded]);
+
+    // ---------------------------------------------------------
+    // 2️⃣ SAVE: Update Business Config (existing logic)
+    // ---------------------------------------------------------
+    const handleUpdateBusinessConfig = async () => {
+        if (!name.trim()) return showMessage("Please fill in Business Name", "error");
+        
+        setSaving(true);
+        try {
+            await client.models.BusinessData.update({
+                pk: pk, 
+                sk: "CONFIG", 
+                name: name.trim(), 
+                entityType: 'Business',
+                location: { 
+                    latitude: parseFloat(coords.lat), 
+                    longitude: parseFloat(coords.lng) 
+                }
+            });
+            showMessage("✅ Business config saved!");
+        } catch (err) {
+            showMessage(`Failed: ${err.message}`, "error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // ---------------------------------------------------------
+    // 3️⃣ NEW: Launch Meta OAuth (Simulated for now)
+    // ---------------------------------------------------------
+    const launchMetaOAuth = () => {
+        setIsRegisteringMeta(true);
+        
+        // 🎥 SIMULATION MODE (Until whatsapp_business_management approved)
+        // In production, this will redirect to Meta OAuth:
+        // const redirectUri = encodeURIComponent(`${window.location.origin}/meta-oauth-callback`);
+        // window.location.href = `https://www.facebook.com/v18.0/dialog/oauth?...`;
+        
+        console.log("🔄 Meta OAuth initiated...");
+        
+        // Simulate OAuth flow (In production: Meta redirects back with code)
+        setTimeout(async () => {
+            // Simulate receiving data from Meta
+            const simulatedMetaData = {
+                metaBusinessAccountId: "1504486807253703",
+                metaBusinessAccessToken: "EAGqCVB...", // Restaurant's token
+                phoneNumber: phoneNbr, // Restaurant's phone
+                phoneNumberId: "812378515295003",
+                registrationStatus: 'ACTIVE'
+            };
+
+            try {
+                // ✅ Save to RestaurantMetaAccount table
+                await client.models.RestaurantMetaAccount.create({
+                    restaurantId: phoneNbr,
+                    ...simulatedMetaData,
+                    registrationDate: new Date().toISOString(),
+                    lastVerified: new Date().toISOString(),
+                });
+
+                setMetaData(simulatedMetaData);
+                showMessage("✅ Meta Account Registered Successfully!");
+            } catch (err) {
+                console.error("Meta registration error:", err);
+                showMessage("Failed to register Meta account", "error");
+            } finally {
+                setIsRegisteringMeta(false);
+            }
+        }, 2000);
+    };
+
+    // ---------------------------------------------------------
+    // 4️⃣ RENDER: Two-Section Layout
+    // ---------------------------------------------------------
+    return (
+        <div className="space-y-8 max-w-sm mx-auto pt-4">
+            
+            {/* --- SECTION 1: BUSINESS IDENTITY --- */}
+            <div className="bg-slate-800/40 p-6 rounded-xl border border-slate-700">
+                <header className="border-l-4 border-sky-500 pl-3 mb-4">
+                    <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">1. Business Identity</h2>
+                    <p className="text-[9px] text-slate-500 mt-1">Your restaurant's basic info</p>
+                </header>
+
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Business Name <span className="text-red-500">*</span></label>
+                        <input 
+                            className="w-full bg-slate-900 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" 
+                            value={name} 
+                            onChange={e => setName(e.target.value)} 
+                        />
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase ml-1">GPS Location <span className="text-red-500">*</span></label>
+                        <div className="flex gap-2">
+                            <input 
+                                className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:border-sky-500 outline-none" 
+                                placeholder="Latitude" 
+                                value={coords.lat} 
+                                onChange={e => setCoords({...coords, lat: e.target.value})} 
+                            />
+                            <input 
+                                className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:border-sky-500 outline-none" 
+                                placeholder="Longitude" 
+                                value={coords.lng} 
+                                onChange={e => setCoords({...coords, lng: e.target.value})} 
+                            />
+                        </div>
+                        <button 
+                            onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} 
+                            className="w-full bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-[10px] font-bold py-2 rounded-xl border border-sky-500/20 transition-all"
+                        >
+                            📍 Capture Current Location
+                        </button>
+                    </div>
+
+                    <button 
+                        onClick={handleUpdateBusinessConfig} 
+                        disabled={saving}
+                        className="w-full py-3 rounded-xl font-black text-white bg-sky-600 hover:bg-sky-500 shadow-lg transition-all disabled:opacity-50"
+                    >
+                        {saving ? "SAVING..." : "SAVE BUSINESS INFO"}
+                    </button>
+                </div>
+            </div>
+
+            {/* --- SECTION 2: META WHATSAPP REGISTRATION --- */}
+            <div className="bg-slate-800/40 p-6 rounded-xl border border-slate-700">
+                <header className="flex items-center gap-2 mb-4">
+                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 4.187 1.213 4.435c.149.248 2.095 3.197 5.077 4.483.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                    </div>
+                    <div>
+                        <h2 className="text-green-400 font-bold uppercase text-xs tracking-widest">2. WhatsApp Business Account</h2>
+                        <p className="text-[9px] text-slate-500 mt-0.5">Register your phone number with Meta</p>
+                    </div>
+                </header>
+
+                {metaData.registrationStatus === 'ACTIVE' ? (
+                    // ✅ REGISTERED STATE
+                    <div className="space-y-3">
+                        <div className="text-center p-3 bg-green-900/20 rounded-lg border border-green-500/30">
+                            <p className="text-green-400 text-xs font-bold mb-1">✅ Connected to WhatsApp Business</p>
+                            <p className="text-slate-400 text-[9px] font-mono">{metaData.phoneNumber}</p>
+                        </div>
+                        <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-700 space-y-1">
+                            <p className="text-[9px] text-slate-500"><strong>WABA ID:</strong></p>
+                            <p className="text-[9px] text-slate-400 font-mono break-all">{metaData.metaBusinessAccountId}</p>
+                            <p className="text-[9px] text-slate-500 mt-2"><strong>Phone Number ID:</strong></p>
+                            <p className="text-[9px] text-slate-400 font-mono">{metaData.phoneNumberId}</p>
+                        </div>
+                        <p className="text-[10px] text-emerald-400 bg-emerald-900/20 p-2 rounded border border-emerald-500/20 text-center">
+                            🎉 Your customers can now message {metaData.phoneNumber}
+                        </p>
+                    </div>
+                ) : (
+                    // ❌ NOT REGISTERED STATE
+                    <div className="space-y-3">
+                        <p className="text-[10px] text-slate-400 mb-2">
+                            Connect your WhatsApp Business account to enable messaging. You'll need approval from Meta's <code className="bg-slate-900 px-1 rounded text-[9px]">whatsapp_business_management</code> permission.
+                        </p>
+                        <button 
+                            onClick={launchMetaOAuth}
+                            disabled={isRegisteringMeta}
+                            className="w-full bg-[#1877F2] hover:bg-[#166fe5] py-3 rounded-lg font-bold text-white text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                            {isRegisteringMeta ? "🔄 Connecting..." : "🔗 Connect WhatsApp Business"}
+                        </button>
+                        <p className="text-[9px] text-slate-500 text-center italic">
+                            (In production, you'll be redirected to Meta to authorize)
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* --- FEEDBACK MESSAGE --- */}
+            {feedback.msg && (
+                <div className={`text-center text-[10px] font-bold py-2 px-3 rounded ${
+                    feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border border-red-500/30' 
+                    : 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30'
+                }`}>
+                    {feedback.msg}
+                </div>
+            )}
         </div>
     );
 };
