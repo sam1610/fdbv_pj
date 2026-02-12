@@ -7,12 +7,14 @@ import { CfnMap, CfnTracker } from 'aws-cdk-lib/aws-location';
 import { createAgentUser } from './functions/createAgentUser/resource'; 
 import { generatePlanHandler } from './functions/generate-plan/resource';
 import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
+import { registerBusinessPhone } from './functions/registerBusinessPhone/resource';
 const backend = defineBackend({
   auth,
   data,
   optimizeDelivery,
   createAgentUser, 
   generatePlanHandler,
+  registerBusinessPhone
 });
 
 

@@ -2,6 +2,7 @@ import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { optimizeDelivery } from '../functions/optimizeDelivery/resource';
 import { createAgentUser } from '../functions/createAgentUser/resource'; // 1. Import the create function
 import { generatePlanHandler } from '../functions/generate-plan/resource'; // We will create this next
+import { registerBusinessPhone } from '../functions/registerBusinessPhone/resource';
 // Define all necessary status enums for data consistency
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
 // const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
@@ -68,7 +69,36 @@ expiration: a.integer()
     allow.groups(['ManaDeeb']).to(['read', 'update']),
     allow.publicApiKey().to(['create', 'update', 'read'])
     ]),
- 
+  RestaurantMetaAccount: a.model({
+    restaurantId: a.string().required(), // PK - Business Phone
+    metaBusinessAccessToken: a.string(),
+    phoneNumberId: a.string(),
+    phoneNumber: a.string(),
+    wabaId: a.string(),
+    registrationStatus: a.enum(['PENDING', 'ACTIVE', 'ERROR']),
+    registrationDate: a.datetime(),
+    lastVerified: a.datetime(),
+    businessOwnerId: a.string(), // 🆕 Link to owner
+  })
+  .identifier(['restaurantId'])
+  .authorization(allow => [
+    allow.authenticated().to(['read', 'update']),
+    allow.publicApiKey().to(['create', 'read', 'update'])
+  ]),
+
+    registerPhoneNumber: a.mutation()
+    .arguments({
+      action: a.string().required(),
+        businessPhone: a.string().required(),
+        otpCode: a.string(),
+        businessPhoneOwner: a.string(),
+        phoneNumberId: a.string()
+    })
+    .returns(a.json())
+    .authorization(allow => [
+      allow.authenticated()
+    ])
+    .handler(a.handler.function(registerBusinessPhone)),
     optimizeDelivery: a.query()
       .arguments({
         orders: a.json(),            // Array of orders passed from React
