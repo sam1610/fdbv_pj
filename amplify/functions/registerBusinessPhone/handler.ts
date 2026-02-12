@@ -77,7 +77,8 @@ async function getPhoneNumberId(businessPhone: string) {
     const res = await callMeta(`/${WABA_ID}/phone_numbers`, 'POST', {
         cc: cc,
         phone_number: number,
-        display_name: "CloudOrder Merchant"
+        display_name: "CloudOrder Merchant",
+        verified_name: "CloudOrder Merchant" // ✅ ADD THIS LINE
     });
 
     if (res.id) return res.id;
@@ -87,7 +88,7 @@ async function getPhoneNumberId(businessPhone: string) {
         console.log("Phone might exist, searching list...", res.error.message);
         
         // Fetch list of all phones in WABA (GET doesn't need a body)
-        const listRes = await callMeta(`/${WABA_ID}/phone_numbers?fields=display_phone_number,id`, 'GET');
+        const listRes = await callMeta(`/${WABA_ID}/phone_numbers?fields=display_phone_number,id,verified_name`, 'GET');
         
         // Match clean numbers
         const targetClean = businessPhone.replace(/\D/g, '');
