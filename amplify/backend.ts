@@ -1,4 +1,4 @@
-import { defineBackend } from '@aws-amplify/backend';
+import { defineBackend , secret } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { optimizeDelivery } from './functions/optimizeDelivery/resource';
@@ -17,7 +17,26 @@ const backend = defineBackend({
   registerBusinessPhone
 });
 
+backend.registerBusinessPhone.addEnvironment('WABA_ID', secret('WABA_ID'));
+backend.registerBusinessPhone.addEnvironment('META_SYSTEM_USER_TOKEN', secret('META_SYSTEM_USER_TOKEN'));
+backend.registerBusinessPhone.addEnvironment(
+  'APPSYNC_ENDPOINT_URL',
+  backend.data.resources.cfnResources.cfnGraphqlApi.attrGraphQlUrl
+);
 
+if (backend.data.resources.cfnResources.cfnApiKey) {
+  backend.registerBusinessPhone.addEnvironment(
+    'APPSYNC_API_KEY',
+    backend.data.resources.cfnResources.cfnApiKey.attrApiKey
+  );
+}
+
+backend.registerBusinessPhone.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['appsync:GraphQL'],
+    resources: [backend.data.resources.graphqlApi.arn + '/*'],
+  })
+);
 const businessTable = backend.data.resources.tables['BusinessData'];
 if (businessTable) {
   const cfnTable = businessTable.node.defaultChild as CfnTable;

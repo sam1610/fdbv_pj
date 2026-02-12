@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import AgentsView from './AgentsView'; 
-    import { registerBusinessPhone } from '../functions/registerBusinessPhone/resource';
+// import { registerBusinessPhone } from '../../functions/registerBusinessPhone/resource';
 
 // ✅ GLOBAL CONSTANTS & HELPERS
 const TABS = ['Restaurant', 'Branches', 'Items', 'Agents', 'Templates'];

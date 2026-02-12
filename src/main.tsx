@@ -1,44 +1,5 @@
 
 
-// import React from 'react';
-// import ReactDOM from 'react-dom/client';
-// import { Amplify } from 'aws-amplify';
-// // Import the Authenticator and its props type
-// import { Authenticator, AuthenticatorProps } from '@aws-amplify/ui-react';
-// import '@aws-amplify/ui-react/styles.css';
-// import outputs from '../amplify_outputs.json'; // Adjust path
-// import App from './App.tsx';
-
-// Amplify.configure(outputs);
-
-// // --- 1. Define the custom form fields ---
-// // NOTE: This 'signUp' configuration won't be visible 
-// // since you are hiding the sign-up form.
-// const formFields: AuthenticatorProps['formFields'] = {
-//   signUp: {
-//     phone_number: {
-//       order: 3, 
-//       label: 'Phone Number',
-//       placeholder: 'Enter your phone number (e.g., +15551234567)',
-//       isRequired: true,
-//     },
-//     email: { order: 1 },
-//     password: { order: 2 },
-//     confirm_password: { order: 4 },
-//   },
-// };
-
-// // --- 2.  hideSignUp prop ---
-// ReactDOM.createRoot(document.getElementById('root')!).render(
-//   <>
-//     <Authenticator formFields={formFields} hideSignUp={true}>
-//       {({ signOut, user }) => (
-//        <App signOut={() => signOut && signOut()} user={user} />
-//       )}
-//     </Authenticator>
-//   </>
-// );
-
 // main.tsx
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -74,8 +35,15 @@ const formFields: AuthenticatorProps['formFields'] = {
 const CustomSignInFooter = ({ onOpenPrivacy }: { onOpenPrivacy: () => void }) => {
   const { toForgotPassword } = useAuthenticator();
   return (
-    <View textAlign="center" padding="1rem" display="flex" flexDirection="column" gap="0.5rem">
-      <Button
+<View 
+      textAlign="center" 
+      padding="1rem" 
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '0.5rem' 
+      }}
+    >      <Button
         variation="link"
         onClick={toForgotPassword}
         size="small"
@@ -119,20 +87,41 @@ const AuthWrapper = () => {
 
 // 🔥 THE FIX: CHECK URL BEFORE RENDERING
 // If the URL is exactly "/privacy.html", we skip the App/Login and just show the Policy.
-const root = ReactDOM.createRoot(document.getElementById('root')!);
+// const root = ReactDOM.createRoot(document.getElementById('root')!);
 
-if (window.location.pathname === '/privacy.html') {
-  root.render(
-    <React.StrictMode>
-       {/* Redirect to home when they close the modal */}
-       <PrivacyPolicyModal onClose={() => window.location.href = '/'} />
-    </React.StrictMode>
-  );
-} else {
-  // Normal App Load
-  root.render(
-    <React.StrictMode>
-      <AuthWrapper />
-    </React.StrictMode>
-  );
+// if (window.location.pathname === '/privacy.html') {
+//   root.render(
+//     <React.StrictMode>
+//        {/* Redirect to home when they close the modal */}
+//        <PrivacyPolicyModal onClose={() => window.location.href = '/'} />
+//     </React.StrictMode>
+//   );
+// } else {
+//   // Normal App Load
+//   root.render(
+//     <React.StrictMode>
+//       <AuthWrapper />
+//     </React.StrictMode>
+//   );
+// }
+
+const container = document.getElementById('root');
+
+if (container) {
+  // Only create the root if it doesn't look like it's already handled (mostly for HMR safety)
+  const root = ReactDOM.createRoot(container);
+
+  if (window.location.pathname === '/privacy.html') {
+    root.render(
+      <React.StrictMode>
+         <PrivacyPolicyModal onClose={() => window.location.href = '/'} />
+      </React.StrictMode>
+    );
+  } else {
+    root.render(
+      <React.StrictMode>
+        <AuthWrapper />
+      </React.StrictMode>
+    );
+  }
 }

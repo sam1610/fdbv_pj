@@ -630,7 +630,8 @@ const ItemsSection = ({ pk, onUpdate }) => {
 //         setIsSendingTest(true);
 
 //         // ⚠️ VIDEO ONLY: Paste the credentials that worked in your shell script
-//         const TEMP_ACCESS_TOKEN = "EAGqCVBCUVhwBPxKs8axYLM4pWSEb3QZA7Vxg443OZC7izFkD6uviZBYWnttuOY6rVGZC4GjOSVj44qAYnWsxk0RK3gDMGBn5nwHTZCkTykGwCkev3oisKUuFQSc4f1bZAhLwPDsb7XF0sbY7ScoUVDSnrqueoRoekIwNfa77MHX7ttEN6rLIvmZAZCmXNi2etMJs2wZDZD"; 
+//         const TEMP_ACCESS_TOKEN = "
+// EAGqCVBCUVhwBPxKs8axYLM4pWSEb3QZA7Vxg443OZC7izFkD6uviZBYWnttuOY6rVGZC4GjOSVj44qAYnWsxk0RK3gDMGBn5nwHTZCkTykGwCkev3oisKUuFQSc4f1bZAhLwPDsb7XF0sbY7ScoUVDSnrqueoRoekIwNfa77MHX7ttEN6rLIvmZAZCmXNi2etMJs2wZDZD"; 
 //         const PHONE_NUMBER_ID = "812378515295003"; // Matches your shell command
         
 //         // Target Configuration
