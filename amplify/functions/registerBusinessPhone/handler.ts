@@ -48,25 +48,27 @@ async function callMeta(endpoint: string, method: string, body?: any) {
 // 2. CORE LOGIC
 // ============================================================
 
+// STEP A: Add Phone to WABA to get ID
 async function getPhoneNumberId(businessPhone: string) {
     const { cc, number } = parsePhoneNumber(businessPhone);
 
     console.log(`Trying to register: ${cc} ${number} to WABA: ${WABA_ID}`);
 
-    // ✅ FIX 2: Added 'verified_name' which is REQUIRED by Meta v19+
+    // 1. Try to ADD the phone
     const res = await callMeta(`/${WABA_ID}/phone_numbers`, 'POST', {
         cc: cc,
         phone_number: number,
-        display_name: "CloudOrder Merchant",
-        verified_name: "CloudOrder Merchant" 
+        verified_name: "CloudOrder Merchant" // ✅ SEND ONLY THIS (Remove display_name)
     });
 
     if (res.id) return res.id;
 
+    // 2. If error, Log it and search list
     if (res.error) {
-        console.log("Registration failed, checking if exists...", res.error.message);
+        // 🔍 DEBUG LOG: Use JSON.stringify to see the FULL error details
+        console.error("Registration failed:", JSON.stringify(res.error));
         
-        // Fetch list to see if it's already there
+        // Fetch list of all phones in WABA
         const listRes = await callMeta(`/${WABA_ID}/phone_numbers?fields=display_phone_number,id,verified_name`, 'GET');
         
         const targetClean = businessPhone.replace(/\D/g, '');
@@ -78,7 +80,7 @@ async function getPhoneNumberId(businessPhone: string) {
         }
     }
     
-    // Throw the original error if we couldn't recover
+    // Throw error if we couldn't recover
     throw new Error(res.error?.message || "Could not register phone with Meta");
 }
 
