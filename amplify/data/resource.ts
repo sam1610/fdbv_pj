@@ -92,7 +92,8 @@ expiration: a.integer()
         businessPhone: a.string().required(),
         otpCode: a.string(),
         businessPhoneOwner: a.string(),
-        phoneNumberId: a.string()
+        phoneNumberId: a.string(),
+        verificationMethod: a.string() 
     })
     .returns(a.json())
     .authorization(allow => [

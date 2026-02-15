@@ -55,20 +55,20 @@ async function getPhoneNumberId(businessPhone: string) {
     console.log(`Trying to register: ${cc} ${number} to WABA: ${WABA_ID}`);
 
     // 1. Try to ADD the phone
+    // We REMOVED display_name as discussed to fix the "Invalid Parameter" error
     const res = await callMeta(`/${WABA_ID}/phone_numbers`, 'POST', {
         cc: cc,
         phone_number: number,
-        verified_name: "CloudOrder Merchant" // ✅ SEND ONLY THIS (Remove display_name)
+        verified_name: "CloudOrder Merchant" 
     });
 
     if (res.id) return res.id;
 
     // 2. If error, Log it and search list
     if (res.error) {
-        // 🔍 DEBUG LOG: Use JSON.stringify to see the FULL error details
         console.error("Registration failed:", JSON.stringify(res.error));
         
-        // Fetch list of all phones in WABA
+        // Fetch list of all phones in WABA to see if it already exists
         const listRes = await callMeta(`/${WABA_ID}/phone_numbers?fields=display_phone_number,id,verified_name`, 'GET');
         
         const targetClean = businessPhone.replace(/\D/g, '');
@@ -80,7 +80,6 @@ async function getPhoneNumberId(businessPhone: string) {
         }
     }
     
-    // Throw error if we couldn't recover
     throw new Error(res.error?.message || "Could not register phone with Meta");
 }
 
@@ -88,19 +87,28 @@ async function getPhoneNumberId(businessPhone: string) {
 // 3. LAMBDA HANDLER
 // ============================================================
 export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (event) => {
-    const { action, businessPhone, otpCode, businessPhoneOwner, phoneNumberId } = event.arguments;
+    // ✅ Extract verificationMethod from arguments
+    const { action, businessPhone, otpCode, businessPhoneOwner, phoneNumberId, verificationMethod } = event.arguments;
 
     try {
         if (!businessPhone) throw new Error("Missing Business Phone");
 
         if (action === "REQUEST_PHONE_VERIFICATION") {
             const phoneId = await getPhoneNumberId(businessPhone);
-            const otpRes = await callMeta(`/${phoneId}/request_code`, 'POST', { code_method: "SMS", language: "en" });
+            
+            // ✅ LOGIC: Use 'VOICE' if requested, otherwise default to 'SMS'
+            const method = verificationMethod === "VOICE" ? "VOICE" : "SMS";
+            console.log(`Requesting OTP via ${method} for ${businessPhone}`);
+
+            const otpRes = await callMeta(`/${phoneId}/request_code`, 'POST', { 
+                code_method: method, 
+                language: "en" 
+            });
 
             if (otpRes.success) {
-                return { success: true, message: "OTP Sent", data: JSON.stringify({ phoneNumberId: phoneId }) };
+                return { success: true, message: `OTP Sent via ${method}`, data: JSON.stringify({ phoneNumberId: phoneId }) };
             }
-            throw new Error(otpRes.error?.message || "Failed to send SMS");
+            throw new Error(otpRes.error?.message || "Failed to send OTP");
         }
 
         if (action === "VERIFY_PHONE_OTP") {
