@@ -393,7 +393,7 @@ const DeliveryOptimizer = ({
                   .setPopup(popup)
                   .addTo(map);
 
-              // Click Handler (Fetch Items)
+            // Click Handler (Fetch Items)
               el.addEventListener('click', async (e) => {
                   e.stopPropagation(); 
                   map.flyTo({ center: [loc.longitude, loc.latitude], zoom: 15 });
@@ -408,24 +408,43 @@ const DeliveryOptimizer = ({
                       });
 
                       const itemsHtml = lineItems.length ? lineItems.map(i => `
-                        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #eee;padding:2px 0;">
-                            <span>${i.name}</span><strong>x${i.quantity || 1}</strong>
+                        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed #eee;padding:4px 0;">
+                            <span style="color:#334155;">${i.name}</span><strong style="color:#0f172a;">x${i.quantity || 1}</strong>
                         </div>
-                      `).join('') : 'No items found';
+                      `).join('') : '<span style="color:#94a3b8; font-style:italic;">No items found</span>';
+
+                      // ✅ 1. Format Agent Status (Red if Unassigned)
+                      const agentDisplay = hasAgent 
+                        ? `<span style="color:#0f172a; font-weight:700;">${agentName}</span>` 
+                        : `<span style="color:#ef4444; font-weight:800; letter-spacing:0.5px;">UNASSIGNED</span>`;
+
+                      // ✅ 2. Format Customer Phone (Plain Text)
+                      const customerPhone = order.phone || "Unknown";
 
                       popup.setHTML(`
-                        <div style="font-family: sans-serif; font-size: 12px; min-width: 160px; color: #334155;">
-                            <div style="background:${status === 'DELIVERING' ? '#eff6ff' : '#f0fdf4'}; padding:5px; border-radius:4px; margin-bottom:5px;">
-                                <b>${shortId}</b> <span style="float:right">${status === 'DELIVERING' ? '🚚' : '✅'}</span>
+                        <div style="font-family: sans-serif; font-size: 12px; min-width: 180px; color: #334155;">
+                            
+                            <div style="background:${status === 'DELIVERING' ? '#eff6ff' : '#f0fdf4'}; padding:6px; border-radius:6px; margin-bottom:8px; border:1px solid ${status === 'DELIVERING' ? '#bfdbfe' : '#bbf7d0'}; display:flex; justify-content:space-between; align-items:center;">
+                                <b style="color:#1e293b; letter-spacing:0.5px;">${shortId}</b> 
+                                <span style="font-size:14px;">${status === 'DELIVERING' ? '🚚' : '✅'}</span>
                             </div>
-                            <div style="max-height:150px; overflow-y:auto;">${itemsHtml}</div>
-                            <div style="margin-top:5px; font-size:10px; color:#64748b;">
-                                Agent: ${hasAgent ? agentName : 'Unassigned'}
+
+                            <div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #f1f5f9; font-weight:600; color:#475569; display:flex; align-items:center;">
+                                <span style="font-size:16px; margin-right:6px;">📞</span> 
+                                <span style="color:#334155; font-size:13px;">${customerPhone}</span>
+                            </div>
+
+                            <div style="max-height:150px; overflow-y:auto; margin-bottom:8px;">
+                                ${itemsHtml}
+                            </div>
+
+                            <div style="margin-top:4px; font-size:11px; color:#64748b; background:#f8fafc; padding:6px; border-radius:4px; border:1px solid #e2e8f0;">
+                                Agent: ${agentDisplay}
                             </div>
                         </div>
                       `);
                   } catch (err) {
-                      popup.setHTML(`<div style="color:red;padding:5px;">Error loading items</div>`);
+                      popup.setHTML(`<div style="color:red;padding:10px;text-align:center;">⚠️ Error loading items</div>`);
                   }
               });
 
