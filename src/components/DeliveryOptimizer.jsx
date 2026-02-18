@@ -60,10 +60,18 @@ const RangeCalendar = ({ startDate, endDate, onChange }) => {
     const handleDayClick = (day) => {
         const dateObj = new Date(year, month, day);
         const selectedStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-        if (startDate && endDate && startDate !== endDate) { onChange(selectedStr, selectedStr); } 
-        else if (startDate && !endDate) { if (selectedStr < startDate) onChange(selectedStr, startDate); else onChange(startDate, selectedStr); } 
-        else if (startDate && endDate === startDate) { if (selectedStr < startDate) onChange(selectedStr, startDate); else onChange(startDate, selectedStr); } 
-        else { onChange(selectedStr, selectedStr); }
+        
+        if (startDate && endDate && startDate !== endDate) {
+            onChange(selectedStr, selectedStr); 
+        } else if (startDate && !endDate) {
+            if (selectedStr < startDate) onChange(selectedStr, startDate); 
+            else onChange(startDate, selectedStr); 
+        } else if (startDate && endDate === startDate) {
+             if (selectedStr < startDate) onChange(selectedStr, startDate);
+             else onChange(startDate, selectedStr);
+        } else {
+            onChange(selectedStr, selectedStr);
+        }
     };
 
     const changeMonth = (delta) => {
@@ -132,7 +140,7 @@ const DeliveryOptimizer = ({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Logic State
-  const [assignments, setAssignments] = useState({});
+  const [assignments, setAssignments] = useState({}); // { orderSk: agentPk }
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false); 
   const [focusedAgentId, setFocusedAgentId] = useState(null);
@@ -321,6 +329,7 @@ const DeliveryOptimizer = ({
           const status = order.orderStatus || 'PREPARED'; 
           const loc = parseLocation(order.location);
           if (loc) {
+              // Current assignment priority: 1. Pending Selection, 2. Saved Assignment
               const assignedAgentId = currentAssignments[order.sk] || order.gsi1pk; 
               const markerColor = getAgentColor(assignedAgentId); 
               let iconContent = status === 'DELIVERING' ? '🚚' : status === 'DELIVERED' ? '✅' : '📦';
@@ -346,10 +355,10 @@ const DeliveryOptimizer = ({
 
                   const items = await fetchOrderItems(order);
                   const itemsHtml = items.length ? items.map(i => `<div style="display:flex;justify-content:space-between;border-bottom:1px dashed #eee;padding:4px 0;"><span style="color:#334155;">${i.name}</span><strong style="color:#0f172a;">x${i.quantity || 1}</strong></div>`).join('') : 'No items';
-                  const custPhone = formatPhone(order.phone);
                   
-                  // ✅ AGENT IN MAP TOOLTIP
+                  // ✅ AGENT NAME IN MAP POPUP
                   const agentName = agents.find(a => getCleanPhone(a.id || a.sk) === getCleanPhone(assignedAgentId))?.name || "Unassigned";
+                  const custPhone = formatPhone(order.phone);
 
                   popup.setHTML(`
                     <div style="font-family: sans-serif; font-size: 12px; min-width: 180px; color: #334155;">
@@ -367,7 +376,7 @@ const DeliveryOptimizer = ({
       });
   };
 
-  // --- Optimization Logic ---
+  // --- 6. AUTO-ASSIGN LOGIC ---
   const runOptimization = async () => {
     setLoading(true);
     try {
@@ -375,6 +384,7 @@ const DeliveryOptimizer = ({
       const geoClient = new GeoRoutesClient({ region: outputs.geo.aws_region, credentials: session.credentials });
       const validAgents = agents.filter(a => parseLocation(a.location));
       const orderMetrics = {};
+      
       const orderPromises = displayedOrders.filter(o => o.orderStatus === 'PREPARED').map(async (order) => {
             const custLoc = parseLocation(order.location);
             if (restaurantLocation && custLoc) {
@@ -401,11 +411,19 @@ const DeliveryOptimizer = ({
       if (typeof proposal === 'string') { try { proposal = JSON.parse(proposal); } catch (e) { proposal = []; } }
 
       setOptimizationMetrics(orderMetrics); 
+      
+      // ✅ APPLY PROPOSAL TO ASSIGNMENTS STATE
       const newAssignments = {};
       if (Array.isArray(proposal)) {
-          proposal.forEach(p => { if (p.assignedOrders) { p.assignedOrders.forEach(orderSk => { newAssignments[orderSk] = p.agentId; }); } });
+          proposal.forEach(p => { 
+              if (p.assignedOrders) { 
+                  p.assignedOrders.forEach(orderSk => { newAssignments[orderSk] = p.agentId; }); 
+              } 
+          });
       }
+      // Merge with any existing manual assignments
       setAssignments(prev => ({ ...prev, ...newAssignments }));
+
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
@@ -415,13 +433,22 @@ const DeliveryOptimizer = ({
     try {
       const updateTasks = Object.entries(assignments).map(async ([orderSk, rawAgentId]) => {
           const order = displayedOrders.find(o => o.sk === orderSk);
-          if (!order || order.orderStatus !== 'PREPARED') return;
+          if (!order) return;
+          
           const cleanPhone = String(rawAgentId).replace(/[^0-9]/g, '');
           const formattedAgentId = `AGENT#${cleanPhone}`; 
           
-          await client.models.BusinessData.update({ pk: order.pk, sk: orderSk, gsi1pk: rawAgentId, deliveryAgentId: formattedAgentId, orderStatus: 'DELIVERING', deliveryDistance: 0, deliveryDuration: 0 });
+          await client.models.BusinessData.update({
+              pk: order.pk, sk: orderSk, 
+              gsi1pk: formattedAgentId,           
+              deliveryAgentId: formattedAgentId, 
+              orderStatus: 'DELIVERING', 
+              deliveryDistance: 0, 
+              deliveryDuration: 0   
+          });
       });
       await Promise.all(updateTasks);
+      setAssignments({}); // Clear processed assignments
       if (onAssignmentSaved) onAssignmentSaved();
     } catch (error) { console.error(error); } finally { setSaving(false); }
   };
@@ -431,6 +458,7 @@ const DeliveryOptimizer = ({
       
       {/* 1. HEADER (Hamburger + Close) */}
       <div className="absolute top-4 left-4 right-4 z-[5000] flex justify-between pointer-events-none">
+          {/* Hamburger Toggle */}
           <button onClick={() => setIsMenuOpen(prev => !prev)} className="pointer-events-auto bg-slate-800/90 text-white p-3 rounded-full shadow-xl border border-slate-700 hover:bg-slate-700 transition-transform active:scale-95">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
@@ -440,6 +468,7 @@ const DeliveryOptimizer = ({
       {/* 2. MAP */}
       <div className="flex-1 relative w-full h-full">
         <div ref={mapContainerRef} id="map" style={{ width: '100%', height: '100%' }} />
+        {/* Status Toggles */}
         <div className="absolute bottom-10 right-4 z-[2500] flex flex-col items-center gap-4 bg-white/60 p-3 rounded-full shadow-xl pointer-events-auto">
            <label className={`cursor-pointer ${showDelivering ? '' : 'grayscale opacity-50'}`}><input type="checkbox" className="hidden" checked={showDelivering} onChange={(e) => setShowDelivering(e.target.checked)} /><span className="text-2xl">🚚</span></label>
            <div className="w-6 h-px bg-slate-500/30"></div>
@@ -490,13 +519,21 @@ const DeliveryOptimizer = ({
               {isLoadingHistory ? <div className="text-center text-slate-500 text-xs py-4 animate-pulse">Fetching history...</div> : displayedOrders.length === 0 && <div className="text-slate-500 text-center text-sm py-4">No orders in range</div>}
               
               {displayedOrders.map((o, i) => {
+                  // Determine State
+                  // 1. Pending Assignment (from Dropdown or Auto-Assign)
+                  // 2. Saved Assignment (from DB)
                   const assignedAgentId = assignments[o.sk] || o.gsi1pk;
                   const color = assignedAgentId ? getAgentColor(assignedAgentId) : '#475569'; 
                   const isDelivered = o.orderStatus === 'DELIVERED';
-                  const isEditable = o.orderStatus === 'PREPARED' || o.orderStatus === 'DELIVERING';
+                  const isPending = assignments[o.sk] !== undefined; // Is actively being changed?
 
                   return (
-                  <div key={o.sk || i} onClick={() => { handleOrderClick(o.sk); setIsMenuOpen(false); }} className="bg-slate-800 rounded-lg border border-slate-700 hover:border-blue-400 p-3 cursor-pointer shadow-sm group relative" style={{ borderLeft: `4px solid ${color}` }}>
+                  <div 
+                    key={o.sk || i} 
+                    onClick={() => { handleOrderClick(o.sk); setIsMenuOpen(false); }} 
+                    className={`bg-slate-800 rounded-lg border p-3 cursor-pointer shadow-sm group relative transition-colors ${isPending ? 'border-yellow-500/50 bg-slate-800/80' : 'border-slate-700 hover:border-blue-400'}`} 
+                    style={{ borderLeft: `4px solid ${color}` }}
+                  >
                       <div className="flex items-center justify-between mb-2">
                           <span className="text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: color }}>{i+1}</span>
                           {optimizationMetrics[o.sk] && (<span className="text-[10px] text-emerald-400 font-mono bg-emerald-900/30 px-2 py-0.5 rounded">{optimizationMetrics[o.sk].dist}km</span>)}
@@ -506,38 +543,35 @@ const DeliveryOptimizer = ({
                             <p className="text-[10px] text-slate-500">{o.sk.split('#')[1].slice(0, 8)}...</p>
                       </div>
                       
-                      {/* ✅ TOOLTIP WITH AGENT CONTROLS */}
+                      {/* ✅ RESTORED DROPDOWN (Visible Directly in Card) */}
+                      {isDelivered ? (
+                          <div className="text-[10px] font-bold text-slate-400 bg-slate-900 p-2 rounded border border-slate-600">
+                              Agent: {agents.find(a => getCleanPhone(a.id || a.sk) === getCleanPhone(assignedAgentId))?.name || "Unknown"}
+                          </div>
+                      ) : (
+                          <select 
+                            value={assignedAgentId || ""} 
+                            onClick={(e) => e.stopPropagation()} 
+                            onChange={(e) => setAssignments(prev => ({...prev, [o.sk]: e.target.value}))} 
+                            className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1.5 outline-none focus:border-blue-500 hover:bg-slate-700 transition-colors"
+                          >
+                              <option value="" disabled>Select Agent</option>
+                              {agents.map((agent, aIndex) => (<option key={agent.id || aIndex} value={agent.id || agent.sk}>{agent.name}</option>))}
+                          </select>
+                      )}
+
+                      {/* Tooltip (Items & Phone) */}
                       {activeTooltipId === o.sk && (
                           <div onClick={(e) => e.stopPropagation()} className="absolute top-full left-0 right-0 mt-2 bg-slate-700 p-3 rounded-lg shadow-2xl border border-slate-600 z-[5000] animate-fade-in cursor-default">
                               <h5 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Order Details</h5>
-                              <div className="text-[10px] text-slate-300 mb-2">Customer: {formatPhone(o.phone)}</div>
-                              
+                              <div className="text-[10px] text-slate-300 mb-2 font-mono">Phone: {formatPhone(o.phone)}</div>
                               {orderItemsCache[o.sk] ? (
-                                  <div className="space-y-1 max-h-24 overflow-y-auto border-b border-slate-600 pb-2 mb-2">
+                                  <div className="space-y-1 max-h-24 overflow-y-auto border-t border-slate-600 pt-2">
                                       {orderItemsCache[o.sk].map((item, idx) => (
                                           <div key={idx} className="flex justify-between text-xs text-slate-300"><span>{item.name}</span><span className="font-bold">x{item.quantity||1}</span></div>
                                       ))}
                                   </div>
-                              ) : <div className="text-xs text-slate-500 mb-2">Loading items...</div>}
-
-                              {/* ✅ EDITABLE DROPDOWN IN TOOLTIP */}
-                              {isEditable ? (
-                                  <div>
-                                      <label className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Assign Agent</label>
-                                      <select 
-                                        value={assignments[o.sk] || assignedAgentId || ""} 
-                                        onChange={(e) => setAssignments(prev => ({...prev, [o.sk]: e.target.value}))} 
-                                        className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1.5 outline-none focus:border-blue-500"
-                                      >
-                                          <option value="" disabled>Select Agent</option>
-                                          {agents.map((agent, aIndex) => (<option key={agent.id || aIndex} value={agent.id || agent.sk}>{agent.name}</option>))}
-                                      </select>
-                                  </div>
-                              ) : (
-                                  <div className="text-[10px] text-green-400 font-bold bg-green-900/20 p-2 rounded">
-                                      Delivered by: {agents.find(a => getCleanPhone(a.id || a.sk) === getCleanPhone(assignedAgentId))?.name || "Unknown"}
-                                  </div>
-                              )}
+                              ) : <div className="text-xs text-slate-500">Loading items...</div>}
                           </div>
                       )}
                   </div>
