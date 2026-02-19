@@ -12,7 +12,7 @@ import { LocationClient, ListDevicePositionsCommand } from "@aws-sdk/client-loca
 // --- CONFIG ---
 const REFRESH_RATE_MS = 5000; 
 const ANIMATION_DURATION_MS = REFRESH_RATE_MS; 
-const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 mins
+const STALE_THRESHOLD_MS = 5 * 60 * 1000; 
 
 // --- HELPERS ---
 const getCleanPhone = (id) => String(id || "").replace(/[^0-9]/g, '');
@@ -151,8 +151,6 @@ const DeliveryOptimizer = ({
   const mapContainerRef = useRef(null);
   const mapInstance = useRef(null);
   const animationFrameId = useRef(null);
-  const isMountedRef = useRef(true); // Component Mount status for fetch loop
-
   const agentAnimationState = useRef({}); 
   const latestAgentsRef = useRef(agents);
   const markersRef = useRef({});          
@@ -177,11 +175,7 @@ const DeliveryOptimizer = ({
   const [activeTooltipId, setActiveTooltipId] = useState(null); 
   const [orderItemsCache, setOrderItemsCache] = useState({}); 
 
-  useEffect(() => { 
-      latestAgentsRef.current = agents; 
-      isMountedRef.current = true;
-      return () => { isMountedRef.current = false; };
-  }, [agents]);
+  useEffect(() => { latestAgentsRef.current = agents; }, [agents]);
 
   const findAgent = (idToFind) => {
       if (!idToFind) return null;
@@ -214,7 +208,7 @@ const DeliveryOptimizer = ({
   useEffect(() => {
       const today = getTodayString();
       if (dateFilter.start !== today || dateFilter.end !== today) {
-          if (!dateFilter.end) return; // Wait for full range
+          if (!dateFilter.end) return; // Wait for end date
 
           const fetchHistory = async () => {
               const pkToUse = phoneNbr ? `BUSINESS#${phoneNbr}` : (orders[0]?.pk); 
@@ -243,7 +237,9 @@ const DeliveryOptimizer = ({
       setIsCalendarOpen(false); 
   };
 
-  const handleCalendarChange = (s, e) => { setDateFilter({ start: s, end: e, label: 'Custom' }); };
+  const handleCalendarChange = (s, e) => {
+      setDateFilter({ start: s, end: e, label: 'Custom' });
+  };
 
   const fetchOrderItems = async (order) => {
       if (orderItemsCache[order.sk]) return orderItemsCache[order.sk];
@@ -304,10 +300,8 @@ const DeliveryOptimizer = ({
         map.on('load', () => {
             if (!isMounted) return;
             if (!map.getSource('agents-source')) map.addSource('agents-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-            
-            // ✅ DYNAMIC COLORS FOR AGENTS: Uses 'color' property from GeoJSON
-            if (!map.getLayer('agents-glow-layer')) map.addLayer({ id: 'agents-glow-layer', type: 'circle', source: 'agents-source', paint: { 'circle-radius': 20, 'circle-color': ['case', ['get', 'isStale'], '#94a3b8', ['get', 'color']], 'circle-opacity': 0.3, 'circle-blur': 0.5 } });
-            if (!map.getLayer('agents-layer')) map.addLayer({ id: 'agents-layer', type: 'circle', source: 'agents-source', paint: { 'circle-radius': 8, 'circle-color': ['case', ['get', 'isStale'], '#64748b', ['get', 'color']], 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' } });
+            if (!map.getLayer('agents-glow-layer')) map.addLayer({ id: 'agents-glow-layer', type: 'circle', source: 'agents-source', paint: { 'circle-radius': 20, 'circle-color': ['case', ['get', 'isStale'], '#94a3b8', '#3b82f6'], 'circle-opacity': 0.3, 'circle-blur': 0.5 } });
+            if (!map.getLayer('agents-layer')) map.addLayer({ id: 'agents-layer', type: 'circle', source: 'agents-source', paint: { 'circle-radius': 8, 'circle-color': ['case', ['get', 'isStale'], '#64748b', '#3b82f6'], 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' } });
 
             map.on('click', 'agents-layer', (e) => handleAgentClick(e, map));
             map.on('mouseenter', 'agents-layer', () => map.getCanvas().style.cursor = 'pointer');
@@ -355,13 +349,12 @@ const DeliveryOptimizer = ({
   // ✅ FULLY IMPLEMENTED LIVE FETCH LOOP
   const startFetchLoop = () => {
     const fetchPositions = async () => {
-      if (!isMountedRef.current) return;
       try {
         const session = await fetchAuthSession();
-        const locClient = new LocationClient({ region: outputs.geo.aws_region, credentials: session.credentials });
+        const client = new LocationClient({ region: outputs.geo.aws_region, credentials: session.credentials });
         let token = undefined;
         do {
-          const response = await locClient.send(new ListDevicePositionsCommand({ 
+          const response = await client.send(new ListDevicePositionsCommand({ 
               TrackerName: outputs.custom.amazon_location_service.trackers.default, 
               NextToken: token, MaxResults: 100 
           }));
@@ -384,59 +377,32 @@ const DeliveryOptimizer = ({
           }
           token = response.NextToken;
         } while (token);
-      } catch (error) { 
-          // Silently handle auth/IAM errors so it doesn't break the UI
-          console.warn("Location Tracking Unavailable or IAM Error:", error.message); 
-      }
-      
-      if (isMountedRef.current) setTimeout(fetchPositions, REFRESH_RATE_MS);
+      } catch (error) { console.error("Agent Location Fetch Error:", error); }
+      setTimeout(fetchPositions, REFRESH_RATE_MS);
     };
     fetchPositions();
   };
   
-  // ✅ FULLY IMPLEMENTED ANIMATION LOOP (With Filtering & Coloring)
+  // ✅ FULLY IMPLEMENTED ANIMATION LOOP
   const startAnimationLoop = (map) => {
       const animate = () => {
-          if (!isMountedRef.current) return;
           const now = Date.now();
           const features = [];
-          
-          // Only show agents related to THIS business
-          const validAgents = latestAgentsRef.current || [];
-          const validAgentPhones = validAgents.map(a => getCleanPhone(a.id || a.sk));
-
           Object.entries(agentAnimationState.current).forEach(([id, state]) => {
-              const cleanId = getCleanPhone(id);
-              if (!validAgentPhones.includes(cleanId)) return; // 🔴 Hides other businesses' agents
-
               const elapsed = now - state.startTime;
               let t = elapsed / ANIMATION_DURATION_MS;
               if (t > 1) t = 1;
               const currentLng = state.start[0] + (state.end[0] - state.start[0]) * t;
               const currentLat = state.start[1] + (state.end[1] - state.start[1]) * t;
               const isStale = (now - state.lastSeen) > STALE_THRESHOLD_MS;
-
-              // Find Agent Color
-              const agentObj = findAgent(cleanId);
-              const agentColor = getAgentColor(agentObj ? (agentObj.id || agentObj.sk) : null);
-
               features.push({ 
                   type: 'Feature', 
                   geometry: { type: 'Point', coordinates: [currentLng, currentLat] }, 
-                  properties: { 
-                      id: id, 
-                      name: agentObj ? agentObj.name : `Agent ${id.slice(-4)}`, 
-                      isStale: isStale, 
-                      lastSeen: state.lastSeen,
-                      color: agentColor // 🟢 Pass specific color to the Map layer
-                  } 
+                  properties: { id: id, name: `Agent ${id.slice(-4)}`, isStale: isStale, lastSeen: state.lastSeen } 
               });
           });
-
           const source = map.getSource('agents-source');
-          if (source) {
-              source.setData({ type: 'FeatureCollection', features: features });
-          }
+          if (source && features.length > 0) source.setData({ type: 'FeatureCollection', features: features });
           animationFrameId.current = requestAnimationFrame(animate);
       };
       animate();
@@ -648,7 +614,6 @@ const DeliveryOptimizer = ({
               {isLoadingHistory ? <div className="text-center text-slate-500 text-xs py-4 animate-pulse">Fetching history...</div> : displayedOrders.length === 0 && <div className="text-slate-500 text-center text-sm py-4">No orders in range</div>}
               
               {displayedOrders.map((o, i) => {
-                  // Determine Assignment
                   const assignedAgentId = assignments[o.sk] || o.gsi1pk;
                   const agentObj = findAgent(assignedAgentId);
                   const strictSelectValue = agentObj ? (agentObj.id || agentObj.sk) : "";
@@ -673,7 +638,6 @@ const DeliveryOptimizer = ({
                             <p className="text-[10px] text-slate-500">{o.sk.split('#')[1].slice(0, 8)}...</p>
                       </div>
                       
-                      {/* Dropdown Logic */}
                       {isDelivered ? (
                           <div className="text-[10px] font-bold text-slate-400 bg-slate-900 p-2 rounded border border-slate-600">
                               Agent: {agentObj?.name || "Unknown"}
