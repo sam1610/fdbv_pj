@@ -12,7 +12,7 @@ import { LocationClient, ListDevicePositionsCommand } from "@aws-sdk/client-loca
 // --- CONFIG ---
 const REFRESH_RATE_MS = 5000; 
 const ANIMATION_DURATION_MS = REFRESH_RATE_MS; 
-const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 mins
+const STALE_THRESHOLD_MS = 5 * 60 * 1000; 
 
 // --- HELPERS ---
 const getCleanPhone = (id) => String(id || "").replace(/[^0-9]/g, '');
@@ -151,7 +151,7 @@ const DeliveryOptimizer = ({
   const mapContainerRef = useRef(null);
   const mapInstance = useRef(null);
   const animationFrameId = useRef(null);
-  const isMountedRef = useRef(true); // Component Mount status for fetch loop
+  const isMountedRef = useRef(true); 
 
   const agentAnimationState = useRef({}); 
   const latestAgentsRef = useRef(agents);
@@ -214,7 +214,7 @@ const DeliveryOptimizer = ({
   useEffect(() => {
       const today = getTodayString();
       if (dateFilter.start !== today || dateFilter.end !== today) {
-          if (!dateFilter.end) return; // Wait for full range
+          if (!dateFilter.end) return; 
 
           const fetchHistory = async () => {
               const pkToUse = phoneNbr ? `BUSINESS#${phoneNbr}` : (orders[0]?.pk); 
@@ -266,12 +266,33 @@ const DeliveryOptimizer = ({
       await fetchOrderItems(order);
   };
 
+  // ✅ Fix Z-Index & Inject Sliding Animation Styles
   useEffect(() => {
     const styleId = 'popup-z-index-fix';
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');
       style.id = styleId;
-      style.innerHTML = `.maplibregl-popup { z-index: 2000 !important; } summary { list-style: none; } summary::-webkit-details-marker { display: none; }`;
+      style.innerHTML = `
+        .maplibregl-popup { z-index: 2000 !important; } 
+        summary { list-style: none; } 
+        summary::-webkit-details-marker { display: none; }
+        
+        /* Smooth Accordion Styles */
+        .sliding-content {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out, padding 0.3s ease-in-out;
+            padding: 0 8px;
+            background: rgba(255,255,255,0.6);
+        }
+        .sliding-content.open {
+            max-height: 200px;
+            opacity: 1;
+            padding: 8px;
+            border-top: 1px dashed #e2e8f0;
+        }
+      `;
       document.head.appendChild(style);
     }
   }, []);
@@ -305,7 +326,6 @@ const DeliveryOptimizer = ({
             if (!isMounted) return;
             if (!map.getSource('agents-source')) map.addSource('agents-source', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
             
-            // ✅ DYNAMIC COLORS FOR AGENTS: Uses 'color' property from GeoJSON
             if (!map.getLayer('agents-glow-layer')) map.addLayer({ id: 'agents-glow-layer', type: 'circle', source: 'agents-source', paint: { 'circle-radius': 20, 'circle-color': ['case', ['get', 'isStale'], '#94a3b8', ['get', 'color']], 'circle-opacity': 0.3, 'circle-blur': 0.5 } });
             if (!map.getLayer('agents-layer')) map.addLayer({ id: 'agents-layer', type: 'circle', source: 'agents-source', paint: { 'circle-radius': 8, 'circle-color': ['case', ['get', 'isStale'], '#64748b', ['get', 'color']], 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' } });
 
@@ -313,7 +333,6 @@ const DeliveryOptimizer = ({
             map.on('mouseenter', 'agents-layer', () => map.getCanvas().style.cursor = 'pointer');
             map.on('mouseleave', 'agents-layer', () => map.getCanvas().style.cursor = '');
 
-            // ✅ START LIVE TRACKING LOOPS
             startFetchLoop();
             startAnimationLoop(map);
         });
@@ -338,21 +357,92 @@ const DeliveryOptimizer = ({
     };
   }, []);
 
+  // ✅ UPDATED: Clicking an agent shows smoothly sliding DELIVERING orders
   const handleAgentClick = async (e, map) => {
       if (!e.features || !e.features.length) return;
       e.originalEvent.stopPropagation(); 
       const props = e.features[0].properties; 
       const cleanTrackerId = getCleanPhone(props.id);
+      
+      const lastSeenMins = props.lastSeen ? Math.floor((Date.now() - props.lastSeen) / 60000) : 0;
+      const statusText = props.isStale ? `🕒 Offline` : `⚡ Live Now`;
+      const statusColor = props.isStale ? '#64748b' : '#22c55e';
+
+      setFocusedAgentId(cleanTrackerId); 
       const agentProfile = findAgent(cleanTrackerId);
       const agentName = agentProfile ? agentProfile.name : (props.name || 'Unknown');
-      
-      new maplibregl.Popup({ maxWidth: '280px' })
+      const agentPhone = agentProfile ? (agentProfile.phone || cleanTrackerId) : cleanTrackerId;
+
+      const popup = new maplibregl.Popup({ maxWidth: '280px' })
           .setLngLat(e.features[0].geometry.coordinates.slice())
-          .setHTML(`<div style="font-family:sans-serif;padding:8px;"><strong>${agentName}</strong><br/><span style="font-size:10px;color:#64748b;">ID: ${cleanTrackerId}</span></div>`)
+          .setHTML(`<div style="font-family:sans-serif;padding:10px;text-align:center;"><strong>${agentName}</strong><div class="animate-pulse text-xs text-slate-500 mt-1">Loading orders...</div></div>`)
           .addTo(map);
+
+       try {
+            // ✅ Only show orders actively DELIVERING for this agent
+            const relevantOrders = displayedOrders.filter(o => {
+                const orderAgentId = getCleanPhone(o.gsi1pk || o.deliveryAgentId);
+                return orderAgentId === cleanTrackerId && o.orderStatus === 'DELIVERING';
+            });
+
+            const enrichedOrders = await Promise.all(relevantOrders.map(async (order) => {
+                try {
+                    const phoneNbr = order.pk.split('#')[1];
+                    const orderIdPart = order.sk.split('#')[1];
+                    const { data: lineItems } = await client.models.BusinessData.listByBusiness({
+                        pk: `ORDER#${phoneNbr}#${orderIdPart}`,
+                        sk: { beginsWith: 'ITEM#' },
+                    });
+                    return { ...order, itemsList: lineItems };
+                } catch { return { ...order, itemsList: [] }; }
+            }));
+
+            let contentHtml = '';
+            if (enrichedOrders.length > 0) {
+                contentHtml = enrichedOrders.map(o => {
+                    const icon = '🚚';
+                    const shortId = (o.sk || "").replace('ORDER#', '').slice(0, 10);
+                    const boxColor = '#3b82f6';
+                    const bg = '#eff6ff';
+                    
+                    const detailsHtml = (o.itemsList || []).map(i => `
+                        <div style="display:flex;justify-content:space-between;font-size:10px;color:#475569;padding:4px 0;border-bottom:1px dashed #cbd5e1;">
+                            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px;">${i.name}</span>
+                            <span style="font-weight:600;">x${i.quantity || 1}</span>
+                        </div>
+                    `).join('');
+
+                    // ✅ SMOOTH ACCORDION INJECTION using onclick & classList.toggle
+                    return `
+                    <div style="background:${bg};margin-bottom:4px;border-radius:4px;border-left:3px solid ${boxColor};overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                        <div onclick="this.nextElementSibling.classList.toggle('open')" style="display:flex;align-items:center;font-size:11px;padding:8px 6px;cursor:pointer; transition: background 0.2s;">
+                            <span style="font-weight:700;color:#334155;margin-right:6px;">${icon} ${shortId}</span>
+                            <span style="color:#64748b;font-size:10px;">(${o.itemsNbr||o.itemsList.length} items)</span>
+                        </div>
+                        <div class="sliding-content">
+                            ${detailsHtml || '<div style="font-size:10px;color:#64748b;padding-bottom:4px;">No Items</div>'}
+                        </div>
+                    </div>`;
+                }).join('');
+            } else { 
+                contentHtml = `<div style="font-size:11px;color:#94a3b8;padding:6px;text-align:center;">No DELIVERING orders assigned.</div>`; 
+            }
+            
+            popup.setHTML(`
+                <div style="font-family:sans-serif;min-width:220px;max-width:260px;">
+                    <div style="border-bottom:1px solid #e2e8f0;padding-bottom:8px;margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:bold;font-size:13px;color:#0f172a;">${agentName}</div>
+                            <div style="font-size:11px;color:#64748b;">${formatPhone(agentPhone)}</div>
+                        </div>
+                        <span style="font-size:9px; font-weight:bold; color:${statusColor}; background:${props.isStale?'#f1f5f9':'#dcfce7'}; padding:2px 5px; border-radius:99px;">${statusText}</span>
+                    </div>
+                    <div style="max-height:220px;overflow-y:auto;padding-right:2px;">${contentHtml}</div>
+                </div>
+            `);
+       } catch (err) { popup.setHTML('<div style="padding:5px;color:red;font-size:10px;">Failed to load data</div>'); }
   };
 
-  // ✅ FULLY IMPLEMENTED LIVE FETCH LOOP
   const startFetchLoop = () => {
     const fetchPositions = async () => {
       if (!isMountedRef.current) return;
@@ -385,7 +475,6 @@ const DeliveryOptimizer = ({
           token = response.NextToken;
         } while (token);
       } catch (error) { 
-          // Silently handle auth/IAM errors so it doesn't break the UI
           console.warn("Location Tracking Unavailable or IAM Error:", error.message); 
       }
       
@@ -394,20 +483,18 @@ const DeliveryOptimizer = ({
     fetchPositions();
   };
   
-  // ✅ FULLY IMPLEMENTED ANIMATION LOOP (With Filtering & Coloring)
   const startAnimationLoop = (map) => {
       const animate = () => {
           if (!isMountedRef.current) return;
           const now = Date.now();
           const features = [];
           
-          // Only show agents related to THIS business
           const validAgents = latestAgentsRef.current || [];
           const validAgentPhones = validAgents.map(a => getCleanPhone(a.id || a.sk));
 
           Object.entries(agentAnimationState.current).forEach(([id, state]) => {
               const cleanId = getCleanPhone(id);
-              if (!validAgentPhones.includes(cleanId)) return; // 🔴 Hides other businesses' agents
+              if (!validAgentPhones.includes(cleanId)) return; 
 
               const elapsed = now - state.startTime;
               let t = elapsed / ANIMATION_DURATION_MS;
@@ -416,7 +503,6 @@ const DeliveryOptimizer = ({
               const currentLat = state.start[1] + (state.end[1] - state.start[1]) * t;
               const isStale = (now - state.lastSeen) > STALE_THRESHOLD_MS;
 
-              // Find Agent Color
               const agentObj = findAgent(cleanId);
               const agentColor = getAgentColor(agentObj ? (agentObj.id || agentObj.sk) : null);
 
@@ -428,7 +514,7 @@ const DeliveryOptimizer = ({
                       name: agentObj ? agentObj.name : `Agent ${id.slice(-4)}`, 
                       isStale: isStale, 
                       lastSeen: state.lastSeen,
-                      color: agentColor // 🟢 Pass specific color to the Map layer
+                      color: agentColor 
                   } 
               });
           });
@@ -473,7 +559,6 @@ const DeliveryOptimizer = ({
                   border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', cursor: 'pointer'
               });
 
-              // Popup
               const shortId = (order.sk || "").replace('ORDER#', '').split('-').slice(0, 3).join('-');
               const popup = new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(`<div>Loading...</div>`);
               const marker = new maplibregl.Marker({ element: el }).setLngLat([loc.longitude, loc.latitude]).setPopup(popup).addTo(map);
@@ -505,7 +590,6 @@ const DeliveryOptimizer = ({
       });
   };
 
-  // --- 6. AUTO-ASSIGN LOGIC ---
   const runOptimization = async () => {
     setLoading(true);
     try {
@@ -540,7 +624,9 @@ const DeliveryOptimizer = ({
       let proposal = [];
       try {
           if (response.data && response.data.proposal) {
-              proposal = typeof response.data.proposal === 'string' ? JSON.parse(response.data.proposal) : response.data.proposal;
+              proposal = typeof response.data.proposal === 'string' 
+                ? JSON.parse(response.data.proposal) 
+                : response.data.proposal;
           }
       } catch(e) { console.error("Failed to parse proposal JSON", e); }
 
@@ -648,7 +734,6 @@ const DeliveryOptimizer = ({
               {isLoadingHistory ? <div className="text-center text-slate-500 text-xs py-4 animate-pulse">Fetching history...</div> : displayedOrders.length === 0 && <div className="text-slate-500 text-center text-sm py-4">No orders in range</div>}
               
               {displayedOrders.map((o, i) => {
-                  // Determine Assignment
                   const assignedAgentId = assignments[o.sk] || o.gsi1pk;
                   const agentObj = findAgent(assignedAgentId);
                   const strictSelectValue = agentObj ? (agentObj.id || agentObj.sk) : "";
@@ -673,7 +758,6 @@ const DeliveryOptimizer = ({
                             <p className="text-[10px] text-slate-500">{o.sk.split('#')[1].slice(0, 8)}...</p>
                       </div>
                       
-                      {/* Dropdown Logic */}
                       {isDelivered ? (
                           <div className="text-[10px] font-bold text-slate-400 bg-slate-900 p-2 rounded border border-slate-600">
                               Agent: {agentObj?.name || "Unknown"}
