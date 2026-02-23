@@ -730,11 +730,194 @@ const BranchesSection = ({ pk }) => {
 // =========================================================
 // 4️⃣ SUB-COMPONENT: ItemsSection (Updated with Stock Toggle)
 // =========================================================
+// const ItemsSection = ({ pk, onUpdate }) => {
+//     const BASE64_HEADER = "data:image/jpeg;base64,";
+//     const [item, setItem] = useState({ 
+//         name: '', price: '', description: '', quantity: '', 
+//         stockStatus: true, // Default to true (In Stock)
+//         imageUrl: '' 
+//     });
+//     const [allItems, setAllItems] = useState([]); 
+//     const [editingId, setEditingId] = useState(null); 
+//     const [category, setCategory] = useState(''); 
+//     const [existingCategories, setExistingCategories] = useState([]);
+//     const [showItemSuggestions, setShowItemSuggestions] = useState(false);
+//     const [showCatSuggestions, setShowCatSuggestions] = useState(false);
+//     const [saving, setSaving] = useState(false);
+    
+//     const handleImageUpload = (event) => {
+//         const file = event.target.files[0];
+//         if (!file) return;
+//         const reader = new FileReader();
+//         reader.onload = (e) => {
+//             const img = new Image();
+//             img.onload = () => {
+//                 const canvas = document.createElement('canvas');
+//                 const ctx = canvas.getContext('2d');
+//                 canvas.width = 70; canvas.height = 70;
+//                 ctx.drawImage(img, 0, 0, 70, 70);
+//                 setItem(prev => ({ ...prev, imageUrl: canvas.toDataURL('image/jpeg', 0.7) }));
+//             };
+//             img.src = e.target.result;
+//         };
+//         reader.readAsDataURL(file);
+//     };
+
+//     const fetchItems = async () => {
+//         try {
+//             const { data } = await client.models.BusinessData.listByBusiness({ pk: pk, sk: { beginsWith: 'ITEM#' } });
+//             setAllItems(data.sort((a, b) => a.name.localeCompare(b.name)));
+//             const uniqueCats = [...new Set(data.map(i => i.itemCategory).filter(c => c))].sort();
+//             setExistingCategories(uniqueCats);
+//         } catch (err) { console.error("Fetch items error", err); }
+//     };
+//     useEffect(() => { fetchItems(); }, [pk]);
+
+//     const filteredItems = allItems.filter(i => i.name.toLowerCase().includes(item.name.toLowerCase()));
+//     const filteredCategories = existingCategories.filter(c => c.toLowerCase().includes(category.toLowerCase()));
+
+//     const selectItemToEdit = (selectedItem) => {
+//         setEditingId(selectedItem.sk);
+//         const previewImage = selectedItem.imageUrl ? (selectedItem.imageUrl.startsWith('data:') ? selectedItem.imageUrl : BASE64_HEADER + selectedItem.imageUrl) : '';
+//         setItem({
+//             name: selectedItem.name, 
+//             price: selectedItem.unitPrice.toString(), 
+//             description: selectedItem.description || '',
+//             quantity: selectedItem.quantity || '', 
+//             stockStatus: selectedItem.stockStatus !== false, // Handle null as true
+//             imageUrl: previewImage 
+//         });
+//         setCategory(selectedItem.itemCategory || ''); 
+//         setShowItemSuggestions(false);
+//     };
+
+//     // ✅ Helper to reset form
+//     const clearForm = () => {
+//         setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true, imageUrl: '' });
+//         setCategory('');
+//         setEditingId(null);
+//     };
+
+//     const submit = async () => {
+//         if (!item.name.trim() || !item.price || !category.trim()) return alert("Missing fields");
+//         setSaving(true);
+//         const dbImageString = item.imageUrl.replace(BASE64_HEADER, '');
+        
+//         const payload = {
+//             pk, 
+//             name: item.name.trim(), 
+//             unitPrice: parseFloat(item.price), 
+//             itemCategory: category.trim().toUpperCase(),
+//             description: item.description, 
+//             stockStatus: item.stockStatus, // ✅ Boolean Value
+//             quantity: item.quantity ? parseInt(item.quantity) : 0, 
+//             imageUrl: dbImageString
+//         };
+
+//         try {
+//             if (editingId) { 
+//                 await client.models.BusinessData.update({ ...payload, sk: editingId }); 
+//             } else {
+//                 const maxId = allItems.reduce((max, i) => { const num = parseInt(i.sk.split('#')[1], 10); return !isNaN(num) && num > max ? num : max; }, 0);
+//                 await client.models.BusinessData.create({ ...payload, sk: `ITEM#${String(maxId + 1).padStart(3, '0')}`, entityType: 'ITEM' });
+//             }
+//             await fetchItems(); 
+//             if (onUpdate) onUpdate(); 
+//             clearForm(); 
+//         } catch (err) { alert("Error saving item"); } finally { setSaving(false); }
+//     };
+
+//     return (
+//         <div className="space-y-4 max-w-sm mx-auto pt-4 animate-fade-in pb-20">
+//             <header className="flex justify-between items-end border-b border-indigo-500 pb-2 mb-2">
+//                 <h2 className="text-indigo-400 font-bold uppercase text-xs tracking-widest">Menu Manager</h2>
+//                 {editingId && (
+//                     <button onClick={clearForm} className="text-[10px] text-slate-400 hover:text-white transition-colors">
+//                         ✕ Cancel Edit
+//                     </button>
+//                 )}
+//             </header>
+            
+//             {/* Name Input with Autocomplete */}
+//             <div className="relative">
+//                 <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm" placeholder="Item Name" value={item.name} onChange={(e) => { setItem({...item, name: e.target.value}); if(!editingId) setShowItemSuggestions(true); }} onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)} />
+//                 {showItemSuggestions && filteredItems.length > 0 && (
+//                     <div className="absolute z-50 w-full bg-slate-800 border border-slate-600 rounded-xl mt-1 max-h-48 overflow-y-auto">
+//                         {filteredItems.map(s => <button key={s.sk} onMouseDown={() => selectItemToEdit(s)} className="w-full text-left px-4 py-2 text-slate-300 text-xs border-b border-slate-700">{s.name}</button>)}
+//                     </div>
+//                 )}
+//             </div>
+
+//             {/* Image and Category */}
+//             <div className="flex gap-2 items-end">
+//                 <div className="relative w-[70px] h-[70px] bg-slate-800 rounded-lg border border-slate-700 overflow-hidden cursor-pointer">
+//                     <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageUpload} />
+//                     {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-cover" alt="prev" /> : <div className="w-full h-full flex items-center justify-center text-slate-500 text-xl">+</div>}
+//                 </div>
+//                 <div className="flex-1 relative">
+//                     <input className="w-full bg-slate-800 p-3 h-[70px] rounded-lg text-white border border-slate-700 outline-none text-sm" placeholder="Category" value={category} onChange={(e) => { setCategory(e.target.value); setShowCatSuggestions(true); }} onBlur={() => setTimeout(() => setShowCatSuggestions(false), 200)} />
+//                     {showCatSuggestions && (
+//                         <div className="absolute top-full z-50 w-full bg-slate-800 border border-slate-600 rounded-xl mt-1 max-h-40 overflow-y-auto">
+//                             {filteredCategories.map(c => <button key={c} onMouseDown={() => { setCategory(c); setShowCatSuggestions(false); }} className="w-full text-left px-4 py-2 text-slate-300 text-xs border-b border-slate-700">{c}</button>)}
+//                         </div>
+//                     )}
+//                 </div>
+//             </div>
+
+//             {/* Price, Qty, and Stock Status */}
+//             <div className="flex gap-2">
+//                 <button 
+//                     onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
+//                     className={`px-3 rounded-lg font-bold text-[10px] uppercase tracking-wide border transition-all ${
+//                         item.stockStatus 
+//                         ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' 
+//                         : 'bg-red-900/30 text-red-400 border-red-500/30'
+//                     }`}
+//                 >
+//                     {item.stockStatus ? 'In Stock' : 'Sold Out'}
+//                 </button>
+               
+
+//                 <input 
+//                     className=" w-28 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm" 
+//                     type="number" 
+//                     placeholder="Qty" 
+//                     value={item.quantity} 
+//                     onChange={e => setItem({...item, quantity: e.target.value})} 
+//                 />
+//                  <input 
+//                     className="flex-1 w-20 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm" 
+//                     placeholder="Price" 
+//                     value={item.price} 
+//                     onChange={e => setItem({...item, price: e.target.value})} 
+//                 />
+//                 {/* ✅ STOCK STATUS TOGGLE */}
+                
+//             </div>
+
+//             {/* Description Input */}
+//             <textarea 
+//                 className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm h-20" 
+//                 placeholder="Description" 
+//                 value={item.description} 
+//                 onChange={e => setItem({...item, description: e.target.value})} 
+//             />
+
+//             {/* Action Buttons */}
+//             <div className="flex gap-2">
+//                 <button onClick={clearForm} className="px-4 rounded-xl font-bold text-slate-400 bg-slate-800 border border-slate-700 hover:bg-slate-700">Clear</button>
+//                 <button onClick={submit} disabled={saving} className="flex-1 py-3 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg transition-all">
+//                     {saving ? "SAVING..." : (editingId ? "UPDATE ITEM" : "ADD NEW ITEM")}
+//                 </button>
+//             </div>
+//         </div>
+//     );
+// };
 const ItemsSection = ({ pk, onUpdate }) => {
     const BASE64_HEADER = "data:image/jpeg;base64,";
     const [item, setItem] = useState({ 
         name: '', price: '', description: '', quantity: '', 
-        stockStatus: true, // Default to true (In Stock)
+        stockStatus: true, 
         imageUrl: '' 
     });
     const [allItems, setAllItems] = useState([]); 
@@ -784,20 +967,20 @@ const ItemsSection = ({ pk, onUpdate }) => {
             price: selectedItem.unitPrice.toString(), 
             description: selectedItem.description || '',
             quantity: selectedItem.quantity || '', 
-            stockStatus: selectedItem.stockStatus !== false, // Handle null as true
+            stockStatus: selectedItem.stockStatus !== false,
             imageUrl: previewImage 
         });
         setCategory(selectedItem.itemCategory || ''); 
         setShowItemSuggestions(false);
     };
 
-    // ✅ Helper to reset form
     const clearForm = () => {
         setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true, imageUrl: '' });
         setCategory('');
         setEditingId(null);
     };
 
+    // ✅ UPDATED SUBMIT LOGIC: Queries DB for the latest ITEM ID
     const submit = async () => {
         if (!item.name.trim() || !item.price || !category.trim()) return alert("Missing fields");
         setSaving(true);
@@ -809,7 +992,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
             unitPrice: parseFloat(item.price), 
             itemCategory: category.trim().toUpperCase(),
             description: item.description, 
-            stockStatus: item.stockStatus, // ✅ Boolean Value
+            stockStatus: item.stockStatus, 
             quantity: item.quantity ? parseInt(item.quantity) : 0, 
             imageUrl: dbImageString
         };
@@ -818,13 +1001,31 @@ const ItemsSection = ({ pk, onUpdate }) => {
             if (editingId) { 
                 await client.models.BusinessData.update({ ...payload, sk: editingId }); 
             } else {
-                const maxId = allItems.reduce((max, i) => { const num = parseInt(i.sk.split('#')[1], 10); return !isNaN(num) && num > max ? num : max; }, 0);
-                await client.models.BusinessData.create({ ...payload, sk: `ITEM#${String(maxId + 1).padStart(3, '0')}`, entityType: 'ITEM' });
+                // Query Database for the Highest ITEM ID
+                const { data: latestItemData } = await client.models.BusinessData.listByBusiness({
+                    pk: pk,
+                    sk: { beginsWith: 'ITEM#' },
+                    sortDirection: 'DESC', // Get greatest first
+                    limit: 1 // Only need the top 1
+                });
+                
+                let nextNum = 1;
+                if (latestItemData && latestItemData.length > 0) {
+                    const latestSk = latestItemData[0].sk; // e.g. "ITEM#015"
+                    const parsedNum = parseInt(latestSk.split('#')[1], 10);
+                    if (!isNaN(parsedNum)) {
+                        nextNum = parsedNum + 1; // Increment
+                    }
+                }
+                
+                const newSk = `ITEM#${String(nextNum).padStart(3, '0')}`; // Format e.g. "ITEM#016"
+                
+                await client.models.BusinessData.create({ ...payload, sk: newSk, entityType: 'ITEM' });
             }
             await fetchItems(); 
             if (onUpdate) onUpdate(); 
             clearForm(); 
-        } catch (err) { alert("Error saving item"); } finally { setSaving(false); }
+        } catch (err) { alert("Error saving item"); console.error(err); } finally { setSaving(false); }
     };
 
     return (
@@ -891,8 +1092,6 @@ const ItemsSection = ({ pk, onUpdate }) => {
                     value={item.price} 
                     onChange={e => setItem({...item, price: e.target.value})} 
                 />
-                {/* ✅ STOCK STATUS TOGGLE */}
-                
             </div>
 
             {/* Description Input */}
