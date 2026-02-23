@@ -1488,7 +1488,7 @@ const DeliveryOptimizer = ({
             
             {/* Header: Dispatch Buttons */}
             <div className="p-6 border-b border-slate-700 bg-slate-800">
-                <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">Dispatch</h2>
+                <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-4 text-center ">Dispatch</h2>
                 {hasActiveOrders ? (
                   <div className="flex gap-2 w-full flex-col">
                     <button onClick={runOptimization} disabled={loading || saving} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg h-10 flex items-center justify-center text-sm transition-all">{loading ? "Calculating..." : "⚡️ Auto-Assign"}</button>
