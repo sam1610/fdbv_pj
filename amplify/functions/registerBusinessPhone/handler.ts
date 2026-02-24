@@ -80,8 +80,7 @@ async function getPhoneNumberId(businessPhone: string) {
         }
     }
     
-    throw new Error(res.error?.message || "Could not register phone with Meta");
-}
+throw new Error(res.error?.error_user_msg || res.error?.message || "Could not register phone with Meta");}
 
 // ============================================================
 // 3. LAMBDA HANDLER
@@ -108,7 +107,7 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
             if (otpRes.success) {
                 return { success: true, message: `OTP Sent via ${method}`, data: JSON.stringify({ phoneNumberId: phoneId }) };
             }
-            throw new Error(otpRes.error?.message || "Failed to send OTP");
+            throw new Error(otpRes.error?.error_user_msg || otpRes.error?.message || "Failed to send OTP");
         }
 
         if (action === "VERIFY_PHONE_OTP") {
