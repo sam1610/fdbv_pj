@@ -3,7 +3,6 @@ import { Schema } from "../../data/resource";
 // ============================================================
 // 1. CONFIGURATION & HELPERS
 // ============================================================
-// ✅ FIX 1: Trim whitespace to prevent "Invalid Parameter" from copy-paste errors
 const WABA_ID = process.env.WABA_ID ? process.env.WABA_ID.trim() : "";
 const SYSTEM_TOKEN = process.env.META_SYSTEM_USER_TOKEN ? process.env.META_SYSTEM_USER_TOKEN.trim() : "";
 const APPSYNC_URL = process.env.APPSYNC_ENDPOINT_URL;
@@ -49,17 +48,18 @@ async function callMeta(endpoint: string, method: string, body?: any) {
 // ============================================================
 
 // STEP A: Add Phone to WABA to get ID
-async function getPhoneNumberId(businessPhone: string) {
+// ✅ UPDATED: Now accepts businessName as an argument
+async function getPhoneNumberId(businessPhone: string, businessName?: string | null) {
     const { cc, number } = parsePhoneNumber(businessPhone);
 
-    console.log(`Trying to register: ${cc} ${number} to WABA: ${WABA_ID}`);
+    console.log(`Trying to register: ${cc} ${number} to WABA: ${WABA_ID} as ${businessName}`);
 
     // 1. Try to ADD the phone
-    // We REMOVED display_name as discussed to fix the "Invalid Parameter" error
     const res = await callMeta(`/${WABA_ID}/phone_numbers`, 'POST', {
         cc: cc,
         phone_number: number,
-        verified_name: "CloudOrder Merchant" 
+        // ✅ UPDATED: Uses the actual business name, or falls back to Merchant if empty
+        verified_name: businessName || "CloudOrder Merchant" 
     });
 
     if (res.id) return res.id;
@@ -78,27 +78,30 @@ async function getPhoneNumberId(businessPhone: string) {
             console.log("Found existing phone ID:", match.id);
             return match.id;
         }
+        
+        throw new Error(res.error?.error_user_msg || res.error?.message || "Could not register phone with Meta");
     }
     
-throw new Error(res.error?.error_user_msg || res.error?.message || "Could not register phone with Meta");}
+    throw new Error("Could not register phone with Meta");
+}
 
 // ============================================================
 // 3. LAMBDA HANDLER
 // ============================================================
 export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (event) => {
-    // ✅ Extract verificationMethod from arguments
-    const { action, businessPhone, otpCode, businessPhoneOwner, phoneNumberId, verificationMethod } = event.arguments;
-
+    // ✅ Extract businessName from arguments
+    const { action, businessPhone, otpCode, businessPhoneOwner, phoneNumberId, verificationMethod, businessName } = event.arguments;    
+    
     try {
         if (!businessPhone) throw new Error("Missing Business Phone");
 
         if (action === "REQUEST_PHONE_VERIFICATION") {
-            const phoneId = await getPhoneNumberId(businessPhone);
+            // ✅ UPDATED: Pass the businessName into the function
+            const phoneId = await getPhoneNumberId(businessPhone, businessName);
             
-            // ✅ LOGIC: Use 'VOICE' if requested, otherwise default to 'SMS'
             const method = verificationMethod === "VOICE" ? "VOICE" : "SMS";
             console.log(`Requesting OTP via ${method} for ${businessPhone}`);
-
+            
             const otpRes = await callMeta(`/${phoneId}/request_code`, 'POST', { 
                 code_method: method, 
                 language: "en" 
@@ -111,10 +114,11 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
         }
 
         if (action === "VERIFY_PHONE_OTP") {
-            const phoneId = phoneNumberId || await getPhoneNumberId(businessPhone);
+            // ✅ UPDATED: Pass the businessName here as well just in case it needs to fetch it again
+            const phoneId = phoneNumberId || await getPhoneNumberId(businessPhone, businessName);
             const verifyRes = await callMeta(`/${phoneId}/verify_code`, 'POST', { code: otpCode });
 
-            if (!verifyRes.success) throw new Error("Invalid OTP Code");
+            if (!verifyRes.success) throw new Error(verifyRes.error?.error_user_msg || "Invalid OTP Code");
 
             const input = {
                 restaurantId: businessPhone,
