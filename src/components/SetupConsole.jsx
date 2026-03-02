@@ -86,6 +86,9 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
 // =========================================================
 // 2️⃣ SUB-COMPONENT: RestaurantSection (SaaS Upgraded)
 // =========================================================
+// =========================================================
+// 2️⃣ SUB-COMPONENT: RestaurantSection (SaaS Upgraded)
+// =========================================================
 const RestaurantSection = ({ pk, phoneNbr }) => {
     // Identity State
     const [name, setName] = useState('');
@@ -106,7 +109,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
         phoneNumberId: '',
         wabaId: '',
         registrationStatus: 'PENDING',
-        assignedPin: '' // ✅ NEW: Store the auto-generated PIN
+        assignedPin: ''
     });
     
     const [feedback, setFeedback] = useState({ msg: '', type: '' });
@@ -116,7 +119,6 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
         setTimeout(() => setFeedback({ msg: '', type: '' }), 5000);
     };
 
-    // Helper to handle coordinate inputs
     const handleCoordChange = (field, value) => {
         const isFloat = /^-?[0-9]*\.?[0-9]*$/.test(value);
         if (isFloat || value === "") {
@@ -128,6 +130,15 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
     useEffect(() => {
         const fetchInitialData = async () => {
             if (hasLoaded) return;
+            const lockTime = localStorage.getItem(`meta_lock_${phoneNbr}`);
+            if (lockTime) {
+                const elapsed = Date.now() - parseInt(lockTime);
+                if (elapsed < 2 * 60 * 60 * 1000) { // 2 hours in milliseconds
+                    setPhoneVerificationStep('PENDING_REVIEW');
+                } else {
+                    localStorage.removeItem(`meta_lock_${phoneNbr}`); // Expire the lock
+                }
+            }
             try {
                 const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
                 if (config) {
@@ -154,7 +165,8 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                         assignedPin: '' 
                     });
                     
-                    if (metaRecord.phoneNumber && metaRecord.registrationStatus === 'ACTIVE') {
+                    // ✅ If they are already ACTIVE in the DB, lock the UI to the success screen
+                    if (metaRecord.registrationStatus === 'ACTIVE') {
                         setPhoneVerificationStep('ACTIVE');
                     }
                 }
@@ -168,9 +180,13 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
 
     // --- SAVE BUSINESS IDENTITY ---
     const handleUpdateBusinessConfig = async () => {
-        if (!name.trim()) return showMessage("Please fill in Business Name", "error");
-        if (!coords.lat || !coords.lng) return showMessage("Location coordinates are required", "error");
-
+        const trimmedName = name.trim();
+        if (!trimmedName) return showMessage("Please fill in Business Name", "error");
+        
+        // ✅ NEW: Block forbidden Meta names
+        if (trimmedName.toLowerCase() === 'home') {
+            return showMessage("Meta policy: 'Home' is a forbidden Business Name. Please use a real brand name.", "error");
+        }
         setSaving(true);
         try {
             await client.models.BusinessData.update({
@@ -193,8 +209,14 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
 
     // --- STEP 1: REQUEST OTP ---
     const handleRequestPhoneVerification = async () => {
-        if (!name || !name.trim()) {
+        const trimmedName = name.trim();
+        if (!trimmedName) {
             return showMessage("Please fill in your Business Name in step 1 first!", "error");
+        }
+
+        // ✅ NEW: Block forbidden Meta names before hitting the API
+        if (trimmedName.toLowerCase() === 'home') {
+            return showMessage("Meta policy: 'Home' is a forbidden Business Name. Please update Step 1.", "error");
         }
 
         setPhoneVerificationStep('REQUESTING_CODE');
@@ -213,9 +235,9 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                 setPhoneVerificationStep('WAITING_OTP');
                 showMessage(`✅ Code sent via ${verificationMethod}!`, "success");
             } 
-            // ✅ NEW: Catch Meta Review and route to the lock screen
             else if (response && response.message === "PENDING_META_REVIEW") {
                 setPhoneVerificationStep('PENDING_REVIEW');
+                localStorage.setItem(`meta_lock_${phoneNbr}`, Date.now().toString());
             } 
             else {
                 setPhoneVerificationStep(null);
@@ -250,8 +272,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                     phoneNumberId: innerData.phoneNumberId || '',
                     wabaId: innerData.wabaId || '',
                     registrationStatus: 'ACTIVE',
-                    metaBusinessAccessToken: 'SYSTEM',
-                    assignedPin: innerData.assignedPin || '' // ✅ NEW: Save auto-generated PIN
+                    assignedPin: innerData.assignedPin || '' 
                 });
                 setPhoneVerificationStep('ACTIVE');
                 setOtpCode('');
@@ -288,32 +309,20 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                             className="w-full bg-slate-900 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" 
                             value={name} 
                             onChange={e => setName(e.target.value)} 
+                            disabled={phoneVerificationStep === 'ACTIVE'} // Optional: Prevent name change if already registered to Meta
                         />
                     </div>
 
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Location Coordinates</label>
                         <div className="flex gap-2">
-                            <input 
-                                className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:ring-2 ring-sky-500 outline-none font-mono" 
-                                placeholder="Latitude" 
-                                value={coords.lat} 
-                                onChange={e => handleCoordChange('lat', e.target.value)} 
-                            />
-                            <input 
-                                className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:ring-2 ring-sky-500 outline-none font-mono" 
-                                placeholder="Longitude" 
-                                value={coords.lng} 
-                                onChange={e => handleCoordChange('lng', e.target.value)} 
-                            />
+                            <input className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:ring-2 ring-sky-500 outline-none font-mono" placeholder="Latitude" value={coords.lat} onChange={e => handleCoordChange('lat', e.target.value)} />
+                            <input className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:ring-2 ring-sky-500 outline-none font-mono" placeholder="Longitude" value={coords.lng} onChange={e => handleCoordChange('lng', e.target.value)} />
                         </div>
                     </div>
 
-                    <button 
-                            onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} 
-                            className="w-full bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-[10px] font-bold py-2 rounded-xl border border-sky-500/20 transition-all mb-2"
-                    >
-                            📍 Capture Current Location
+                    <button onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} className="w-full bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-[10px] font-bold py-2 rounded-xl border border-sky-500/20 transition-all mb-2">
+                        📍 Capture Current Location
                     </button>
                     <button onClick={handleUpdateBusinessConfig} disabled={saving} className="w-full py-3 rounded-xl font-black text-white bg-sky-600 hover:bg-sky-500 shadow-lg transition-all disabled:opacity-50">
                         {saving ? "SAVING..." : "SAVE BUSINESS INFO"}
@@ -333,18 +342,20 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                     </div>
                 </header>
 
+                {/* ✅ EXACT UI SEPARATION BASED ON STATE */}
                 {phoneVerificationStep === 'ACTIVE' ? (
+                    // IF ALREADY REGISTERED: Hide all setup options
                     <div className="space-y-3">
                         <div className="text-center p-4 bg-green-900/20 rounded-lg border border-green-500/30">
                             <p className="text-green-400 text-xs font-bold mb-2">✅ WhatsApp Business Connected</p>
-                            <p className="text-white font-mono font-bold text-lg mb-3">{metaData.phoneNumber}</p>
+                            <p className="text-white font-mono font-bold text-lg mb-3">{metaData.phoneNumber || phoneNbr}</p>
                             
                             <div className="bg-slate-900/60 p-3 rounded border border-slate-700 space-y-3 text-left">
                                 <div>
                                     <p className="text-[9px] text-slate-500"><strong>PHONE NUMBER ID</strong></p>
-                                    <p className="text-[9px] text-slate-400 font-mono break-all">{metaData.wabaId}</p>
+                                    <p className="text-[9px] text-slate-400 font-mono break-all">{metaData.phoneNumberId || 'Verified'}</p>
                                 </div> 
-                                {/* ✅ NEW: Displays the auto-generated PIN to the business owner */}
+                                {/* Only show PIN immediately after generation, not on subsequent page loads */}
                                 {metaData.assignedPin && (
                                     <div className="pt-2 border-t border-slate-700">
                                         <p className="text-[9px] text-slate-500"><strong>WHATSAPP API PIN</strong></p>
@@ -354,8 +365,9 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                             </div>
                         </div>
                     </div>
+
                 ) : phoneVerificationStep === 'PENDING_REVIEW' ? (
-                    // ✅ NEW: Lockout UI when Meta is reviewing the name or applying limits
+                    // IF NAME REJECTED/REVIEWING: Show lockout screen
                     <div className="space-y-3">
                         <div className="text-center p-5 bg-yellow-900/20 rounded-xl border border-yellow-500/30 shadow-inner">
                             <div className="w-10 h-10 mx-auto bg-yellow-500/20 rounded-full flex items-center justify-center mb-3">
@@ -367,18 +379,15 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                             </p>
                             <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 mb-3">
                                 <p className="text-[10px] text-slate-400">
-                                    This automated security review usually takes between <strong>1 to 24 hours</strong>. You cannot request a verification code until the review is complete.
+                                    This automated security review usually takes between <strong>1 to 24 hours</strong>. To protect your account from being flagged for spam, the connection button has been disabled for 2 hours.
                                 </p>
                             </div>
-                            <button 
-                                onClick={() => setPhoneVerificationStep(null)} 
-                                className="w-full mt-2 px-4 py-3 bg-slate-800 text-slate-300 font-bold text-xs rounded-lg hover:bg-slate-700 transition-all shadow-md"
-                            >
-                                ← Try Again Later
-                            </button>
+                            {/* ✅ Button removed. They are safely locked here. */}
                         </div>
                     </div>
+
                 ) : phoneVerificationStep === 'WAITING_OTP' ? (
+                    // IF OTP SENT: Show input field
                     <div className="space-y-3">
                         <p className="text-[10px] text-blue-200 bg-blue-900/20 p-2 rounded border border-blue-500/30">
                             📱 Code sent via <strong>{verificationMethod}</strong> to <strong>{phoneNbr}</strong>
@@ -392,12 +401,16 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                         </button>
                         <button onClick={() => { setPhoneVerificationStep(null); setOtpCode(''); }} className="w-full text-slate-400 text-[9px] font-bold py-2 transition-all hover:text-slate-300">← Cancel</button>
                     </div>
+
                 ) : phoneVerificationStep === 'VERIFYING_OTP' || phoneVerificationStep === 'REQUESTING_CODE' ? (
+                    // IF LOADING: Show spinner
                     <div className="text-center py-8">
                         <div className="w-8 h-8 mx-auto border-4 border-slate-600 border-t-sky-500 rounded-full animate-spin mb-3"></div>
                         <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Communicating with Meta...</p>
                     </div>
+
                 ) : (
+                    // DEFAULT VIEW: Show request options
                     <div className="space-y-4">
                         <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex items-center justify-between shadow-inner">
                             <div>
@@ -408,24 +421,15 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 bg-slate-900/50 p-1 rounded-lg border border-slate-700">
-                            <button 
-                                onClick={() => setVerificationMethod('SMS')}
-                                className={`py-2 rounded-md text-xs font-bold transition-all ${verificationMethod === 'SMS' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
+                            <button onClick={() => setVerificationMethod('SMS')} className={`py-2 rounded-md text-xs font-bold transition-all ${verificationMethod === 'SMS' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>
                                 📩 Send SMS
                             </button>
-                            <button 
-                                onClick={() => setVerificationMethod('VOICE')}
-                                className={`py-2 rounded-md text-xs font-bold transition-all ${verificationMethod === 'VOICE' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
+                            <button onClick={() => setVerificationMethod('VOICE')} className={`py-2 rounded-md text-xs font-bold transition-all ${verificationMethod === 'VOICE' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>
                                 📞 Call Me
                             </button>
                         </div>
 
-                        <button 
-                            onClick={handleRequestPhoneVerification} 
-                            className="w-full bg-green-600 hover:bg-green-500 py-3 rounded-lg font-bold text-white text-xs shadow-md transition-all"
-                        >
+                        <button onClick={handleRequestPhoneVerification} className="w-full bg-green-600 hover:bg-green-500 py-3 rounded-lg font-bold text-white text-xs shadow-md transition-all">
                             VERIFY & CONNECT
                         </button>
                     </div>
