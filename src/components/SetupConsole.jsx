@@ -79,10 +79,10 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
     );
 }
 
-// =========================================================
-// 2️⃣ SUB-COMPONENT: RestaurantSection (Zero Entry + Toggle)
-// =========================================================
 
+// =========================================================
+// 2️⃣ SUB-COMPONENT: RestaurantSection (Updated for Dynamic Name)
+// =========================================================
 const RestaurantSection = ({ pk, phoneNbr }) => {
     // Identity State
     const [name, setName] = useState('');
@@ -114,7 +114,6 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
 
     // Helper to handle coordinate inputs
     const handleCoordChange = (field, value) => {
-        // Allow numeric values, minus sign, and decimal point
         const isFloat = /^-?[0-9]*\.?[0-9]*$/.test(value);
         if (isFloat || value === "") {
             setCoords(prev => ({ ...prev, [field]: value }));
@@ -132,7 +131,6 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                     setName(config.name || '');
                     try {
                         const loc = typeof config.location === 'string' ? JSON.parse(config.location) : config.location;
-                        // Handle both simple {lat, lng} and DynamoDB {latitude: {N: ...}} formats just in case
                         const lat = loc.latitude?.N || loc.latitude || loc.lat;
                         const lng = loc.longitude?.N || loc.longitude || loc.lng;
                         if(lat) setCoords({ lat: String(lat), lng: String(lng) });
@@ -177,7 +175,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                 sk: "CONFIG", 
                 name: name.trim(), 
                 entityType: 'Business',
-                location: JSON.stringify({ // Ensure it's stringified as per your schema usually
+                location: JSON.stringify({ 
                     latitude: parseFloat(coords.lat), 
                     longitude: parseFloat(coords.lng) 
                 })
@@ -192,13 +190,19 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
 
     // --- STEP 1: REQUEST OTP ---
     const handleRequestPhoneVerification = async () => {
+        // ✅ REQUIRED: Ensure they typed a business name before sending to Meta
+        if (!name || !name.trim()) {
+            return showMessage("Please fill in your Business Name in step 1 first!", "error");
+        }
+
         setPhoneVerificationStep('REQUESTING_CODE');
         try {
             const { data: response } = await client.mutations.registerPhoneNumber({
                 action: 'REQUEST_PHONE_VERIFICATION',
                 businessPhone: phoneNbr,
                 businessPhoneOwner: phoneNbr,
-                verificationMethod: verificationMethod
+                verificationMethod: verificationMethod,
+                businessName: name.trim() // ✅ DYNAMICALLY PASS THE NAME HERE
             });
 
             if (response && response.success) {
@@ -227,7 +231,8 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                 businessPhone: phoneNbr, 
                 otpCode: otpCode.trim(),
                 phoneNumberId: tempPhoneId, 
-                businessPhoneOwner: phoneNbr
+                businessPhoneOwner: phoneNbr,
+                businessName: name.trim() // ✅ Keep schema happy
             });
 
             if (response && response.success) {
@@ -274,7 +279,6 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                         />
                     </div>
 
-                    {/* ✅ RESTORED LAT/LNG INPUTS */}
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Location Coordinates</label>
                         <div className="flex gap-2">
@@ -318,17 +322,16 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                 </header>
 
                 {phoneVerificationStep === 'ACTIVE' ? (
-                    // ACTIVE STATE
                     <div className="space-y-3">
                         <div className="text-center p-4 bg-green-900/20 rounded-lg border border-green-500/30">
                             <p className="text-green-400 text-xs font-bold mb-2">✅ WhatsApp Business Connected</p>
                             <p className="text-white font-mono font-bold text-lg mb-3">{metaData.phoneNumber}</p>
                             <div className="bg-slate-900/60 p-3 rounded border border-slate-700 space-y-2 mb-3 text-left">
-<div><p className="text-[9px] text-slate-500"><strong>PHONE NUMBER ID</strong></p><p className="text-[9px] text-slate-400 font-mono break-all">{metaData.wabaId}</p></div>                            </div>
+                                <div><p className="text-[9px] text-slate-500"><strong>PHONE NUMBER ID</strong></p><p className="text-[9px] text-slate-400 font-mono break-all">{metaData.wabaId}</p></div>                            
+                            </div>
                         </div>
                     </div>
                 ) : phoneVerificationStep === 'WAITING_OTP' ? (
-                    // OTP ENTRY STATE
                     <div className="space-y-3">
                         <p className="text-[10px] text-blue-200 bg-blue-900/20 p-2 rounded border border-blue-500/30">
                             📱 Code sent via <strong>{verificationMethod}</strong> to <strong>{phoneNbr}</strong>
@@ -343,10 +346,8 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                         <button onClick={() => { setPhoneVerificationStep(null); setOtpCode(''); }} className="w-full text-slate-400 text-[9px] font-bold py-2 transition-all hover:text-slate-300">← Cancel</button>
                     </div>
                 ) : phoneVerificationStep === 'REQUESTING_CODE' ? (
-                    // LOADING STATE
                     <div className="text-center py-6"><p className="text-slate-400 text-xs font-bold">🔄 Connecting to Meta...</p></div>
                 ) : (
-                    // INITIAL STATE (READ ONLY + TOGGLE)
                     <div className="space-y-4">
                         <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex items-center justify-between">
                             <div>
@@ -356,7 +357,6 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                             <div className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse"></div>
                         </div>
 
-                        {/* TOGGLE BUTTONS */}
                         <div className="grid grid-cols-2 gap-2 bg-slate-900/50 p-1 rounded-lg border border-slate-700">
                             <button 
                                 onClick={() => setVerificationMethod('SMS')}

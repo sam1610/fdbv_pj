@@ -95,13 +95,14 @@ expiration: a.integer()
         businessPhoneOwner: a.string(),
         phoneNumberId: a.string(),
         verificationMethod: a.string(),
-        businessName: a.string(), // ✅ ADD THIS LINE
+        businessName: a.string(), 
       })
       .returns(a.customType({
         success: a.boolean(),
         message: a.string(),
         data: a.string()
       }))
+      .authorization(allow => [allow.publicApiKey()])
       .handler(a.handler.function(registerBusinessPhone)),
     optimizeDelivery: a.query()
       .arguments({
