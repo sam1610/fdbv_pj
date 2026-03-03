@@ -17,8 +17,8 @@ const backend = defineBackend({
   registerBusinessPhone
 });
 
-backend.registerBusinessPhone.addEnvironment('WABA_ID', secret('WABA_ID'));
-backend.registerBusinessPhone.addEnvironment('META_SYSTEM_USER_TOKEN', secret('META_SYSTEM_USER_TOKEN'));
+// backend.registerBusinessPhone.addEnvironment('WABA_ID', secret('WABA_ID'));
+// backend.registerBusinessPhone.addEnvironment('META_SYSTEM_USER_TOKEN', secret('META_SYSTEM_USER_TOKEN'));
 backend.registerBusinessPhone.addEnvironment(
   'APPSYNC_ENDPOINT_URL',
   backend.data.resources.cfnResources.cfnGraphqlApi.attrGraphQlUrl

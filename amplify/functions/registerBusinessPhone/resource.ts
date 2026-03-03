@@ -1,4 +1,4 @@
-import { defineFunction, secret } from '@aws-amplify/backend'; // ✅ ADDED 'secret' here
+import { defineFunction, secret } from '@aws-amplify/backend';
 
 export const registerBusinessPhone = defineFunction({
   name: 'registerBusinessPhone',
