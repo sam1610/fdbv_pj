@@ -7,10 +7,10 @@ import Dashboard from './components/Dashboard';
 import AgentDashboard from './components/AgentDashboard'; 
 import SuperAgentDashboard from './components/SuperAgentDashboard';
 import { Amplify } from 'aws-amplify'; // ✅ Import Amplify
-import outputs from '../amplify_outputs.json'; // ✅ Import Outputs
+// import outputs from '../amplify_outputs.json'; // ✅ Import Outputs
 
 // ✅ FIX 1: Configure at the top level to prevent "Not Configured" race conditions
-Amplify.configure(outputs);
+// Amplify.configure(outputs);
 
 // Fallback Default (Bahrain)
 const DEFAULT_LOCATION = { latitude: 26.0935053, longitude: 50.48796 };
