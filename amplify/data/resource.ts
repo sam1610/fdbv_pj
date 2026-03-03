@@ -86,24 +86,25 @@ expiration: a.integer()
     allow.publicApiKey().to(['create', 'read', 'update'])
   ]),
 
-    registerPhoneNumber: a
-      .mutation()
-      .arguments({
-        action: a.string(),
-        businessPhone: a.string(),
-        otpCode: a.string(),
-        businessPhoneOwner: a.string(),
-        phoneNumberId: a.string(),
-        verificationMethod: a.string(),
-        businessName: a.string(), 
-      })
-      .returns(a.customType({
-        success: a.boolean(),
-        message: a.string(),
-        data: a.string()
-      }))
-      .authorization(allow => [allow.publicApiKey()])
-      .handler(a.handler.function(registerBusinessPhone)),
+  registerPhoneNumber: a
+  .mutation()
+  .arguments({
+    action: a.string(),
+    businessPhone: a.string(),
+    otpCode: a.string(),
+    businessPhoneOwner: a.string(),
+    phoneNumberId: a.string(),
+    verificationMethod: a.string(),
+    businessName: a.string(), 
+  })
+  .returns(a.customType({
+    success: a.boolean(),
+    message: a.string(),
+    data: a.string()
+  }))
+  // Change publicApiKey() to authenticated()
+  .authorization(allow => [allow.authenticated()]) 
+  .handler(a.handler.function(registerBusinessPhone)),
     optimizeDelivery: a.query()
       .arguments({
         orders: a.json(),            // Array of orders passed from React
