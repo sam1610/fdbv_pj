@@ -208,46 +208,33 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
     };
 
     // --- STEP 1: REQUEST OTP ---
-    const handleRequestPhoneVerification = async () => {
-        const trimmedName = name.trim();
-        if (!trimmedName) {
-            return showMessage("Please fill in your Business Name in step 1 first!", "error");
-        }
+const handleRequestPhoneVerification = async () => {
+    // ... validation code ...
+    setPhoneVerificationStep('REQUESTING_CODE');
+    try {
+        const response = await client.mutations.registerPhoneNumber({
+            action: 'REQUEST_PHONE_VERIFICATION',
+            businessPhone: phoneNbr,
+            businessPhoneOwner: phoneNbr,
+            verificationMethod: verificationMethod,
+            businessName: name.trim() 
+        });
 
-        // ✅ NEW: Block forbidden Meta names before hitting the API
-        if (trimmedName.toLowerCase() === 'home') {
-            return showMessage("Meta policy: 'Home' is a forbidden Business Name. Please update Step 1.", "error");
-        }
+        console.log("DEBUG: Mutation Response:", response); // 👈 ADD THIS
 
-        setPhoneVerificationStep('REQUESTING_CODE');
-        try {
-            const { data: response } = await client.mutations.registerPhoneNumber({
-                action: 'REQUEST_PHONE_VERIFICATION',
-                businessPhone: phoneNbr,
-                businessPhoneOwner: phoneNbr,
-                verificationMethod: verificationMethod,
-                businessName: name.trim() 
-            });
-
-            if (response && response.success) {
-                const innerData = response.data ? JSON.parse(response.data) : {}; 
-                setTempPhoneId(innerData.phoneNumberId); 
-                setPhoneVerificationStep('WAITING_OTP');
-                showMessage(`✅ Code sent via ${verificationMethod}!`, "success");
-            } 
-            else if (response && response.message === "PENDING_META_REVIEW") {
-                setPhoneVerificationStep('PENDING_REVIEW');
-                localStorage.setItem(`meta_lock_${phoneNbr}`, Date.now().toString());
-            } 
-            else {
-                setPhoneVerificationStep(null);
-                showMessage(`Failed: ${response?.message || "Unknown error"}`, "error");
-            }
-        } catch (err) {
+        if (response.data?.success) {
+            // ... success logic ...
+        } else {
             setPhoneVerificationStep(null);
-            showMessage(`Network error: ${err.message}`, "error");
+            // 👈 UPDATE THIS to show the actual error message from the backend
+            showMessage(`Failed: ${response.data?.message || "Check Browser Console"}`, "error");
         }
-    };
+    } catch (err) {
+        setPhoneVerificationStep(null);
+        console.error("CRITICAL: Frontend Mutation Error:", err); // 👈 ADD THIS
+        showMessage(`Network error: ${err.message}`, "error");
+    }
+};
 
     // --- STEP 2: VERIFY OTP ---
     const handleVerifyPhoneOTP = async () => {

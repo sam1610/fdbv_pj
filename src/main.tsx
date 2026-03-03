@@ -2,7 +2,7 @@
 
 // main.tsx
 import outputs from '../amplify_outputs.json'; 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Amplify } from 'aws-amplify';
 import { 
@@ -64,18 +64,28 @@ const CustomSignInFooter = ({ onOpenPrivacy }: { onOpenPrivacy: () => void }) =>
 
 const AuthWrapper = () => {
   const [showPrivacy, setShowPrivacy] = useState(false);
+  // Add a state to track if Amplify is actually ready
+  const [isAmplifyConfigured, setIsAmplifyConfigured] = useState(false);
+
+  useEffect(() => {
+    try {
+      Amplify.configure(outputs);
+      console.log("DEBUG: Amplify Configuration Successful");
+      setIsAmplifyConfigured(true);
+    } catch (e) {
+      console.error("DEBUG: Amplify Configuration Failed", e);
+    }
+  }, []);
+
+  if (!isAmplifyConfigured) {
+    return <div style={{color: 'white', padding: '20px'}}>Initializing AWS Connection...</div>;
+  }
 
   return (
     <>
       {showPrivacy && <PrivacyPolicyModal onClose={() => setShowPrivacy(false)} />}
       <Authenticator 
-        formFields={formFields} 
-        hideSignUp={true}
-        components={{
-          SignIn: {
-            Footer: () => <CustomSignInFooter onOpenPrivacy={() => setShowPrivacy(true)} />
-          }
-        }}
+        // ... your existing props
       >
         {({ signOut, user }) => (
            <App signOut={() => signOut && signOut()} user={user} />
@@ -85,25 +95,6 @@ const AuthWrapper = () => {
   );
 };
 
-// 🔥 THE FIX: CHECK URL BEFORE RENDERING
-// If the URL is exactly "/privacy.html", we skip the App/Login and just show the Policy.
-// const root = ReactDOM.createRoot(document.getElementById('root')!);
-
-// if (window.location.pathname === '/privacy.html') {
-//   root.render(
-//     <React.StrictMode>
-//        {/* Redirect to home when they close the modal */}
-//        <PrivacyPolicyModal onClose={() => window.location.href = '/'} />
-//     </React.StrictMode>
-//   );
-// } else {
-//   // Normal App Load
-//   root.render(
-//     <React.StrictMode>
-//       <AuthWrapper />
-//     </React.StrictMode>
-//   );
-// }
 
 const container = document.getElementById('root');
 
