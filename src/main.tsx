@@ -1,6 +1,7 @@
 
 
 // main.tsx
+import outputs from '../amplify_outputs.json'; 
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Amplify } from 'aws-amplify';
@@ -12,7 +13,6 @@ import {
   useAuthenticator 
 } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
-import outputs from '../amplify_outputs.json'; 
 import App from './App.tsx';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal'; 
 

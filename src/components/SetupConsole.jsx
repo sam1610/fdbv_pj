@@ -129,7 +129,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
     // --- FETCH DATA ---
     useEffect(() => {
         const fetchInitialData = async () => {
-            if (hasLoaded) return;
+            if (!client || hasLoaded) return;
             const lockTime = localStorage.getItem(`meta_lock_${phoneNbr}`);
             if (lockTime) {
                 const elapsed = Date.now() - parseInt(lockTime);
