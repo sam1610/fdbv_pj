@@ -27,3 +27,5 @@ dist-ssr
 .amplify
 amplify_outputs.json
 amplifyconfiguration.json
+src/repo_test
+node_modules 17.02.22

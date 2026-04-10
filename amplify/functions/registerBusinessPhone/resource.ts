@@ -8,6 +8,7 @@ export const registerBusinessPhone = defineFunction({
   // ✅ ADD THIS ENVIRONMENT BLOCK:
   environment: {
     WABA_ID: secret('WABA_ID'),
-    META_SYSTEM_USER_TOKEN: secret('META_SYSTEM_USER_TOKEN')
+    META_SYSTEM_USER_TOKEN: secret('META_SYSTEM_USER_TOKEN'),
+    PUBLIC_KEY: secret('PUBLIC_KEY')
   }
 });

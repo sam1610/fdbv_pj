@@ -136,6 +136,30 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
                 console.error("PIN Registration Error:", JSON.stringify(pinRes.error));
                 throw new Error(pinRes.error?.error_user_msg || "OTP verified, but failed to activate PIN with Meta.");
             }
+            // ✅ THE MISSING FIX: Bind the AWS Public Key to the new Phone Number ID
+const publicKey = process.env.PUBLIC_KEY ? process.env.PUBLIC_KEY.trim() : "";
+if (publicKey) {
+    console.log(`Binding AWS Public Key to new phone ID ${phoneId}`);
+    
+    // Must use x-www-form-urlencoded format for this specific Meta endpoint
+    const encodedKey = encodeURIComponent(publicKey);
+    const keyRes = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/whatsapp_business_encryption`, {
+        method: 'POST',
+        headers: {
+            "Authorization": `Bearer ${SYSTEM_TOKEN}`,
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `business_public_key=${encodedKey}`
+    });
+    
+    const keyJson = await keyRes.json();
+    if (!keyJson.success) {
+        console.error("⚠️ Key Binding Failed (Flows will not work):", JSON.stringify(keyJson));
+        // You may want to throw an error here depending on how strict you want the onboarding to be
+    } else {
+        console.log(`✅ Public Key successfully bound to ${phoneId}`);
+    }
+}
 
             // 3. Save to AppSync
             const input = {
