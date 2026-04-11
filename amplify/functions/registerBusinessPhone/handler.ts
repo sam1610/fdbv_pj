@@ -1,4 +1,4 @@
-import { Schema } from "../../data/resource"; 
+import { Schema } from "../../data/resource";
 
 // ============================================================
 // 1. CONFIGURATION & HELPERS
@@ -9,7 +9,7 @@ const APPSYNC_URL = process.env.APPSYNC_ENDPOINT_URL;
 const APPSYNC_API_KEY = process.env.APPSYNC_API_KEY;
 
 function parsePhoneNumber(phone: string) {
-    const clean = phone.replace(/\D/g, ''); 
+    const clean = phone.replace(/\D/g, '');
     if (clean.startsWith('973')) return { cc: '973', number: clean.substring(3) };
     if (clean.startsWith('1')) return { cc: '1', number: clean.substring(1) };
     if (clean.startsWith('44')) return { cc: '44', number: clean.substring(2) };
@@ -61,26 +61,26 @@ async function getPhoneNumberId(businessPhone: string, businessName?: string | n
     const res = await callMeta(`/${WABA_ID}/phone_numbers`, 'POST', {
         cc: cc,
         phone_number: number,
-        verified_name: businessName || "CloudOrder Merchant" 
+        verified_name: businessName || "CloudOrder Merchant"
     });
 
     if (res.id) return res.id;
 
     if (res.error) {
         console.error("Registration failed:", JSON.stringify(res.error));
-        
+
         const listRes = await callMeta(`/${WABA_ID}/phone_numbers?fields=display_phone_number,id,verified_name`, 'GET');
         const targetClean = businessPhone.replace(/\D/g, '');
         const match = listRes.data?.find((p: any) => p.display_phone_number.replace(/\D/g, '') === targetClean);
-        
+
         if (match) {
             console.log("Found existing phone ID:", match.id);
             return match.id;
         }
-        
+
         throw new Error(res.error?.error_user_msg || res.error?.message || "Could not register phone with Meta");
     }
-    
+
     throw new Error("Could not register phone with Meta");
 }
 
@@ -88,20 +88,20 @@ async function getPhoneNumberId(businessPhone: string, businessName?: string | n
 // 3. LAMBDA HANDLER
 // ============================================================
 export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (event) => {
-    const { action, businessPhone, otpCode, businessPhoneOwner, phoneNumberId, verificationMethod, businessName } = event.arguments;    
-    
+    const { action, businessPhone, otpCode, businessPhoneOwner, phoneNumberId, verificationMethod, businessName } = event.arguments;
+
     try {
         if (!businessPhone) throw new Error("Missing Business Phone");
 
         if (action === "REQUEST_PHONE_VERIFICATION") {
             const phoneId = await getPhoneNumberId(businessPhone, businessName);
-            
+
             const method = verificationMethod === "VOICE" ? "VOICE" : "SMS";
             console.log(`Requesting OTP via ${method} for ${businessPhone}`);
-            
-            const otpRes = await callMeta(`/${phoneId}/request_code`, 'POST', { 
-                code_method: method, 
-                language: "en" 
+
+            const otpRes = await callMeta(`/${phoneId}/request_code`, 'POST', {
+                code_method: method,
+                language: "en"
             });
 
             if (otpRes.success) {
@@ -110,7 +110,7 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
 
             // ✅ NEW: Catch Meta's specific rate limit or review blocks
             if (otpRes.error?.error_user_msg?.includes("already in progress") || otpRes.error?.error_user_msg?.includes("1 hour")) {
-                 return { success: false, message: "PENDING_META_REVIEW", data: otpRes.error.error_user_msg };
+                return { success: false, message: "PENDING_META_REVIEW", data: otpRes.error.error_user_msg };
             }
 
             throw new Error(otpRes.error?.error_user_msg || otpRes.error?.message || "Failed to send OTP");
@@ -118,7 +118,7 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
 
         if (action === "VERIFY_PHONE_OTP") {
             const phoneId = phoneNumberId || await getPhoneNumberId(businessPhone, businessName);
-            
+
             // 1. Verify the OTP
             const verifyRes = await callMeta(`/${phoneId}/verify_code`, 'POST', { code: otpCode });
             if (!verifyRes.success) throw new Error(verifyRes.error?.error_user_msg || "Invalid OTP Code");
@@ -126,7 +126,7 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
             // ✅ NEW: 2. Automatically Register the PIN
             const generatedPin = generateRandomPin();
             console.log(`Registering phone ID ${phoneId} with auto-generated PIN: ${generatedPin}`);
-            
+
             const pinRes = await callMeta(`/${phoneId}/register`, 'POST', {
                 messaging_product: "whatsapp",
                 pin: generatedPin
@@ -137,40 +137,69 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
                 throw new Error(pinRes.error?.error_user_msg || "OTP verified, but failed to activate PIN with Meta.");
             }
             // ✅ THE MISSING FIX: Bind the AWS Public Key to the new Phone Number ID
-const publicKey = process.env.PUBLIC_KEY ? process.env.PUBLIC_KEY.trim() : "";
-if (publicKey) {
-    console.log(`Binding AWS Public Key to new phone ID ${phoneId}`);
-    
-    // Must use x-www-form-urlencoded format for this specific Meta endpoint
-    const encodedKey = encodeURIComponent(publicKey);
-    const keyRes = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/whatsapp_business_encryption`, {
-        method: 'POST',
-        headers: {
-            "Authorization": `Bearer ${SYSTEM_TOKEN}`,
-            "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: `business_public_key=${encodedKey}`
-    });
-    
-    const keyJson = await keyRes.json();
-    if (!keyJson.success) {
-        console.error("⚠️ Key Binding Failed (Flows will not work):", JSON.stringify(keyJson));
-        // You may want to throw an error here depending on how strict you want the onboarding to be
-    } else {
-        console.log(`✅ Public Key successfully bound to ${phoneId}`);
-    }
-}
+            // const publicKey = process.env.PUBLIC_KEY ? process.env.PUBLIC_KEY.trim() : "";
+            // if (publicKey) {
+            //     console.log(`Binding AWS Public Key to new phone ID ${phoneId}`);
 
+            //     // Must use x-www-form-urlencoded format for this specific Meta endpoint
+            //     const encodedKey = encodeURIComponent(publicKey);
+            //     const keyRes = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/whatsapp_business_encryption`, {
+            //         method: 'POST',
+            //         headers: {
+            //             "Authorization": `Bearer ${SYSTEM_TOKEN}`,
+            //             "Content-Type": "application/x-www-form-urlencoded"
+            //         },
+            //         body: `business_public_key=${encodedKey}`
+            //     });
+
+            //     const keyJson = await keyRes.json();
+            //     if (!keyJson.success) {
+            //         console.error("⚠️ Key Binding Failed (Flows will not work):", JSON.stringify(keyJson));
+            //         // You may want to throw an error here depending on how strict you want the onboarding to be
+            //     } else {
+            //         console.log(`✅ Public Key successfully bound to ${phoneId}`);
+            //     }
+            // }
+            // ✅ THE MISSING FIX: Bind the AWS Public Key to the new Phone Number ID
+            const publicKey = process.env.PUBLIC_KEY ? process.env.PUBLIC_KEY.trim() : "";
+
+            // HARD STOP 1: Check if the server actually has the key
+            if (!publicKey) {
+                throw new Error("Server Configuration Error: PUBLIC_KEY is missing. Cannot enable WhatsApp Flows.");
+            }
+
+            console.log(`Binding AWS Public Key to new phone ID ${phoneId}`);
+
+            // Must use x-www-form-urlencoded format for this specific Meta endpoint
+            const encodedKey = encodeURIComponent(publicKey);
+            const keyRes = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/whatsapp_business_encryption`, {
+                method: 'POST',
+                headers: {
+                    "Authorization": `Bearer ${SYSTEM_TOKEN}`,
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: `business_public_key=${encodedKey}`
+            });
+
+            const keyJson = await keyRes.json();
+
+            // HARD STOP 2: Check if Meta accepted the key
+            if (!keyJson.success) {
+                console.error("⚠️ Key Binding Failed:", JSON.stringify(keyJson));
+                throw new Error(keyJson.error?.error_user_msg || keyJson.error?.message || "Failed to bind encryption key to Meta. Please try again.");
+            }
+
+            console.log(`✅ Public Key successfully bound to ${phoneId}`);
             // 3. Save to AppSync
             const input = {
                 restaurantId: businessPhone,
-                metaBusinessAccessToken: SYSTEM_TOKEN, 
+                metaBusinessAccessToken: SYSTEM_TOKEN,
                 phoneNumberId: phoneId,
                 phoneNumber: businessPhone,
                 wabaId: WABA_ID,
                 registrationStatus: "ACTIVE",
                 businessOwnerId: businessPhoneOwner,
-                registrationDate: new Date().toISOString(), 
+                registrationDate: new Date().toISOString(),
                 lastVerified: new Date().toISOString()
             };
 
