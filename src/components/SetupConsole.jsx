@@ -735,3 +735,14 @@ const PrivacyPolicySection = () => {
         </div>
     );
 };
+const BranchesSection = ({ pk }) => {
+    return (
+        <div className="p-8 bg-slate-800/40 rounded-xl border border-slate-700 text-center animate-fade-in">
+            <div className="w-12 h-12 mx-auto bg-slate-700 rounded-full flex items-center justify-center mb-4">
+                <span className="text-xl">🏪</span>
+            </div>
+            <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest mb-2">Branch Management</h2>
+            <p className="text-slate-400 text-xs">Branch configuration UI is coming soon.</p>
+        </div>
+    );
+};
