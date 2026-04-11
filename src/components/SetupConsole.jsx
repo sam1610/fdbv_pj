@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { client } from '../DataHook/amplifyClient';
-import AgentsView from './AgentsView'; 
+import AgentsView from './AgentsView';
 
 // ✅ GLOBAL CONSTANTS
 // Removed 'Templates' from tabs
@@ -15,8 +15,8 @@ const parseConfigLocation = (loc) => {
         const lng = parseFloat(data.longitude?.N || data.longitude || data.lng?.N || data.lng);
         if (isNaN(lat) || isNaN(lng)) return null;
         return { lat: String(lat), lng: String(lng) };
-    } catch (e) { 
-        return null; 
+    } catch (e) {
+        return null;
     }
 };
 
@@ -38,10 +38,10 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`flex-1 min-w-[80px] py-3 px-2 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all whitespace-nowrap 
-                            ${activeTab === tab 
-                            ?  'bg-sky-600 text-white shadow-lg'
-                            : 'text-slate-400 hover:bg-slate-700'
-                        }`}
+                            ${activeTab === tab
+                                ? 'bg-sky-600 text-white shadow-lg'
+                                : 'text-slate-400 hover:bg-slate-700'
+                            }`}
                     >
                         {tab}
                     </button>
@@ -58,21 +58,21 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
             {/* Content Area */}
             <div className="flex-grow overflow-y-auto p-4 pb-24">
                 {activeTab === 'Restaurant' && (
-                    <RestaurantSection 
-                        pk={businessPk} 
-                        phoneNbr={phoneNbr} 
+                    <RestaurantSection
+                        pk={businessPk}
+                        phoneNbr={phoneNbr}
                     />
                 )}
-                
+
                 {activeTab === 'Branches' && <BranchesSection pk={businessPk} />}
                 {activeTab === 'Items' && <ItemsSection pk={businessPk} onUpdate={onDataChange} />}
-                
+
                 {activeTab === 'Agents' && (
                     <div className="animate-fade-in">
                         <AgentsView phoneNbr={phoneNbr} setModal={setModal} onAgentAdded={onDataChange} businessLocation={businessLocation} />
                     </div>
                 )}
-                
+
                 {activeTab === 'ⓘ' && <PrivacyPolicySection />}
             </div>
         </div>
@@ -95,13 +95,13 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
     const [coords, setCoords] = useState({ lat: '', lng: '' });
     const [saving, setSaving] = useState(false);
     const [hasLoaded, setHasLoaded] = useState(false);
-    
+
     // Phone Registration State
-    const [verificationMethod, setVerificationMethod] = useState('SMS'); 
-    const [phoneVerificationStep, setPhoneVerificationStep] = useState(null); 
+    const [verificationMethod, setVerificationMethod] = useState('SMS');
+    const [phoneVerificationStep, setPhoneVerificationStep] = useState(null);
     const [otpCode, setOtpCode] = useState('');
-    const [tempPhoneId, setTempPhoneId] = useState(null); 
-    
+    const [tempPhoneId, setTempPhoneId] = useState(null);
+
     // Meta Data State
     const [metaData, setMetaData] = useState({
         metaBusinessAccountId: '',
@@ -111,7 +111,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
         registrationStatus: 'PENDING',
         assignedPin: ''
     });
-    
+
     const [feedback, setFeedback] = useState({ msg: '', type: '' });
 
     const showMessage = (msg, type = 'success') => {
@@ -147,24 +147,25 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                         const loc = typeof config.location === 'string' ? JSON.parse(config.location) : config.location;
                         const lat = loc.latitude?.N || loc.latitude || loc.lat;
                         const lng = loc.longitude?.N || loc.longitude || loc.lng;
-                        if(lat) setCoords({ lat: String(lat), lng: String(lng) });
-                    } catch(e) {}
+                        if (lat) setCoords({ lat: String(lat), lng: String(lng) });
+                    } catch (e) { }
                 }
 
-                const { data: metaRecord } = await client.models.RestaurantMetaAccount.get({ 
-                    restaurantId: phoneNbr 
+                const { data: metaRecords } = await client.models.RestaurantMetaAccount.list({
+                    filter: { restaurantId: { eq: phoneNbr } }
                 });
-                
-                if (metaRecord) {
+
+                if (metaRecords && metaRecords.length > 0) {
+                    const metaRecord = metaRecords[0];
                     setMetaData({
                         metaBusinessAccountId: metaRecord.metaBusinessAccountId || '',
                         phoneNumber: metaRecord.phoneNumber || '',
                         phoneNumberId: metaRecord.phoneNumberId || '',
                         wabaId: metaRecord.wabaId || '',
                         registrationStatus: metaRecord.registrationStatus || 'PENDING',
-                        assignedPin: '' 
+                        assignedPin: ''
                     });
-                    
+
                     // ✅ If they are already ACTIVE in the DB, lock the UI to the success screen
                     if (metaRecord.registrationStatus === 'ACTIVE') {
                         setPhoneVerificationStep('ACTIVE');
@@ -182,7 +183,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
     const handleUpdateBusinessConfig = async () => {
         const trimmedName = name.trim();
         if (!trimmedName) return showMessage("Please fill in Business Name", "error");
-        
+
         // ✅ NEW: Block forbidden Meta names
         if (trimmedName.toLowerCase() === 'home') {
             return showMessage("Meta policy: 'Home' is a forbidden Business Name. Please use a real brand name.", "error");
@@ -190,13 +191,13 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
         setSaving(true);
         try {
             await client.models.BusinessData.update({
-                pk: pk, 
-                sk: "CONFIG", 
-                name: name.trim(), 
+                pk: pk,
+                sk: "CONFIG",
+                name: name.trim(),
                 entityType: 'Business',
-                location: JSON.stringify({ 
-                    latitude: parseFloat(coords.lat), 
-                    longitude: parseFloat(coords.lng) 
+                location: JSON.stringify({
+                    latitude: parseFloat(coords.lat),
+                    longitude: parseFloat(coords.lng)
                 })
             });
             showMessage("✅ Business config saved!");
@@ -208,33 +209,33 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
     };
 
     // --- STEP 1: REQUEST OTP ---
-const handleRequestPhoneVerification = async () => {
-    // ... validation code ...
-    setPhoneVerificationStep('REQUESTING_CODE');
-    try {
-        const response = await client.mutations.registerPhoneNumber({
-            action: 'REQUEST_PHONE_VERIFICATION',
-            businessPhone: phoneNbr,
-            businessPhoneOwner: phoneNbr,
-            verificationMethod: verificationMethod,
-            businessName: name.trim() 
-        });
+    const handleRequestPhoneVerification = async () => {
+        // ... validation code ...
+        setPhoneVerificationStep('REQUESTING_CODE');
+        try {
+            const response = await client.mutations.registerPhoneNumber({
+                action: 'REQUEST_PHONE_VERIFICATION',
+                businessPhone: phoneNbr,
+                businessPhoneOwner: phoneNbr,
+                verificationMethod: verificationMethod,
+                businessName: name.trim()
+            });
 
-        console.log("DEBUG: Mutation Response:", response); // 👈 ADD THIS
+            console.log("DEBUG: Mutation Response:", response); // 👈 ADD THIS
 
-        if (response.data?.success) {
-            // ... success logic ...
-        } else {
+            if (response.data?.success) {
+                // ... success logic ...
+            } else {
+                setPhoneVerificationStep(null);
+                // 👈 UPDATE THIS to show the actual error message from the backend
+                showMessage(`Failed: ${response.data?.message || "Check Browser Console"}`, "error");
+            }
+        } catch (err) {
             setPhoneVerificationStep(null);
-            // 👈 UPDATE THIS to show the actual error message from the backend
-            showMessage(`Failed: ${response.data?.message || "Check Browser Console"}`, "error");
+            console.error("CRITICAL: Frontend Mutation Error:", err); // 👈 ADD THIS
+            showMessage(`Network error: ${err.message}`, "error");
         }
-    } catch (err) {
-        setPhoneVerificationStep(null);
-        console.error("CRITICAL: Frontend Mutation Error:", err); // 👈 ADD THIS
-        showMessage(`Network error: ${err.message}`, "error");
-    }
-};
+    };
 
     // --- STEP 2: VERIFY OTP ---
     const handleVerifyPhoneOTP = async () => {
@@ -244,11 +245,11 @@ const handleRequestPhoneVerification = async () => {
         try {
             const { data: response } = await client.mutations.registerPhoneNumber({
                 action: 'VERIFY_PHONE_OTP',
-                businessPhone: phoneNbr, 
+                businessPhone: phoneNbr,
                 otpCode: otpCode.trim(),
-                phoneNumberId: tempPhoneId, 
+                phoneNumberId: tempPhoneId,
                 businessPhoneOwner: phoneNbr,
-                businessName: name.trim() 
+                businessName: name.trim()
             });
 
             if (response && response.success) {
@@ -259,15 +260,15 @@ const handleRequestPhoneVerification = async () => {
                     phoneNumberId: innerData.phoneNumberId || '',
                     wabaId: innerData.wabaId || '',
                     registrationStatus: 'ACTIVE',
-                    assignedPin: innerData.assignedPin || '' 
+                    assignedPin: innerData.assignedPin || ''
                 });
                 setPhoneVerificationStep('ACTIVE');
                 setOtpCode('');
                 showMessage("✅ Phone securely registered to WhatsApp API!", "success");
-            } 
+            }
             else if (response && response.message === "PENDING_META_REVIEW") {
                 setPhoneVerificationStep('PENDING_REVIEW');
-            } 
+            }
             else {
                 setPhoneVerificationStep('WAITING_OTP');
                 showMessage(`Verification failed: ${response?.message || "Invalid OTP"}`, "error");
@@ -281,7 +282,7 @@ const handleRequestPhoneVerification = async () => {
     // --- RENDER UI ---
     return (
         <div className="space-y-8 max-w-sm mx-auto pt-4">
-            
+
             {/* 1. BUSINESS IDENTITY */}
             <div className="bg-slate-800/40 p-6 rounded-xl border border-slate-700">
                 <header className="border-l-4 border-sky-500 pl-3 mb-4">
@@ -292,10 +293,10 @@ const handleRequestPhoneVerification = async () => {
                 <div className="space-y-4">
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Business Name <span className="text-red-500">*</span></label>
-                        <input 
-                            className="w-full bg-slate-900 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none" 
-                            value={name} 
-                            onChange={e => setName(e.target.value)} 
+                        <input
+                            className="w-full bg-slate-900 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none"
+                            value={name}
+                            onChange={e => setName(e.target.value)}
                             disabled={phoneVerificationStep === 'ACTIVE'} // Optional: Prevent name change if already registered to Meta
                         />
                     </div>
@@ -336,12 +337,12 @@ const handleRequestPhoneVerification = async () => {
                         <div className="text-center p-4 bg-green-900/20 rounded-lg border border-green-500/30">
                             <p className="text-green-400 text-xs font-bold mb-2">✅ WhatsApp Business Connected</p>
                             <p className="text-white font-mono font-bold text-lg mb-3">{metaData.phoneNumber || phoneNbr}</p>
-                            
+
                             <div className="bg-slate-900/60 p-3 rounded border border-slate-700 space-y-3 text-left">
                                 <div>
                                     <p className="text-[9px] text-slate-500"><strong>PHONE NUMBER ID</strong></p>
                                     <p className="text-[9px] text-slate-400 font-mono break-all">{metaData.phoneNumberId || 'Verified'}</p>
-                                </div> 
+                                </div>
                                 {/* Only show PIN immediately after generation, not on subsequent page loads */}
                                 {metaData.assignedPin && (
                                     <div className="pt-2 border-t border-slate-700">
@@ -434,19 +435,19 @@ const handleRequestPhoneVerification = async () => {
 };
 const ItemsSection = ({ pk, onUpdate }) => {
     const BASE64_HEADER = "data:image/jpeg;base64,";
-    const [item, setItem] = useState({ 
-        name: '', price: '', description: '', quantity: '', 
-        stockStatus: true, 
-        imageUrl: '' 
+    const [item, setItem] = useState({
+        name: '', price: '', description: '', quantity: '',
+        stockStatus: true,
+        imageUrl: ''
     });
-    const [allItems, setAllItems] = useState([]); 
-    const [editingId, setEditingId] = useState(null); 
-    const [category, setCategory] = useState(''); 
+    const [allItems, setAllItems] = useState([]);
+    const [editingId, setEditingId] = useState(null);
+    const [category, setCategory] = useState('');
     const [existingCategories, setExistingCategories] = useState([]);
     const [showItemSuggestions, setShowItemSuggestions] = useState(false);
     const [showCatSuggestions, setShowCatSuggestions] = useState(false);
     const [saving, setSaving] = useState(false);
-    
+
     const handleImageUpload = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -482,14 +483,14 @@ const ItemsSection = ({ pk, onUpdate }) => {
         setEditingId(selectedItem.sk);
         const previewImage = selectedItem.imageUrl ? (selectedItem.imageUrl.startsWith('data:') ? selectedItem.imageUrl : BASE64_HEADER + selectedItem.imageUrl) : '';
         setItem({
-            name: selectedItem.name, 
-            price: selectedItem.unitPrice.toString(), 
+            name: selectedItem.name,
+            price: selectedItem.unitPrice.toString(),
             description: selectedItem.description || '',
-            quantity: selectedItem.quantity || '', 
+            quantity: selectedItem.quantity || '',
             stockStatus: selectedItem.stockStatus !== false,
-            imageUrl: previewImage 
+            imageUrl: previewImage
         });
-        setCategory(selectedItem.itemCategory || ''); 
+        setCategory(selectedItem.itemCategory || '');
         setShowItemSuggestions(false);
     };
 
@@ -504,21 +505,21 @@ const ItemsSection = ({ pk, onUpdate }) => {
         if (!item.name.trim() || !item.price || !category.trim()) return alert("Missing fields");
         setSaving(true);
         const dbImageString = item.imageUrl.replace(BASE64_HEADER, '');
-        
+
         const payload = {
-            pk, 
-            name: item.name.trim(), 
-            unitPrice: parseFloat(item.price), 
+            pk,
+            name: item.name.trim(),
+            unitPrice: parseFloat(item.price),
             itemCategory: category.trim().toUpperCase(),
-            description: item.description, 
-            stockStatus: item.stockStatus, 
-            quantity: item.quantity ? parseInt(item.quantity) : 0, 
+            description: item.description,
+            stockStatus: item.stockStatus,
+            quantity: item.quantity ? parseInt(item.quantity) : 0,
             imageUrl: dbImageString
         };
 
         try {
-            if (editingId) { 
-                await client.models.BusinessData.update({ ...payload, sk: editingId }); 
+            if (editingId) {
+                await client.models.BusinessData.update({ ...payload, sk: editingId });
             } else {
                 // Query Database for the Highest ITEM ID
                 const { data: latestItemData } = await client.models.BusinessData.listByBusiness({
@@ -527,7 +528,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
                     sortDirection: 'DESC', // Get greatest first
                     limit: 1 // Only need the top 1
                 });
-                
+
                 let nextNum = 1;
                 if (latestItemData && latestItemData.length > 0) {
                     const latestSk = latestItemData[0].sk; // e.g. "ITEM#015"
@@ -536,14 +537,14 @@ const ItemsSection = ({ pk, onUpdate }) => {
                         nextNum = parsedNum + 1; // Increment
                     }
                 }
-                
+
                 const newSk = `ITEM#${String(nextNum).padStart(3, '0')}`; // Format e.g. "ITEM#016"
-                
+
                 await client.models.BusinessData.create({ ...payload, sk: newSk, entityType: 'ITEM' });
             }
-            await fetchItems(); 
-            if (onUpdate) onUpdate(); 
-            clearForm(); 
+            await fetchItems();
+            if (onUpdate) onUpdate();
+            clearForm();
         } catch (err) { alert("Error saving item"); console.error(err); } finally { setSaving(false); }
     };
 
@@ -557,10 +558,10 @@ const ItemsSection = ({ pk, onUpdate }) => {
                     </button>
                 )}
             </header>
-            
+
             {/* Name Input with Autocomplete */}
             <div className="relative">
-                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm" placeholder="Item Name" value={item.name} onChange={(e) => { setItem({...item, name: e.target.value}); if(!editingId) setShowItemSuggestions(true); }} onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)} />
+                <input className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm" placeholder="Item Name" value={item.name} onChange={(e) => { setItem({ ...item, name: e.target.value }); if (!editingId) setShowItemSuggestions(true); }} onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)} />
                 {showItemSuggestions && filteredItems.length > 0 && (
                     <div className="absolute z-50 w-full bg-slate-800 border border-slate-600 rounded-xl mt-1 max-h-48 overflow-y-auto">
                         {filteredItems.map(s => <button key={s.sk} onMouseDown={() => selectItemToEdit(s)} className="w-full text-left px-4 py-2 text-slate-300 text-xs border-b border-slate-700">{s.name}</button>)}
@@ -586,39 +587,38 @@ const ItemsSection = ({ pk, onUpdate }) => {
 
             {/* Price, Qty, and Stock Status */}
             <div className="flex gap-2">
-                <button 
+                <button
                     onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
-                    className={`px-3 rounded-lg font-bold text-[10px] uppercase tracking-wide border transition-all ${
-                        item.stockStatus 
-                        ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' 
-                        : 'bg-red-900/30 text-red-400 border-red-500/30'
-                    }`}
+                    className={`px-3 rounded-lg font-bold text-[10px] uppercase tracking-wide border transition-all ${item.stockStatus
+                            ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
+                            : 'bg-red-900/30 text-red-400 border-red-500/30'
+                        }`}
                 >
                     {item.stockStatus ? 'In Stock' : 'Sold Out'}
                 </button>
-               
 
-                <input 
-                    className=" w-28 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm" 
-                    type="number" 
-                    placeholder="Qty" 
-                    value={item.quantity} 
-                    onChange={e => setItem({...item, quantity: e.target.value})} 
+
+                <input
+                    className=" w-28 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm"
+                    type="number"
+                    placeholder="Qty"
+                    value={item.quantity}
+                    onChange={e => setItem({ ...item, quantity: e.target.value })}
                 />
-                 <input 
-                    className="flex-1 w-20 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm" 
-                    placeholder="Price" 
-                    value={item.price} 
-                    onChange={e => setItem({...item, price: e.target.value})} 
+                <input
+                    className="flex-1 w-20 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm"
+                    placeholder="Price"
+                    value={item.price}
+                    onChange={e => setItem({ ...item, price: e.target.value })}
                 />
             </div>
 
             {/* Description Input */}
-            <textarea 
-                className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm h-20" 
-                placeholder="Description" 
-                value={item.description} 
-                onChange={e => setItem({...item, description: e.target.value})} 
+            <textarea
+                className="w-full bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm h-20"
+                placeholder="Description"
+                value={item.description}
+                onChange={e => setItem({ ...item, description: e.target.value })}
             />
 
             {/* Action Buttons */}
@@ -636,12 +636,12 @@ const ItemsSection = ({ pk, onUpdate }) => {
 // =========================================================
 const PrivacyPolicySection = () => {
     return (
-<div className="max-w-2xl mx-auto space-y-6 animate-fade-in text-slate-300 pt-2">
+        <div className="max-w-2xl mx-auto space-y-6 animate-fade-in text-slate-300 pt-2">
             <header className="border-l-4 border-emerald-500 pl-4 mb-6">
                 <h2 className="text-2xl font-bold text-white">Privacy Policy</h2>
                 <p className="text-xs text-emerald-400 mt-1 uppercase tracking-widest">Effective Date: January 4, 2026</p>
             </header>
-            <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 shadow-xl text-sm leading-relaxed">                
+            <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 shadow-xl text-sm leading-relaxed">
                 {/* 1. Introduction */}
                 <section>
                     <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">1. Introduction</h3>
@@ -655,7 +655,7 @@ const PrivacyPolicySection = () => {
                 <section>
                     <h3 className="text-white font-bold text-base mb-2 border-b border-slate-700 pb-2">2. Information We Collect</h3>
                     <p className="mb-2">We collect information to provide and improve our services. The types of data collected include:</p>
-                    
+
                     <div className="pl-4 border-l-2 border-slate-600 space-y-3">
                         <div>
                             <h4 className="text-emerald-400 font-bold text-xs uppercase">A. Information You Provide to Us</h4>
@@ -728,7 +728,7 @@ const PrivacyPolicySection = () => {
                     </div>
                 </section>
             </div>
-            
+
             <div className="text-center pt-6 pb-4">
                 <p className="text-xs text-slate-500">© 2026 1st-Hub. All rights reserved.</p>
             </div>
