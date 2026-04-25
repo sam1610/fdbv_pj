@@ -208,9 +208,10 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
         }
     };
 
-    // --- STEP 1: REQUEST OTP ---
+  // --- STEP 1: REQUEST OTP ---
     const handleRequestPhoneVerification = async () => {
-        // ... validation code ...
+        if (!name.trim()) return showMessage("Please fill in Business Name first", "error");
+        
         setPhoneVerificationStep('REQUESTING_CODE');
         try {
             const response = await client.mutations.registerPhoneNumber({
@@ -218,21 +219,30 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                 businessPhone: phoneNbr,
                 businessPhoneOwner: phoneNbr,
                 verificationMethod: verificationMethod,
-                businessName: name.trim()
+                businessName: name.trim() 
             });
 
-            console.log("DEBUG: Mutation Response:", response); // 👈 ADD THIS
+            console.log("DEBUG: Mutation Response:", response); 
 
+            // ✅ THE MISSING SUCCESS LOGIC
             if (response.data?.success) {
-                // ... success logic ...
+                // Parse the returned data to get the phoneId Meta generated
+                const innerData = response.data.data ? JSON.parse(response.data.data) : {};
+                if (innerData.phoneNumberId) {
+                    setTempPhoneId(innerData.phoneNumberId);
+                }
+                
+                // Move the UI to the OTP input screen
+                setPhoneVerificationStep('WAITING_OTP');
+                showMessage(`Code sent via ${verificationMethod}!`, "success");
+                
             } else {
                 setPhoneVerificationStep(null);
-                // 👈 UPDATE THIS to show the actual error message from the backend
                 showMessage(`Failed: ${response.data?.message || "Check Browser Console"}`, "error");
             }
         } catch (err) {
             setPhoneVerificationStep(null);
-            console.error("CRITICAL: Frontend Mutation Error:", err); // 👈 ADD THIS
+            console.error("CRITICAL: Frontend Mutation Error:", err);
             showMessage(`Network error: ${err.message}`, "error");
         }
     };
