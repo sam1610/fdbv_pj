@@ -11,10 +11,20 @@
 // // 2. Generate the AI Hooks from that client
 // export const { useAIGeneration, useAIConversation } = createAIHooks(client);
 
+// import { generateClient } from "aws-amplify/data";
+// import { createAIHooks } from "@aws-amplify/ui-react-ai";
+
+// // Standard JavaScript client (No <Schema> required)
+// export const client = generateClient({ authMode: 'userPool' });
+
+// export const { useAIGeneration, useAIConversation } = createAIHooks(client);
+// src/DataHook/amplifyClient.js
 import { generateClient } from "aws-amplify/data";
 import { createAIHooks } from "@aws-amplify/ui-react-ai";
 
-// Standard JavaScript client (No <Schema> required)
-export const client = generateClient({ authMode: 'userPool' });
+/**
+ * @type {import('aws-amplify/data').V6Client<import('../../amplify/data/resource').Schema>}
+ */
+export const client = generateClient(); 
 
 export const { useAIGeneration, useAIConversation } = createAIHooks(client);
