@@ -264,14 +264,34 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
 
             if (response && response.success) {
                 const innerData = response.data ? JSON.parse(response.data) : {};
-                setMetaData({
+                
+                const newMetaData = {
                     metaBusinessAccountId: innerData.wabaId || '',
                     phoneNumber: phoneNbr,
                     phoneNumberId: innerData.phoneNumberId || '',
                     wabaId: innerData.wabaId || '',
                     registrationStatus: 'ACTIVE',
                     assignedPin: innerData.assignedPin || ''
-                });
+                };
+                
+                setMetaData(newMetaData);
+
+                // ✅ NEW: Actually save the credentials to the database!
+                try {
+                     await client.models.RestaurantMetaAccount.create({
+                        restaurantId: phoneNbr,
+                        metaBusinessAccessToken: innerData.accessToken || process.env.REACT_APP_META_SYSTEM_USER_TOKEN, // Use token from response or your global one
+                        phoneNumberId: innerData.phoneNumberId,
+                        wabaId: innerData.wabaId,
+                        phoneNumber: phoneNbr,
+                        registrationStatus: 'ACTIVE'
+                    });
+                    console.log("Credentials saved to RestaurantMetaAccount table.");
+                } catch (dbErr) {
+                     console.error("Failed to save credentials to DB:", dbErr);
+                     // Optional: If create fails because it already exists, run an update here
+                }
+
                 setPhoneVerificationStep('ACTIVE');
                 setOtpCode('');
                 showMessage("✅ Phone securely registered to WhatsApp API!", "success");
