@@ -3,7 +3,6 @@ import { optimizeDelivery } from '../functions/optimizeDelivery/resource';
 import { createAgentUser } from '../functions/createAgentUser/resource'; // 1. Import the create function
 import { generatePlanHandler } from '../functions/generate-plan/resource'; // We will create this next
 import { registerBusinessPhone } from '../functions/registerBusinessPhone/resource';
-// Define all necessary status enums for data consistency
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
 // const stockStatus = ['IN_STOCK', 'OUT_OF_STOCK'] as const;
 const schema = a.schema({
