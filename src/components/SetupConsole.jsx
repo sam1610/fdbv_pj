@@ -540,7 +540,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
             pk,
             name: item.name.trim(),
             unitPrice: parseFloat(item.price),
-            itemCategory: category.trim().toUpperCase(),
+            itemCategory: category.trim(),
             description: item.description,
             stockStatus: item.stockStatus,
             quantity: item.quantity ? parseInt(item.quantity) : 0,
