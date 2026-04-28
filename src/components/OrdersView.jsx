@@ -222,6 +222,98 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
 
   // 1. Fetch Orders
  // 1. Fetch Orders & Subscribe
+  // useEffect(() => {
+  //   if (!phoneNbr) return;
+  //   setLoading(true);
+
+  //   // ✅ Track mounting to prevent updates after unmount
+  //   let isMounted = true;
+  //   const subscriptions = []; // Store subs in an array for safe cleanup
+
+  //   const businessPk = `BUSINESS#${phoneNbr}`;
+  //   const orderPrefix = 'ORDER#';
+  //   const subFilter = { pk: { eq: businessPk }, sk: { beginsWith: orderPrefix } };
+
+  //   const fetchAndSubscribe = async () => {
+  //     try {
+  //       // A. Initial Fetch
+  //       const { data , nextToken: initialToken} = await client.models.BusinessData.listByBusiness({
+  //         pk: businessPk,
+  //         sk: { beginsWith: orderPrefix },
+  //         sortDirection: 'DESC',
+  //         limit: 20 // Fetch a small initial chunk
+  //       });
+        
+  //       if (isMounted) {
+  //           setOrders(data);
+  //           setNextToken(initialToken);
+  //           setLoading(false);
+  //       }
+
+  //       // B. Start Subscriptions (Inside async, but safe now)
+  //       if (!isMounted) return;
+
+  //       // 1. On Create
+  //       const createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
+  //           next: (newItem) => { 
+  //               if (newItem && isMounted) {
+  //                   setOrders(prev => {
+  //                       // 🚨 CRITICAL FIX: DEDUPLICATION CHECK
+  //                       // If an order with this SK already exists, do not add it again.
+  //                       console.log("📥 Subscription Payload:", newItem);
+  //                       if (prev.some(order => order.sk === newItem.sk)) {
+  //                           console.warn("Duplicate prevented:", newItem.sk);
+  //                           return prev;
+  //                       }
+  //                       return [newItem, ...prev];
+  //                   }); 
+  //               }
+  //           }
+  //       });
+  //       subscriptions.push(createSub);
+
+  //       // 2. On Update
+  //       const updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
+  //           next: (updatedItem) => {
+  //               if (updatedItem && updatedItem.pk && isMounted) {
+  //                   setOrders(prev => prev.map(item => 
+  //                       (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item
+  //                   ));
+  //               }
+  //           }
+  //       });
+  //       subscriptions.push(updateSub);
+
+  //       // 3. On Delete
+  //       const deleteSub = client.models.BusinessData.onDelete({ filter: subFilter }).subscribe({
+  //           next: (deletedItem) => {
+  //               if (deletedItem && deletedItem.pk && isMounted) {
+  //                   setOrders(prev => prev.filter(item => 
+  //                       !(item.pk === deletedItem.pk && item.sk === deletedItem.sk)
+  //                   ));
+  //               }
+  //           }
+  //       });
+  //       subscriptions.push(deleteSub);
+
+  //     } catch (err) { 
+  //         if (isMounted) {
+  //             setError(err.message); 
+  //             setLoading(false);
+  //         }
+  //     } 
+  //   };
+
+  //   fetchAndSubscribe();
+
+  //   // ✅ ROBUST CLEANUP
+  //   // This runs when the component unmounts or re-runs
+  //   return () => { 
+  //       isMounted = false;
+  //       subscriptions.forEach(sub => sub.unsubscribe());
+  //   };
+  // }, [phoneNbr]);
+// 1. Fetch Orders & Subscribe
   useEffect(() => {
     if (!phoneNbr) return;
     setLoading(true);
@@ -232,11 +324,14 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
 
     const businessPk = `BUSINESS#${phoneNbr}`;
     const orderPrefix = 'ORDER#';
-    const subFilter = { pk: { eq: businessPk }, sk: { beginsWith: orderPrefix } };
+    
+    // 🔴 FIX: Simplify the AppSync filter so the WebSocket doesn't crash!
+    // We only ask the server to filter by 'pk'.
+    const serverFilter = { pk: { eq: businessPk } };
 
     const fetchAndSubscribe = async () => {
       try {
-        // A. Initial Fetch
+        // A. Initial Fetch (Pagination stays perfectly intact!)
         const { data , nextToken: initialToken} = await client.models.BusinessData.listByBusiness({
           pk: businessPk,
           sk: { beginsWith: orderPrefix },
@@ -250,19 +345,17 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
             setLoading(false);
         }
 
-        // B. Start Subscriptions (Inside async, but safe now)
+        // B. Start Subscriptions
         if (!isMounted) return;
 
         // 1. On Create
-        const createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
+        const createSub = client.models.BusinessData.onCreate({ filter: serverFilter }).subscribe({
             next: (newItem) => { 
-                if (newItem && isMounted) {
+                // 🟢 CLIENT-SIDE FILTER: Make sure it's an Order before adding it!
+                if (newItem && newItem.sk.startsWith(orderPrefix) && isMounted) {
                     setOrders(prev => {
-                        // 🚨 CRITICAL FIX: DEDUPLICATION CHECK
-                        // If an order with this SK already exists, do not add it again.
-                        console.log("📥 Subscription Payload:", newItem);
+                        // Deduplication check
                         if (prev.some(order => order.sk === newItem.sk)) {
-                            console.warn("Duplicate prevented:", newItem.sk);
                             return prev;
                         }
                         return [newItem, ...prev];
@@ -273,9 +366,9 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
         subscriptions.push(createSub);
 
         // 2. On Update
-        const updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
+        const updateSub = client.models.BusinessData.onUpdate({ filter: serverFilter }).subscribe({
             next: (updatedItem) => {
-                if (updatedItem && updatedItem.pk && isMounted) {
+                if (updatedItem && updatedItem.sk.startsWith(orderPrefix) && isMounted) {
                     setOrders(prev => prev.map(item => 
                         (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item
                     ));
@@ -285,9 +378,9 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
         subscriptions.push(updateSub);
 
         // 3. On Delete
-        const deleteSub = client.models.BusinessData.onDelete({ filter: subFilter }).subscribe({
+        const deleteSub = client.models.BusinessData.onDelete({ filter: serverFilter }).subscribe({
             next: (deletedItem) => {
-                if (deletedItem && deletedItem.pk && isMounted) {
+                if (deletedItem && deletedItem.sk.startsWith(orderPrefix) && isMounted) {
                     setOrders(prev => prev.filter(item => 
                         !(item.pk === deletedItem.pk && item.sk === deletedItem.sk)
                     ));
@@ -307,13 +400,11 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     fetchAndSubscribe();
 
     // ✅ ROBUST CLEANUP
-    // This runs when the component unmounts or re-runs
     return () => { 
         isMounted = false;
         subscriptions.forEach(sub => sub.unsubscribe());
     };
   }, [phoneNbr]);
-
   // 2. Computed Values
   const sortedOrders = useMemo(() => [...orders].sort((a, b) => b.sk.localeCompare(a.sk)), [orders]);
 
