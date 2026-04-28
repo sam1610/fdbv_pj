@@ -314,6 +314,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
   //   };
   // }, [phoneNbr]);
 // 1. Fetch Orders & Subscribe
+// 1. Fetch Orders & Subscribe
   useEffect(() => {
     if (!phoneNbr) return;
     setLoading(true);
@@ -324,10 +325,6 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
 
     const businessPk = `BUSINESS#${phoneNbr}`;
     const orderPrefix = 'ORDER#';
-    
-    // 🔴 FIX: Simplify the AppSync filter so the WebSocket doesn't crash!
-    // We only ask the server to filter by 'pk'.
-    const serverFilter = { pk: { eq: businessPk } };
 
     const fetchAndSubscribe = async () => {
       try {
@@ -336,7 +333,7 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
           pk: businessPk,
           sk: { beginsWith: orderPrefix },
           sortDirection: 'DESC',
-          limit: 20 // Fetch a small initial chunk
+          limit: 20 
         });
         
         if (isMounted) {
@@ -348,44 +345,50 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
         // B. Start Subscriptions
         if (!isMounted) return;
 
+        // 🔴 BULLETPROOF FIX: We remove the 'filter' parameter so AppSync doesn't silently crash.
+        // We listen to ALL BusinessData events, and filter them instantly using JavaScript.
+
         // 1. On Create
-        const createSub = client.models.BusinessData.onCreate({ filter: serverFilter }).subscribe({
+        const createSub = client.models.BusinessData.onCreate().subscribe({
             next: (newItem) => { 
-                // 🟢 CLIENT-SIDE FILTER: Make sure it's an Order before adding it!
-                if (newItem && newItem.sk.startsWith(orderPrefix) && isMounted) {
+                console.log("🔥 WEBSOCKET EVENT:", newItem); // 🟢 You will see this in the browser console!
+                
+                // 🟢 CLIENT-SIDE FILTER: Is this for our restaurant? Is it an Order?
+                if (newItem && newItem.pk === businessPk && String(newItem.sk).startsWith(orderPrefix) && isMounted) {
                     setOrders(prev => {
                         // Deduplication check
-                        if (prev.some(order => order.sk === newItem.sk)) {
-                            return prev;
-                        }
+                        if (prev.some(order => order.sk === newItem.sk)) return prev;
                         return [newItem, ...prev];
                     }); 
                 }
-            }
+            },
+            error: (err) => console.error("Create Sub Error:", err)
         });
         subscriptions.push(createSub);
 
         // 2. On Update
-        const updateSub = client.models.BusinessData.onUpdate({ filter: serverFilter }).subscribe({
+        const updateSub = client.models.BusinessData.onUpdate().subscribe({
             next: (updatedItem) => {
-                if (updatedItem && updatedItem.sk.startsWith(orderPrefix) && isMounted) {
+                if (updatedItem && updatedItem.pk === businessPk && String(updatedItem.sk).startsWith(orderPrefix) && isMounted) {
                     setOrders(prev => prev.map(item => 
                         (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item
                     ));
                 }
-            }
+            },
+            error: (err) => console.error("Update Sub Error:", err)
         });
         subscriptions.push(updateSub);
 
         // 3. On Delete
-        const deleteSub = client.models.BusinessData.onDelete({ filter: serverFilter }).subscribe({
+        const deleteSub = client.models.BusinessData.onDelete().subscribe({
             next: (deletedItem) => {
-                if (deletedItem && deletedItem.sk.startsWith(orderPrefix) && isMounted) {
+                if (deletedItem && deletedItem.pk === businessPk && String(deletedItem.sk).startsWith(orderPrefix) && isMounted) {
                     setOrders(prev => prev.filter(item => 
                         !(item.pk === deletedItem.pk && item.sk === deletedItem.sk)
                     ));
                 }
-            }
+            },
+            error: (err) => console.error("Delete Sub Error:", err)
         });
         subscriptions.push(deleteSub);
 
