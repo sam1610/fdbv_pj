@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { client } from '../DataHook/amplifyClient';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -16,13 +14,12 @@ const statusColors = {
   DELIVERED: 'bg-gray-500'
 };
 
-// ✅ Robust Location Parser (Handles Raw DynamoDB & Clean JSON)
 const parseLocation = (loc) => {
   if (!loc) return null;
   try {
     let data = loc;
     if (typeof data === 'string') data = JSON.parse(data);
-    if (data.M) data = data.M; // Handle DynamoDB format
+    if (data.M) data = data.M; 
 
     const extract = (v) => (v && v.N ? parseFloat(v.N) : parseFloat(v));
     const lat = extract(data.latitude || data.lat);
@@ -35,7 +32,6 @@ const parseLocation = (loc) => {
   }
 };
 
-// PickUp Badge
 const PickUpBadge = () => (
   <div className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-900 text-indigo-200 border border-indigo-500/30">
     <svg className="mr-1 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -48,7 +44,6 @@ const PickUpBadge = () => (
   </div>
 );
 
-// ✅ UPDATED FILTERS: Accepts 'onDispatch' and 'loadingMap'
 const TABS = [
   { id: 'active', label: 'Active' },
   { id: 'Prepared', label: 'Prepared' },
@@ -74,7 +69,6 @@ const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch,
       ))}
     </div>
 
-    {/* Dispatch Action Button */}
     <button
       onClick={onDispatch}
       disabled={loadingMap}
@@ -104,7 +98,6 @@ const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch,
   </div>
 );
 
-// Status Editor
 const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
   if (isEditing) {
     return (
@@ -133,12 +126,9 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
   );
 };
 
-// Memoized Order Card
 const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, onClick, getAgentName, updatingId }) => {
-
-  const isActuallyPickup = order.isPickUp === true || 
-                         order.isPickUp === 1 || 
-                         String(order.isPickUp).toLowerCase() === 'true';
+  const isActuallyPickup = order.isPickUp === true || order.isPickUp === 1 || String(order.isPickUp).toLowerCase() === 'true';
+  
   return (
     <div
       onClick={onClick}
@@ -160,7 +150,7 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
           )}
         </div>
         <p className="text-sm text-slate-400 truncate">
-          Customer: {order.gsi2pk?.split('#')[2] || 'N/A'}
+          Customer: {order.name || order.gsi2pk?.split('#')[2] || 'N/A'}
         </p>
       </div>
 
@@ -176,15 +166,12 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
             <span className="text-white font-bold text-sm">
               {getAgentName(order.gsi1pk)}
             </span>
-            <span className="text-slate-400 text-xs font-mono">
-              {order.gsi1pk?.split('#')[1] || ''}
-            </span>
           </div>
         </div>
       )}
 
       <div className="text-right flex-shrink-0 ml-4">
-        <p className="font-bold text-white">BD {order.totalAmount?.toFixed(2) || '0.00'}</p>
+        <p className="font-bold text-white">BD {order.totalAmount?.toFixed(3) || '0.000'}</p>
         <OrderStatusEditor
           order={order}
           isEditing={isEditing}
@@ -199,201 +186,91 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
 const generateDistinctColors = (count) => {
   const colors = [];
   for (let i = 0; i < count; i++) {
-    const hue = Math.floor((360 / count) * i);
-    colors.push(`hsl(${hue}, 70%, 50%)`);
+    colors.push(`hsl(${Math.floor((360 / count) * i)}, 70%, 50%)`);
   }
   return colors;
 };
 
 // --- MAIN COMPONENT ---
-const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation }) => {
+export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], businessLocation }) {
+  // 🟢 STATE DECLARATIONS
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('active');
   const [editingId, setEditingId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
-  const [nextToken, setNextToken] = useState(null); // ✅ NEW: Tracks DynamoDB cursor
-  const [isFetchingNextPage, setIsFetchingNextPage] = useState(false); // ✅ NEW: Pagination loader
-  // ✅ New States for Map/Agents
+  
+  const [nextToken, setNextToken] = useState(null);
+  const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
+  
   const [liveAgents, setLiveAgents] = useState([]); 
   const [loadingMap, setLoadingMap] = useState(false);
-  const [dispatchProposal, setDispatchProposal] = useState(null); // ✅ Stores the AI optimization result
+  const [dispatchProposal, setDispatchProposal] = useState(null);
 
-  // 1. Fetch Orders
- // 1. Fetch Orders & Subscribe
-  // useEffect(() => {
-  //   if (!phoneNbr) return;
-  //   setLoading(true);
+  const isMounted = useRef(true);
+  
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
-  //   // ✅ Track mounting to prevent updates after unmount
-  //   let isMounted = true;
-  //   const subscriptions = []; // Store subs in an array for safe cleanup
-
-  //   const businessPk = `BUSINESS#${phoneNbr}`;
-  //   const orderPrefix = 'ORDER#';
-  //   const subFilter = { pk: { eq: businessPk }, sk: { beginsWith: orderPrefix } };
-
-  //   const fetchAndSubscribe = async () => {
-  //     try {
-  //       // A. Initial Fetch
-  //       const { data , nextToken: initialToken} = await client.models.BusinessData.listByBusiness({
-  //         pk: businessPk,
-  //         sk: { beginsWith: orderPrefix },
-  //         sortDirection: 'DESC',
-  //         limit: 20 // Fetch a small initial chunk
-  //       });
-        
-  //       if (isMounted) {
-  //           setOrders(data);
-  //           setNextToken(initialToken);
-  //           setLoading(false);
-  //       }
-
-  //       // B. Start Subscriptions (Inside async, but safe now)
-  //       if (!isMounted) return;
-
-  //       // 1. On Create
-  //       const createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
-  //           next: (newItem) => { 
-  //               if (newItem && isMounted) {
-  //                   setOrders(prev => {
-  //                       // 🚨 CRITICAL FIX: DEDUPLICATION CHECK
-  //                       // If an order with this SK already exists, do not add it again.
-  //                       console.log("📥 Subscription Payload:", newItem);
-  //                       if (prev.some(order => order.sk === newItem.sk)) {
-  //                           console.warn("Duplicate prevented:", newItem.sk);
-  //                           return prev;
-  //                       }
-  //                       return [newItem, ...prev];
-  //                   }); 
-  //               }
-  //           }
-  //       });
-  //       subscriptions.push(createSub);
-
-  //       // 2. On Update
-  //       const updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
-  //           next: (updatedItem) => {
-  //               if (updatedItem && updatedItem.pk && isMounted) {
-  //                   setOrders(prev => prev.map(item => 
-  //                       (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item
-  //                   ));
-  //               }
-  //           }
-  //       });
-  //       subscriptions.push(updateSub);
-
-  //       // 3. On Delete
-  //       const deleteSub = client.models.BusinessData.onDelete({ filter: subFilter }).subscribe({
-  //           next: (deletedItem) => {
-  //               if (deletedItem && deletedItem.pk && isMounted) {
-  //                   setOrders(prev => prev.filter(item => 
-  //                       !(item.pk === deletedItem.pk && item.sk === deletedItem.sk)
-  //                   ));
-  //               }
-  //           }
-  //       });
-  //       subscriptions.push(deleteSub);
-
-  //     } catch (err) { 
-  //         if (isMounted) {
-  //             setError(err.message); 
-  //             setLoading(false);
-  //         }
-  //     } 
-  //   };
-
-  //   fetchAndSubscribe();
-
-  //   // ✅ ROBUST CLEANUP
-  //   // This runs when the component unmounts or re-runs
-  //   return () => { 
-  //       isMounted = false;
-  //       subscriptions.forEach(sub => sub.unsubscribe());
-  //   };
-  // }, [phoneNbr]);
-// 1. Fetch Orders & Subscribe
-// 1. Fetch Orders & Subscribe
+  // 1. Fetch Orders & Subscribe
   useEffect(() => {
     if (!phoneNbr) return;
     setLoading(true);
 
-    // ✅ Track mounting to prevent updates after unmount
-    let isMounted = true;
-    const subscriptions = []; // Store subs in an array for safe cleanup
-
+    const subscriptions = []; 
     const businessPk = `BUSINESS#${phoneNbr}`;
     const orderPrefix = 'ORDER#';
 
     const fetchAndSubscribe = async () => {
       try {
-        // A. Initial Fetch (Pagination stays perfectly intact!)
-        const { data , nextToken: initialToken} = await client.models.BusinessData.listByBusiness({
+        // Initial Fetch
+        const { data, nextToken: initialToken } = await client.models.BusinessData.listByBusiness({
           pk: businessPk,
           sk: { beginsWith: orderPrefix },
           sortDirection: 'DESC',
           limit: 20 
         });
         
-        if (isMounted) {
+        if (isMounted.current) {
             setOrders(data);
             setNextToken(initialToken);
             setLoading(false);
         }
 
-        // B. Start Subscriptions
-        if (!isMounted) return;
+        // WebSockets: Unfiltered on the server to prevent disconnects, filtered securely on the client
+        const handleNewItem = (item) => {
+          if (!isMounted.current) return;
+          if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
+              setOrders(prev => {
+                  if (prev.some(o => o.sk === item.sk)) return prev;
+                  return [item, ...prev];
+              }); 
+          }
+        };
 
-        // 🔴 BULLETPROOF FIX: We remove the 'filter' parameter so AppSync doesn't silently crash.
-        // We listen to ALL BusinessData events, and filter them instantly using JavaScript.
+        const handleUpdateItem = (item) => {
+          if (!isMounted.current) return;
+          if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
+              setOrders(prev => prev.map(o => (o.sk === item.sk ? item : o)));
+          }
+        };
 
-        // 1. On Create
-        const createSub = client.models.BusinessData.onCreate().subscribe({
-            next: (newItem) => { 
-                console.log("🔥 WEBSOCKET EVENT:", newItem); // 🟢 You will see this in the browser console!
-                
-                // 🟢 CLIENT-SIDE FILTER: Is this for our restaurant? Is it an Order?
-                if (newItem && newItem.pk === businessPk && String(newItem.sk).startsWith(orderPrefix) && isMounted) {
-                    setOrders(prev => {
-                        // Deduplication check
-                        if (prev.some(order => order.sk === newItem.sk)) return prev;
-                        return [newItem, ...prev];
-                    }); 
-                }
-            },
-            error: (err) => console.error("Create Sub Error:", err)
-        });
-        subscriptions.push(createSub);
+        const handleDeleteItem = (item) => {
+          if (!isMounted.current) return;
+          if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
+              setOrders(prev => prev.filter(o => o.sk !== item.sk));
+          }
+        };
 
-        // 2. On Update
-        const updateSub = client.models.BusinessData.onUpdate().subscribe({
-            next: (updatedItem) => {
-                if (updatedItem && updatedItem.pk === businessPk && String(updatedItem.sk).startsWith(orderPrefix) && isMounted) {
-                    setOrders(prev => prev.map(item => 
-                        (item.pk === updatedItem.pk && item.sk === updatedItem.sk) ? updatedItem : item
-                    ));
-                }
-            },
-            error: (err) => console.error("Update Sub Error:", err)
-        });
-        subscriptions.push(updateSub);
-
-        // 3. On Delete
-        const deleteSub = client.models.BusinessData.onDelete().subscribe({
-            next: (deletedItem) => {
-                if (deletedItem && deletedItem.pk === businessPk && String(deletedItem.sk).startsWith(orderPrefix) && isMounted) {
-                    setOrders(prev => prev.filter(item => 
-                        !(item.pk === deletedItem.pk && item.sk === deletedItem.sk)
-                    ));
-                }
-            },
-            error: (err) => console.error("Delete Sub Error:", err)
-        });
-        subscriptions.push(deleteSub);
+        subscriptions.push(client.models.BusinessData.onCreate().subscribe({ next: handleNewItem }));
+        subscriptions.push(client.models.BusinessData.onUpdate().subscribe({ next: handleUpdateItem }));
+        subscriptions.push(client.models.BusinessData.onDelete().subscribe({ next: handleDeleteItem }));
 
       } catch (err) { 
-          if (isMounted) {
+          if (isMounted.current) {
               setError(err.message); 
               setLoading(false);
           }
@@ -401,15 +278,20 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
     };
 
     fetchAndSubscribe();
-
-    // ✅ ROBUST CLEANUP
-    return () => { 
-        isMounted = false;
-        subscriptions.forEach(sub => sub.unsubscribe());
+    
+    return () => {
+      subscriptions.forEach(sub => sub.unsubscribe());
     };
   }, [phoneNbr]);
-  // 2. Computed Values
-  const sortedOrders = useMemo(() => [...orders].sort((a, b) => b.sk.localeCompare(a.sk)), [orders]);
+
+  // Computed Values
+  const sortedOrders = useMemo(() => {
+    return [...orders].sort((a, b) => {
+      const dateA = new Date(a.orderDate || 0).getTime();
+      const dateB = new Date(b.orderDate || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [orders]);
 
   const filteredOrders = useMemo(() => {
     if (!sortedOrders.length) return [];
@@ -421,200 +303,114 @@ const OrdersView = ({ phoneNbr, setModal, deliveryAgents = [], businessLocation 
 
   const readyForDispatch = useMemo(() => {
     return sortedOrders
-      .filter(o => o.orderStatus === 'PREPARED')
+      .filter(o => o.orderStatus === 'PREPARED' && o.location !== null)
       .map(order => ({
         sk: order.sk,
         pk: order.pk,
         location: parseLocation(order.location),
-        customer: order.gsi2pk?.split('#')[2] || 'Unknown',
+        customer: order.name || order.gsi2pk?.split('#')[2] || 'Unknown',
         orderStatus: order.orderStatus
-      }))
-      .filter(o => o.location !== null);
+      }));
   }, [sortedOrders]);
 
-  // ✅ 3. All Map Orders (LAST 24 HOURS ONLY)
-  // This filters the data *before* sending it to DeliveryOptimizer
   const allMapOrders = useMemo(() => {
-    // Calculate cutoff time (24 hours ago)
     const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
     return sortedOrders
-      .filter(o => {
-          const isValidStatus = ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus);
-          const isNotPickup = !o.isPickUp;
-          // ✅ Time Filter: Only include orders created after the cutoff
-          // (Assuming 'createdAt' exists. If it's missing, we default to true to avoid hiding data)
-          const isRecent = o.createdAt ? o.createdAt >= cutoffTime : true; 
-          
-          return isValidStatus && isNotPickup && isRecent;
-      })
+      .filter(o => ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus) && !o.isPickUp && (o.createdAt ? o.createdAt >= cutoffTime : true) && o.location !== null)
       .map(order => ({
         sk: order.sk,
         pk: order.pk,
         location: parseLocation(order.location),
-        customer: order.gsi2pk?.split('#')[2] || 'Unknown',
+        customer: order.name || order.gsi2pk?.split('#')[2] || 'Unknown',
         orderStatus: order.orderStatus,
         gsi1pk: order.gsi1pk,
-        pickupLocation: parseLocation(order.pickupLocation), // Important for optimization
-        restaurantLocation: parseLocation(businessLocation), // Fallback,
-        itemsNbr: order.itemsNbr || 1 ,
+        pickupLocation: parseLocation(order.pickupLocation), 
+        restaurantLocation: parseLocation(businessLocation), 
+        itemsNbr: order.itemsNbr || 1,
         totalAmount: order.totalAmount || 0
-
-      }))
-      .filter(o => o.location !== null);
+      }));
   }, [sortedOrders, businessLocation]);
 
-  // ✅ NEW: Calls the Backend Optimization Algorithm
   const handleDispatch = async (currentAgents) => {
     try {
       console.log("🤖 Calculating Optimal Routes...");
-      
-      // 1. Format Agents (Must match handler.ts expectations)
       const formattedAgents = currentAgents.map(a => ({
-        id: a.id,
-        location: a.location,
-        currentLoad: a.currentLoad || 0,
-        maxCapacity: a.maxCapacity || 10,
-        deliveryDurationRemaining: 0 // You can update this if you have live tracking data
+        id: a.id, location: a.location, currentLoad: a.currentLoad || 0, maxCapacity: a.maxCapacity || 10, deliveryDurationRemaining: 0 
       }));
-
-      // 2. Format Orders (Only send what needs to be dispatched)
       const formattedOrders = readyForDispatch.map(o => ({
-        sk: o.sk,
-        restaurantLocation: parseLocation(businessLocation),
-        pickupLocation: parseLocation(o.pickupLocation), // If available
-        size: 'REGULAR' // You can map this from your DB if you have order size
+        sk: o.sk, restaurantLocation: parseLocation(businessLocation), pickupLocation: parseLocation(o.pickupLocation), size: 'REGULAR' 
       }));
 
-      // 3. Call AppSync Query
       const { data } = await client.queries.optimizeDelivery({
         agents: JSON.stringify(formattedAgents),
         orders: JSON.stringify(formattedOrders),
         restaurantLocation: JSON.stringify(parseLocation(businessLocation))
       });
 
-      if (data) {
-        console.log("✅ Optimization Result:", data);
-        setDispatchProposal(data); // Store result to pass to DeliveryOptimizer
+      if (data && isMounted.current) {
+        setDispatchProposal(data); 
       }
-      
     } catch (err) {
       console.error("❌ Dispatch Error:", err);
     }
   };
 
-  // ✅ 4. FETCH LIVE AGENTS FUNCTION
-  // const fetchLiveAgentLocations = async () => {
-  //   setLoadingMap(true);
-  //   try {
-  //       console.log("📍 Locating Agents via Profile...");
-  //       const promises = deliveryAgents.map(async (agent) => {
-  //           try {
-  //               // Agent.sk is usually "AGENT#+973..."
-  //               const agentPhonePk = agent.sk; 
-                
-  //               // Fetch the PROFILE record (which has the real live location)
-  //               const { data } = await client.models.BusinessData.listByBusiness({
-  //                   pk: agentPhonePk,       
-  //                   sk: { eq: agentPhonePk } 
-  //               });
-
-  //               const profile = data[0]; 
-                
-  //               return {
-  //                   id: agent.sk,
-  //                   name: agent.name,
-  //                   // PRIORITY: Profile Location > Business Record Location > null
-  //                   maxCapacity: profile?.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
-  //                   currentLoad: profile?.capacityLeft ? parseInt(profile.capacityLeft) : 0,
-  //                   location: profile?.location ? parseLocation(profile.location) : parseLocation(agent.location)
-  //               };
-  //           } catch (e) {
-  //               console.warn(`Failed to fetch profile for ${agent.name}`, e);
-  //               return { id: agent.sk, name: agent.name, location: parseLocation(agent.location), maxCapacity: 10, currentLoad: 0 };
-  //           }
-  //       });
-
-  //       const results = await Promise.all(promises);
-  //       setLiveAgents(results); 
-        
-  //       // After fetching, open the map
-  //       setFilter('Auto-Assign');
-
-  //   } catch (e) {
-  //       console.error("Error fetching live agents", e);
-  //   } finally {
-  //       setLoadingMap(false);
-  //   }
-  // };
-
-  // ✅ UPDATED: Fetches Agents AND Triggers Optimization
   const fetchLiveAgentLocations = async () => {
     setLoadingMap(true);
     try {
-        console.log("📍 Locating Agents via Profile...");
-        const promises = deliveryAgents.map(async (agent) => {
-            // ... (Your existing agent fetching logic remains exactly the same) ...
-            try {
-                const agentPhonePk = agent.sk; 
-                const { data } = await client.models.BusinessData.listByBusiness({
-                    pk: agentPhonePk,       
-                    sk: { eq: agentPhonePk } 
-                });
-                const profile = data[0]; 
-                return {
-                    id: agent.sk,
-                    name: agent.name,
-                    maxCapacity: profile?.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
-                    currentLoad: profile?.capacityLeft ? parseInt(profile.capacityLeft) : 0,
-                    location: profile?.location ? parseLocation(profile.location) : parseLocation(agent.location)
-                };
-            } catch (e) {
-                return { id: agent.sk, name: agent.name, location: parseLocation(agent.location), maxCapacity: 10, currentLoad: 0 };
-            }
+        const { data: allProfiles } = await client.models.BusinessData.listByBusiness({
+            pk: `BUSINESS#${phoneNbr}`,
+            sk: { beginsWith: 'AGENT#' }
         });
 
-        const results = await Promise.all(promises);
-        setLiveAgents(results); 
-        
-        // 🚀 TRIGGER OPTIMIZATION HERE with the fresh 'results'
-        await handleDispatch(results);
-        
-        // Open the map view
-        setFilter('Auto-Assign');
+        const results = deliveryAgents.map(agent => {
+            const profile = allProfiles.find(p => p.sk === agent.sk);
+            return {
+                id: agent.sk,
+                name: agent.name,
+                maxCapacity: profile?.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
+                currentLoad: profile?.capacityLeft ? parseInt(profile.capacityLeft) : 0,
+                location: profile?.location ? parseLocation(profile.location) : parseLocation(agent.location)
+            };
+        });
 
+        if (isMounted.current) {
+            setLiveAgents(results); 
+            await handleDispatch(results);
+            setFilter('Auto-Assign');
+        }
     } catch (e) {
         console.error("Error fetching live agents", e);
     } finally {
-        setLoadingMap(false);
+        if (isMounted.current) setLoadingMap(false);
     }
   };
-// ✅ 5. DEEP DIVE PAGINATION FUNCTION
-const fetchNextPage = useCallback(async () => {
-  // Guard: Don't fetch if there's no cursor or we are already loading
-  if (!nextToken || isFetchingNextPage) return;
 
-  setIsFetchingNextPage(true);
-  try {
-    console.log("🔍 Fetching next page of history...");
-    const { data, nextToken: newNextToken } = await client.models.BusinessData.listByBusiness({
-      pk: `BUSINESS#${phoneNbr}`,
-      sk: { beginsWith: 'ORDER#' },
-      sortDirection: 'DESC', // ✅ Newest first
-      nextToken: nextToken,  // ✅ Use cursor to dig deeper
-      limit: 20
-    });
+  const fetchNextPage = useCallback(async () => {
+    if (!nextToken || isFetchingNextPage) return;
+    setIsFetchingNextPage(true);
+    try {
+      const { data, nextToken: newNextToken } = await client.models.BusinessData.listByBusiness({
+        pk: `BUSINESS#${phoneNbr}`,
+        sk: { beginsWith: 'ORDER#' },
+        sortDirection: 'DESC', 
+        nextToken: nextToken,  
+        limit: 20
+      });
 
-    // Append older orders to the end of the existing list
-    setOrders(prev => [...prev, ...data]); 
-    setNextToken(newNextToken);
-  } catch (err) {
-    console.error("Pagination error:", err);
-  } finally {
-    setIsFetchingNextPage(false);
-  }
-}, [nextToken, isFetchingNextPage, phoneNbr]);
-
+      if (isMounted.current) {
+         setOrders(prev => {
+             const newItems = data.filter(d => !prev.some(p => p.sk === d.sk));
+             return [...prev, ...newItems];
+         }); 
+         setNextToken(newNextToken);
+      }
+    } catch (err) {
+      console.error("Pagination error:", err);
+    } finally {
+      if (isMounted.current) setIsFetchingNextPage(false);
+    }
+  }, [nextToken, isFetchingNextPage, phoneNbr]);
 
   const parentRef = useRef();
   const rowVirtualizer = useVirtualizer({
@@ -626,18 +422,14 @@ const fetchNextPage = useCallback(async () => {
 
   const agentColors = useMemo(() => generateDistinctColors(deliveryAgents.length), [deliveryAgents.length]);
   const virtualItems = rowVirtualizer.getVirtualItems();
-// ✅ 6. INFINITE SCROLL TRIGGER
-useEffect(() => {
-  const lastItem = virtualItems[virtualItems.length - 1];
-  
-  if (!lastItem) return;
 
-  // Trigger fetch when user is 5 items away from the bottom of currently loaded orders
-  if (lastItem.index >= filteredOrders.length - 5 && nextToken && !isFetchingNextPage) {
-    fetchNextPage();
-  }
-}, [virtualItems, filteredOrders.length, nextToken, isFetchingNextPage, fetchNextPage]);
-
+  useEffect(() => {
+    const lastItem = virtualItems[virtualItems.length - 1];
+    if (!lastItem) return;
+    if (lastItem.index >= filteredOrders.length - 5 && nextToken && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [virtualItems, filteredOrders.length, nextToken, isFetchingNextPage, fetchNextPage]);
 
   const handleStatusChange = useCallback(async (order, newStatus) => {
     if (order.orderStatus === newStatus) return setEditingId(null);
@@ -645,7 +437,7 @@ useEffect(() => {
     try {
       await client.models.BusinessData.update({ pk: order.pk, sk: order.sk, orderStatus: newStatus });
     } catch (err) { alert('Update failed'); console.error(err); } 
-    finally { setUpdatingId(null); setEditingId(null); }
+    finally { if (isMounted.current) { setUpdatingId(null); setEditingId(null); } }
   }, []);
 
   const getAgentName = useCallback((gsi1pk) => {
@@ -710,11 +502,10 @@ useEffect(() => {
           )}
         </div>
       ) : (
-        /* ✅ Map View with Live Agents */
         <DeliveryOptimizer
           orders={allMapOrders}
-          agents={liveAgents} // Use the Hydrated Agents
-          proposal={dispatchProposal} // 👈 PASS THE OPTIMIZATION RESULT HERE
+          agents={liveAgents} 
+          proposal={dispatchProposal} 
           AGENT_COLORS={agentColors}
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
@@ -724,6 +515,4 @@ useEffect(() => {
       )}
     </div>
   );
-};
-
-export default OrdersView;
+}
