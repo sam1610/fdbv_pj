@@ -16,7 +16,7 @@ function parsePhoneNumber(phone: string) {
     return { cc: clean.substring(0, 3), number: clean.substring(3) };
 }
 
-// ✅ NEW: Generates a random 6-digit PIN for Meta registration
+// Generates a random 6-digit PIN for Meta registration
 function generateRandomPin() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -108,7 +108,6 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
                 return { success: true, message: `OTP Sent via ${method}`, data: JSON.stringify({ phoneNumberId: phoneId }) };
             }
 
-            // ✅ NEW: Catch Meta's specific rate limit or review blocks
             if (otpRes.error?.error_user_msg?.includes("already in progress") || otpRes.error?.error_user_msg?.includes("1 hour")) {
                 return { success: false, message: "PENDING_META_REVIEW", data: otpRes.error.error_user_msg };
             }
@@ -123,7 +122,7 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
             const verifyRes = await callMeta(`/${phoneId}/verify_code`, 'POST', { code: otpCode });
             if (!verifyRes.success) throw new Error(verifyRes.error?.error_user_msg || "Invalid OTP Code");
 
-            // ✅ NEW: 2. Automatically Register the PIN
+            // 2. Automatically Register the PIN
             const generatedPin = generateRandomPin();
             console.log(`Registering phone ID ${phoneId} with auto-generated PIN: ${generatedPin}`);
 
@@ -136,41 +135,15 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
                 console.error("PIN Registration Error:", JSON.stringify(pinRes.error));
                 throw new Error(pinRes.error?.error_user_msg || "OTP verified, but failed to activate PIN with Meta.");
             }
-            // ✅ THE MISSING FIX: Bind the AWS Public Key to the new Phone Number ID
-            // const publicKey = process.env.PUBLIC_KEY ? process.env.PUBLIC_KEY.trim() : "";
-            // if (publicKey) {
-            //     console.log(`Binding AWS Public Key to new phone ID ${phoneId}`);
-
-            //     // Must use x-www-form-urlencoded format for this specific Meta endpoint
-            //     const encodedKey = encodeURIComponent(publicKey);
-            //     const keyRes = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/whatsapp_business_encryption`, {
-            //         method: 'POST',
-            //         headers: {
-            //             "Authorization": `Bearer ${SYSTEM_TOKEN}`,
-            //             "Content-Type": "application/x-www-form-urlencoded"
-            //         },
-            //         body: `business_public_key=${encodedKey}`
-            //     });
-
-            //     const keyJson = await keyRes.json();
-            //     if (!keyJson.success) {
-            //         console.error("⚠️ Key Binding Failed (Flows will not work):", JSON.stringify(keyJson));
-            //         // You may want to throw an error here depending on how strict you want the onboarding to be
-            //     } else {
-            //         console.log(`✅ Public Key successfully bound to ${phoneId}`);
-            //     }
-            // }
-            // ✅ THE MISSING FIX: Bind the AWS Public Key to the new Phone Number ID
+            
+            // 3. Bind the AWS Public Key to the new Phone Number ID
             const publicKey = process.env.PUBLIC_KEY ? process.env.PUBLIC_KEY.trim() : "";
 
-            // HARD STOP 1: Check if the server actually has the key
             if (!publicKey) {
                 throw new Error("Server Configuration Error: PUBLIC_KEY is missing. Cannot enable WhatsApp Flows.");
             }
 
             console.log(`Binding AWS Public Key to new phone ID ${phoneId}`);
-
-            // Must use x-www-form-urlencoded format for this specific Meta endpoint
             const encodedKey = encodeURIComponent(publicKey);
             const keyRes = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/whatsapp_business_encryption`, {
                 method: 'POST',
@@ -183,14 +156,25 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
 
             const keyJson = await keyRes.json();
 
-            // HARD STOP 2: Check if Meta accepted the key
             if (!keyJson.success) {
                 console.error("⚠️ Key Binding Failed:", JSON.stringify(keyJson));
                 throw new Error(keyJson.error?.error_user_msg || keyJson.error?.message || "Failed to bind encryption key to Meta. Please try again.");
             }
-
             console.log(`✅ Public Key successfully bound to ${phoneId}`);
-            // 3. Save to AppSync
+
+            // 🟢 4. REPLACES YOUR MANUAL CURL COMMAND: Subscribe the Webhook
+            console.log(`Subscribing App Webhooks to WABA ID: ${WABA_ID}`);
+            const webhookRes = await callMeta(`/${WABA_ID}/subscribed_apps`, 'POST');
+            
+            if (!webhookRes.success) {
+                console.warn("⚠️ Webhook Subscription Warning:", JSON.stringify(webhookRes.error));
+                // Note: We don't throw an error here because if the app is already subscribed, 
+                // Meta sometimes returns an error, but the connection is still valid.
+            } else {
+                console.log(`✅ Webhooks securely connected!`);
+            }
+
+            // 5. Save to AppSync
             const input = {
                 restaurantId: businessPhone,
                 metaBusinessAccessToken: SYSTEM_TOKEN,
@@ -206,7 +190,6 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
             const mutation = `mutation SaveMeta($input: CreateRestaurantMetaAccountInput!) { createRestaurantMetaAccount(input: $input) { restaurantId } }`;
             await appSyncRequest(mutation, { input });
 
-            // Pass the PIN back in the payload just in case the UI or backend ever needs it
             const payload = { wabaId: WABA_ID, phoneNumberId: phoneId, assignedPin: generatedPin };
             return { success: true, message: "Phone Verified and Registered", data: JSON.stringify(payload) };
         }
@@ -217,7 +200,6 @@ export const handler: Schema["registerPhoneNumber"]["functionHandler"] = async (
         console.error("Handler Error:", error);
         const errorMessage = (error as Error).message || "Unknown Error";
 
-        // ✅ NEW: Global catch for Meta's manual review error string
         if (errorMessage.includes("Display name verification is already in progress") || errorMessage.includes("Verification already in progress")) {
             return { success: false, message: "PENDING_META_REVIEW", data: errorMessage };
         }
