@@ -1,39 +1,32 @@
 import React from 'react';
 import { useEntityList } from '../DataHook/useEntityList';
 
-// Helper to safely extract and format the phone number from the GSI key
-const formatCustomerPhone = (customerId) => {
-    if (!customerId) return "Unknown";
+// 🟢 BULLETPROOF PHONE EXTRACTOR
+const safeExtractPhone = (customerId) => {
+    if (!customerId || String(customerId).includes('undefined')) return "Unknown";
     
-    // Extract the actual phone part from "CUSTOMER#BUSINESS_PHONE#CUSTOMER_PHONE"
-    let cleanPhone = String(customerId);
-    if (cleanPhone.includes('#')) {
-        const parts = cleanPhone.split('#');
-        cleanPhone = parts[parts.length - 1]; // Grabs the last part (the customer phone)
+    let rawPhone = String(customerId);
+    if (rawPhone.includes('#')) {
+        rawPhone = rawPhone.split('#').pop(); // Grabs the very last part of CUSTOMER#biz#phone
     }
 
-    // Format it nicely
-    cleanPhone = cleanPhone.replace(/\D/g, '');
-    if (cleanPhone.length > 8) {
-        return cleanPhone.replace(/(\d{3,4})(\d{4})(\d+)/, '+$1 $2 $3');
+    const clean = rawPhone.replace(/\D/g, ''); // Strip all non-numbers
+    if (clean.length > 8) {
+        return clean.replace(/(\d{3,4})(\d{4})(\d+)/, '+$1 $2 $3');
     }
-    return '+' + cleanPhone;
+    return clean.length > 5 ? '+' + clean : "Unknown";
 };
 
 const OrderDetailModal = ({ orderId, orderStatus, orderTotal, customerId, customerName, phoneNbr, onClose }) => {
     
-    // 🟢 1. BULLETPROOF THE KEYS
+    // 1. Safe Keys
     const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
     const exactOrderId = String(orderId).replace('ORDER#', '');
     const targetPk = `ORDER#${formattedPhone}#${exactOrderId}`;
 
-    // 🟢 2. EXECUTE QUERY
+    // 2. Query Items
     const { data: lineItems, loading } = useEntityList(
-        {
-            pk: targetPk, 
-            sk: { beginsWith: 'ITEM#' },                      
-            sortDirection: 'DESC'                             
-        },
+        { pk: targetPk, sk: { beginsWith: 'ITEM#' }, sortDirection: 'DESC' },
         "listByBusiness" 
     );
 
@@ -46,20 +39,23 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal, customerId, custom
     };
 
     const badgeColor = statusColors[orderStatus] || 'bg-slate-600';
-    const displayPhone = formatCustomerPhone(customerId);
-    const displayName = customerName || "Customer";
+    
+    // 3. Safe Display Values
+    const displayPhone = safeExtractPhone(customerId);
+    const displayName = (customerName && !String(customerName).includes('undefined') && customerName !== 'unknown') 
+        ? customerName 
+        : "Customer";
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 rounded-lg w-full max-w-md shadow-xl animate-fade-in-up">
                 <div className="p-4 border-b border-slate-700 flex justify-between items-start">
                     <div className="flex flex-col gap-1">
-                        {/* Display clean order timestamp */}
                         <h2 className="text-sm font-bold text-orange-400 bg-black/10 px-2 py-0.5 rounded inline-block w-fit">
-                            {orderId.split('#')[1]}
+                            {String(orderId).includes('#') ? String(orderId).split('#')[1] : orderId}
                         </h2>
                         
-                        {/* ✅ FIX: Display Name and cleanly formatted Phone */}
+                        {/* ✅ THIS REPLACES THE BROKEN SUBSTRING CODE */}
                         <div className="mt-2">
                             <h2 className="text-base font-bold text-white">{displayName}</h2>
                             <h2 className="text-xs font-medium text-slate-400 font-mono tracking-wide">{displayPhone}</h2>
@@ -68,16 +64,7 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal, customerId, custom
                     
                     <div className="flex flex-col items-end gap-3">
                         <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
-                        <span className={`
-                            px-2 py-1 
-                            text-[10px]
-                            rounded-md
-                            text-white 
-                            font-bold 
-                            uppercase 
-                            tracking-wide shadow-sm
-                            ${badgeColor}
-                        `}>
+                        <span className={`px-2 py-1 text-[10px] rounded-md text-white font-bold uppercase tracking-wide shadow-sm ${badgeColor}`}>
                             {orderStatus ? orderStatus.replace('_', ' ') : 'N/A'}
                         </span>
                     </div>
@@ -98,7 +85,7 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal, customerId, custom
                                         <span className="text-white">{item.name}</span>
                                     </span>
                                     <span className="font-mono text-slate-300">
-                                        {item.unitPrice ? item.unitPrice.toFixed(2) : '0.00'}
+                                        {item.unitPrice ? parseFloat(item.unitPrice).toFixed(2) : '0.00'}
                                     </span>
                                 </li>
                             ))}
@@ -108,10 +95,9 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal, customerId, custom
 
                     <div className="border-t border-slate-600 pt-3 flex justify-between items-center font-black text-orange-400 bg-orange-900/10 p-3 rounded-lg">
                         <span className="uppercase text-xs tracking-wider">Total Amount</span>
-                        <span className="text-lg font-mono">BD {orderTotal ? orderTotal.toFixed(3) : '0.000'}</span>
+                        <span className="text-lg font-mono">BD {orderTotal ? parseFloat(orderTotal).toFixed(3) : '0.000'}</span>
                     </div>
                 </div>
-
             </div>
         </div>
     );

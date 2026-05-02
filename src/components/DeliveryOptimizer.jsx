@@ -28,41 +28,39 @@ const parseLocation = (loc) => {
     } catch { return null; }
 };
 
-// 🟢 NEW: OMNI-EXTRACTOR FOR CUSTOMER NAME
+// 🟢 OMNI-EXTRACTOR FOR CUSTOMER NAME
 const getCustName = (order) => {
-    if (!order) return "Customer";
-    let n = order.name || order.customerName || order.customer || order.customer_name;
-    // Check if it's trapped inside a raw DynamoDB { S: "..." } format
-    if (n && typeof n === 'object' && n.S) n = n.S;
-    if (!n || n === 'unknown' || n === '_._') return "Customer";
-    return String(n);
+    try {
+        let n = order.name || order.customerName || order.customer;
+        if (n?.S) n = n.S;
+        if (n && n !== 'unknown' && n !== '_._' && !String(n).includes('undefined')) return String(n);
+    } catch(e) {}
+    return "Customer";
 };
 
-// 🟢 NEW: OMNI-EXTRACTOR FOR CUSTOMER PHONE
+// 🟢 OMNI-EXTRACTOR FOR CUSTOMER PHONE
 const getCustPhone = (order) => {
-    if (!order) return "Unknown";
-    let p = order.phone || order.customerPhone || order.customer_phone;
-    
-    if (p && typeof p === 'object' && p.S) p = p.S;
-    if (p) return String(p);
+    try {
+        let p = order.phone || order.customerPhone || order.customer_phone;
+        if (p?.S) p = p.S;
+        if (p && String(p).replace(/\D/g, '').length > 5) return String(p);
 
-    // Fallback to GSI2PK if phone is completely missing
-    let gsi2pk = order.gsi2pk;
-    if (gsi2pk && typeof gsi2pk === 'object' && gsi2pk.S) gsi2pk = gsi2pk.S;
-    if (typeof gsi2pk === 'string') {
-        const parts = gsi2pk.split('#');
-        if (parts.length > 2) return parts[parts.length - 1]; // Always grab the very last segment
-    }
+        let gsi = order.gsi2pk;
+        if (gsi?.S) gsi = gsi.S;
+        if (gsi && typeof gsi === 'string') {
+            const parts = gsi.split('#');
+            const last = parts[parts.length - 1];
+            if (last && last.replace(/\D/g, '').length > 5) return last;
+        }
+    } catch(e) {}
     return "Unknown";
 };
 
-const formatPhone = (phone) => {
-    if (!phone || phone === 'Unknown' || phone === 'undefined') return "Unknown";
-    const clean = String(phone).replace(/\D/g, '');
-    if (clean.length > 8) {
-        return clean.replace(/(\d{3,4})(\d{4})(\d+)/, '+$1 $2 $3');
-    }
-    return '+' + clean;
+const formatPhone = (phoneStr) => {
+    if (!phoneStr || phoneStr === "Unknown" || String(phoneStr).includes("undefined")) return "Unknown";
+    const clean = String(phoneStr).replace(/\D/g, '');
+    if (clean.length > 8) return clean.replace(/(\d{3,4})(\d{4})(\d+)/, '+$1 $2 $3');
+    return clean.length > 5 ? '+' + clean : "Unknown";
 };
 
 const getTodayString = () => new Date().toISOString().split('T')[0];
@@ -172,6 +170,9 @@ const DeliveryOptimizer = ({
   const agentAnimationState = useRef({}); 
   const latestAgentsRef = useRef(agents);
   const markersRef = useRef({});          
+  
+  // 🛡️ THE PERSISTENT SHIELD 🛡️ (Protects against AppSync null overwrites)
+  const persistentInfo = useRef({});
 
   // UI State
   const [isMenuOpen, setIsMenuOpen] = useState(true); 
@@ -211,13 +212,28 @@ const DeliveryOptimizer = ({
     return AGENT_COLORS[index % AGENT_COLORS.length] || '#64748b';
   };
 
-  // Merge Data
+  // 🟢 SHIELDED DATA MERGE
   const displayedOrders = useMemo(() => {
       const today = getTodayString();
       const isToday = dateFilter.start === today && dateFilter.end === today;
       const sourceData = isToday ? orders : fetchedHistory;
       
-      return sourceData.filter(o => {
+      return sourceData.map(o => {
+          const currentName = getCustName(o);
+          const currentPhone = getCustPhone(o);
+
+          if (!persistentInfo.current[o.sk]) {
+              persistentInfo.current[o.sk] = { name: "Customer", phone: "Unknown" };
+          }
+          if (currentName !== "Customer") persistentInfo.current[o.sk].name = currentName;
+          if (currentPhone !== "Unknown") persistentInfo.current[o.sk].phone = currentPhone;
+
+          return {
+              ...o,
+              _shieldedName: persistentInfo.current[o.sk].name,
+              _shieldedPhone: persistentInfo.current[o.sk].phone
+          };
+      }).filter(o => {
           if (o.orderStatus === 'DELIVERED' && !showDelivered) return false;
           if (o.orderStatus === 'DELIVERING' && !showDelivering) return false;
           return true;
@@ -415,7 +431,8 @@ const DeliveryOptimizer = ({
             if (enrichedOrders.length > 0) {
                 contentHtml = enrichedOrders.map(o => {
                     const icon = '🚚';
-                    const shortId = (o.sk || "").replace('ORDER#', '').slice(0, 10);
+                    // 🟢 FIX: Clean UUID split for Agent Popup
+                    const shortId = String(o.sk || "").replace('ORDER#', '').split('#')[0].split('.')[0];
                     const boxColor = '#3b82f6';
                     const bg = '#eff6ff';
                     
@@ -572,7 +589,8 @@ const DeliveryOptimizer = ({
                   border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', cursor: 'pointer'
               });
 
-              const shortId = (order.sk || "").replace('ORDER#', '').split('-').slice(0, 3).join('-');
+              // 🟢 FIX: Clean UUID split for Map Popup Order ID
+              const shortId = String(order.sk || "").replace('ORDER#', '').split('#')[0].split('.')[0];
               const popup = new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(`<div>Loading...</div>`);
               const marker = new maplibregl.Marker({ element: el }).setLngLat([loc.longitude, loc.latitude]).setPopup(popup).addTo(map);
 
@@ -584,21 +602,27 @@ const DeliveryOptimizer = ({
                   const items = await fetchOrderItems(order);
                   const itemsHtml = items.length ? items.map(i => `<div style="display:flex;justify-content:space-between;border-bottom:1px dashed #eee;padding:4px 0;"><span style="color:#334155;">${i.name}</span><strong style="color:#0f172a;">x${i.quantity || 1}</strong></div>`).join('') : 'No items';
                   
-                  const custPhone = formatPhone(getCustPhone(order));
-                  const custName = getCustName(order);
+                  const custPhone = formatPhone(order._shieldedPhone);
+                  const custName = order._shieldedName;
                   const agentName = agentObj ? agentObj.name : "Unassigned";
 
+                  // 🟢 FIX: Flexbox row for Name and Phone, matching Agent color!
                   popup.setHTML(`
                     <div style="font-family: sans-serif; font-size: 12px; min-width: 180px; color: #334155;">
                         <div style="background:${status === 'DELIVERING' ? '#eff6ff' : '#f0fdf4'}; padding:6px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                            <b style="color:#1e293b;">${shortId}</b> <span style="font-size:14px;">${iconContent}</span>
+                            <b style="color:#1e293b;">ORD: ${shortId}</b> <span style="font-size:14px;">${iconContent}</span>
                         </div>
-                        <div style="margin-bottom:8px; font-weight:600; color:#475569;">
-                            <div style="color:#1e293b; font-size:13px; font-weight:bold; margin-bottom:2px;">${custName}</div>
-                            📞 ${custPhone}
+                        
+                        <div style="margin-bottom:8px; font-weight:600; color:#1e293b; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+                            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 110px;">${custName}</span>
+                            <span style="font-size:11px; color:#475569; font-weight:normal; margin-left:8px;">📞 ${custPhone}</span>
                         </div>
-                        <div style="margin-bottom:8px; color:#64748b; font-size:11px;">Agent: <strong>${agentName}</strong></div>
-                        <div style="max-height:150px; overflow-y:auto; margin-bottom:8px;">${itemsHtml}</div>
+
+                        <div style="margin-bottom:8px; color:#64748b; font-size:11px;">
+                            Agent: <strong style="color:${markerColor}; font-size:12px;">${agentName}</strong>
+                        </div>
+                        
+                        <div style="max-height:150px; overflow-y:auto; margin-bottom:8px; border-top:1px solid #e2e8f0; padding-top:4px;">${itemsHtml}</div>
                     </div>
                   `);
               });
@@ -758,13 +782,14 @@ const DeliveryOptimizer = ({
                   const isDelivered = o.orderStatus === 'DELIVERED';
                   const isPending = assignments[o.sk] !== undefined;
 
-                  const shortId = (o.sk || "").replace('ORDER#', '').split('-').slice(0, 3).join('-');
-                  const custPhone = formatPhone(getCustPhone(o));
+                  // 🟢 FIX: Clean UUID split for Sidebar Orders
+                  const shortId = String(o.sk || "").replace('ORDER#', '').split('#')[0].split('.')[0];
+                  
+                  const custPhone = formatPhone(o._shieldedPhone);
                   const agentPhoneStr = formatPhone(agentObj?.phone || getCleanPhone(assignedAgentId));
-                  const custName = getCustName(o);
+                  const custName = o._shieldedName;
                   const color = agentObj ? getAgentColor(strictSelectValue) : '#475569'; 
 
-                  // ✅ IMMUTABLE DELIVERED CARD UI
                   if (isDelivered) {
                       return (
                           <div 
@@ -782,7 +807,7 @@ const DeliveryOptimizer = ({
                                   <p className="font-bold text-xs text-slate-200 truncate">
                                       {custName} <span className="text-slate-400 font-normal ml-1">({custPhone})</span>
                                   </p>
-                                  <p className="text-[10px] text-slate-400 font-mono">Agent: {agentPhoneStr}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono">Agent: <span style={{color: color, fontWeight: 'bold'}}>{agentPhoneStr}</span></p>
                               </div>
                               
                               {/* Tooltip for delivered items */}
@@ -802,7 +827,6 @@ const DeliveryOptimizer = ({
                       );
                   }
 
-                  // ✅ MUTABLE CARD UI (ORDERED, PREPARED, DELIVERING)
                   return (
                   <div 
                     key={o.sk || i} 

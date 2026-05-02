@@ -32,6 +32,40 @@ const parseLocation = (loc) => {
   }
 };
 
+// 🟢 OMNI-EXTRACTORS FOR CUSTOMER DATA
+const getCustName = (order) => {
+    try {
+        let n = order.name || order.customerName || order.customer;
+        if (n?.S) n = n.S;
+        if (n && n !== 'unknown' && n !== '_._' && !String(n).includes('undefined')) return String(n);
+    } catch(e) {}
+    return "Customer";
+};
+
+const getCustPhone = (order) => {
+    try {
+        let p = order.phone || order.customerPhone || order.customer_phone;
+        if (p?.S) p = p.S;
+        if (p && String(p).replace(/\D/g, '').length > 5) return String(p);
+
+        let gsi = order.gsi2pk;
+        if (gsi?.S) gsi = gsi.S;
+        if (gsi && typeof gsi === 'string') {
+            const parts = gsi.split('#');
+            const last = parts[parts.length - 1];
+            if (last && last.replace(/\D/g, '').length > 5) return last;
+        }
+    } catch(e) {}
+    return "Unknown";
+};
+
+const formatPhone = (phoneStr) => {
+    if (!phoneStr || phoneStr === "Unknown" || String(phoneStr).includes("undefined")) return "Unknown";
+    const clean = String(phoneStr).replace(/\D/g, '');
+    if (clean.length > 8) return clean.replace(/(\d{3,4})(\d{4})(\d+)/, '+$1 $2 $3');
+    return clean.length > 5 ? '+' + clean : "Unknown";
+};
+
 const PickUpBadge = () => (
   <div className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-900 text-indigo-200 border border-indigo-500/30">
     <svg className="mr-1 w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -129,18 +163,22 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, onClick, getAgentName, updatingId }) => {
   const isActuallyPickup = order.isPickUp === true || order.isPickUp === 1 || String(order.isPickUp).toLowerCase() === 'true';
   
+  // 🟢 EXTRACT CLEAN NAME AND PHONE
+  const displayName = getCustName(order);
+  const displayPhone = formatPhone(getCustPhone(order));
+
   return (
     <div
       onClick={onClick}
       className={classNames(
-        "bg-slate-800 p-3 rounded-lg flex items-center transition h-full",
-        updatingId === order.sk ? 'opacity-50' : 'hover:bg-slate-700',
+        "bg-slate-800 p-3 rounded-lg flex items-center transition h-full border border-transparent",
+        updatingId === order.sk ? 'opacity-50' : 'hover:bg-slate-700 hover:border-slate-600',
         !isEditing && 'cursor-pointer'
       )}
     >
       <div className="flex-grow min-w-0">
-        <div className="flex items-center">
-          <p className="font-bold text-white truncate">
+        <div className="flex items-center mb-1">
+          <p className="font-bold text-cyan-500 truncate text-sm">
             ORD: {order.sk.replace('ORDER#', '').split('.')[0]}
           </p>
           {isActuallyPickup && (
@@ -149,8 +187,15 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
             </div>
           )}
         </div>
-        <p className="text-sm text-slate-400 truncate">
-          Customer: {order.name || order.gsi2pk?.split('#')[2] || 'N/A'}
+        
+        {/* 🟢 RENDER CUSTOMER NAME AND PHONE NUMBER */}
+        <p className="text-sm truncate flex items-center">
+            <span className="font-bold text-slate-300">{displayName}</span>
+            {displayPhone !== "Unknown" && (
+                <span className="ml-2 font-mono text-orange-500 text-[12px]  bg-slate-900/50 px-1.5 py-0.5 rounded">
+                    📞 {displayPhone}
+                </span>
+            )}
         </p>
       </div>
 
@@ -163,15 +208,15 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
             {order.orderStatus === 'DELIVERING' ? 'Out for Delivery' : 'Delivered By'}
           </span>
           <div className="flex flex-col items-center">
-            <span className="text-white font-bold text-sm">
+            <span className="text-white font-bold text-sm bg-black/20 px-2 rounded">
               {getAgentName(order.gsi1pk)}
             </span>
           </div>
         </div>
       )}
 
-      <div className="text-right flex-shrink-0 ml-4">
-        <p className="font-bold text-white">BD {order.totalAmount?.toFixed(3) || '0.000'}</p>
+      <div className="text-right flex-shrink-0 ml-4 flex flex-col items-end gap-2">
+        <p className="font-black text-orange-400">BD {order.totalAmount?.toFixed(3) || '0.000'}</p>
         <OrderStatusEditor
           order={order}
           isEditing={isEditing}
@@ -305,11 +350,9 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     return sortedOrders
       .filter(o => o.orderStatus === 'PREPARED' && o.location !== null)
       .map(order => ({
-        sk: order.sk,
-        pk: order.pk,
+        ...order, // 🟢 FIX: This passes ALL properties, including phone and gsi2pk!
         location: parseLocation(order.location),
-        customer: order.name || order.gsi2pk?.split('#')[2] || 'Unknown',
-        orderStatus: order.orderStatus
+        customer: getCustName(order),
       }));
   }, [sortedOrders]);
 
@@ -318,19 +361,15 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     return sortedOrders
       .filter(o => ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus) && !o.isPickUp && (o.createdAt ? o.createdAt >= cutoffTime : true) && o.location !== null)
       .map(order => ({
-        sk: order.sk,
-        pk: order.pk,
+        ...order, // 🟢 FIX: This passes ALL properties, including phone and gsi2pk!
         location: parseLocation(order.location),
-        customer: order.name || order.gsi2pk?.split('#')[2] || 'Unknown',
-        orderStatus: order.orderStatus,
-        gsi1pk: order.gsi1pk,
+        customer: getCustName(order),
         pickupLocation: parseLocation(order.pickupLocation), 
         restaurantLocation: parseLocation(businessLocation), 
         itemsNbr: order.itemsNbr || 1,
         totalAmount: order.totalAmount || 0
       }));
   }, [sortedOrders, businessLocation]);
-
   const handleDispatch = async (currentAgents) => {
     try {
       console.log("🤖 Calculating Optimal Routes...");
@@ -491,7 +530,15 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
                         updatingId={updatingId}
                         onStatusChange={handleStatusChange}
                         getAgentName={getAgentName}
-                        onClick={() => !editingId && setModal({ type: 'orderDetail', Id: order.sk, orderStatus: order.orderStatus, totalAmount: order.totalAmount, customerId: order.gsi2pk?.split('#')[2] || 'N/A' })}
+                        // 🟢 PASS THE OMNI-EXTRACTED NAME TO THE MODAL!
+                        onClick={() => !editingId && setModal({ 
+                            type: 'orderDetail', 
+                            Id: order.sk, 
+                            orderStatus: order.orderStatus, 
+                            totalAmount: order.totalAmount, 
+                            customerId: order.gsi2pk || order.phone, 
+                            customerName: getCustName(order) 
+                        })}
                     />
                   </div>
                 );
