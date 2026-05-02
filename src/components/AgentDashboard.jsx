@@ -265,19 +265,25 @@ const AgentDashboard = ({ agentPhone, businessLocation , agentName}) => {
         setDateFilter({ start: s, end: e || s, label: 'Custom' });
     };
 
-    // Item Fetcher
-    const fetchOrderItems = async (order) => {
+   
+   // Item Fetcher
+   const fetchOrderItems = async (order) => {
         if (orderItemsCache[order.sk]) return orderItemsCache[order.sk];
         try {
-            const phoneNbr = order.pk.split('#')[1];
-            const orderIdPart = order.sk.split('#')[1];
+            const phoneNbrPk = order.pk.split('#')[1]; // Perfectly extracts +97317620635
+            const orderIdPart = order.sk.replace('ORDER#', ''); // Keeps Timestamp AND UUID
+
             const { data: lineItems } = await client.models.BusinessData.listByBusiness({
-                pk: `ORDER#${phoneNbr}#${orderIdPart}`,
-                sk: { beginsWith: 'ITEM#' }
+                pk: `ORDER#${phoneNbrPk}#${orderIdPart}`,
+                sk: { beginsWith: 'ITEM#' },
             });
+            
             setOrderItemsCache(prev => ({ ...prev, [order.sk]: lineItems }));
             return lineItems;
-        } catch (err) { console.error("Item fetch error", err); return []; }
+        } catch (err) { 
+            console.error("Item fetch error", err); 
+            return []; 
+        }
     };
 
     const handleOrderClick = async (e, order) => {
