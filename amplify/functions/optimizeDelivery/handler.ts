@@ -199,7 +199,7 @@ import { GeoRoutesClient, CalculateRouteMatrixCommand } from "@aws-sdk/client-ge
 const client = new GeoRoutesClient({ region: "us-east-1" });
 const DEFAULT_MAX_CAPACITY = 10;
 
-// Helper: Weight of the order
+
 const getOrderLoad = (order: any): number => {
   const size = order.size || 'REGULAR';
   switch (size.toString().toUpperCase()) {
