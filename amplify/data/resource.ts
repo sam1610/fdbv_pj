@@ -69,7 +69,8 @@ expiration: a.integer()
     allow.publicApiKey().to(['create', 'update', 'read'])
     ]),
   RestaurantMetaAccount: a.model({
-    restaurantId: a.string().required(), // PK - Business Phone
+    // 🟢 FIX: Renamed 'restaurantId' to 'pk' to perfectly match DynamoDB's schema
+    pk: a.string().required(), 
     metaBusinessAccessToken: a.string(),
     phoneNumberId: a.string(),
     phoneNumber: a.string(),
@@ -77,9 +78,9 @@ expiration: a.integer()
     registrationStatus: a.enum(['PENDING', 'ACTIVE', 'ERROR']),
     registrationDate: a.datetime(),
     lastVerified: a.datetime(),
-    businessOwnerId: a.string(), // 🆕 Link to owner
+    businessOwnerId: a.string(), 
   })
-  .identifier(['restaurantId'])
+  .identifier(['pk']) // 🟢 FIX: Set identifier to pk
   .authorization(allow => [
     allow.authenticated().to(['read', 'update']),
     allow.publicApiKey().to(['create', 'read', 'update'])
