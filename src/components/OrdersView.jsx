@@ -285,7 +285,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
             setLoading(false);
         }
 
-        // 🟢 SHIELDED WEBSOCKETS
+        // 🟢 SHIELDED WEBSOCKETS WITH LOGGING
         const handleNewItem = (item) => {
           if (!isMounted.current) return;
           if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
@@ -313,9 +313,19 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
           }
         };
 
-        subscriptions.push(client.models.BusinessData.onCreate().subscribe({ next: handleNewItem }));
-        subscriptions.push(client.models.BusinessData.onUpdate().subscribe({ next: handleUpdateItem }));
-        subscriptions.push(client.models.BusinessData.onDelete().subscribe({ next: handleDeleteItem }));
+        // 🟢 WEBSOCKET CONNECTIONS (WITH ERROR CATCHING)
+        subscriptions.push(client.models.BusinessData.onCreate().subscribe({ 
+            next: handleNewItem,
+            error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (CREATE):", err)
+        }));
+        subscriptions.push(client.models.BusinessData.onUpdate().subscribe({ 
+            next: handleUpdateItem,
+            error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (UPDATE):", err)
+        }));
+        subscriptions.push(client.models.BusinessData.onDelete().subscribe({ 
+            next: handleDeleteItem,
+            error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (DELETE):", err)
+        }));
 
       } catch (err) { 
           if (isMounted.current) {
