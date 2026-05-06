@@ -69,7 +69,6 @@ expiration: a.integer()
     allow.publicApiKey().to(['create', 'update', 'read'])
     ]),
   RestaurantMetaAccount: a.model({
-    // 🟢 FIX: Renamed 'restaurantId' to 'pk' to perfectly match DynamoDB's schema
     pk: a.string().required(), 
     metaBusinessAccessToken: a.string(),
     phoneNumberId: a.string(),
