@@ -163,7 +163,6 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, onClick, getAgentName, updatingId }) => {
   const isActuallyPickup = order.isPickUp === true || order.isPickUp === 1 || String(order.isPickUp).toLowerCase() === 'true';
   
-  // 🟢 EXTRACT CLEAN NAME AND PHONE
   const displayName = getCustName(order);
   const displayPhone = formatPhone(getCustPhone(order));
 
@@ -188,7 +187,6 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
           )}
         </div>
         
-        {/* 🟢 RENDER CUSTOMER NAME AND PHONE NUMBER */}
         <p className="text-sm truncate flex items-center">
             <span className="font-bold text-slate-300">{displayName}</span>
             {displayPhone !== "Unknown" && (
@@ -238,7 +236,6 @@ const generateDistinctColors = (count) => {
 
 // --- MAIN COMPONENT ---
 export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], businessLocation }) {
-  // 🟢 STATE DECLARATIONS
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -260,13 +257,16 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     return () => { isMounted.current = false; };
   }, []);
 
-  // 1. Fetch Orders & Subscribe
+  // 1. Fetch Orders & Subscribe (🔥 WEBSOCKET FIX APPLIED HERE)
   useEffect(() => {
     if (!phoneNbr) return;
     setLoading(true);
 
     const subscriptions = []; 
-    const businessPk = `BUSINESS#${phoneNbr}`;
+    
+    // 🟢 BULLETPROOF PHONE: Guarantees it exactly matches DynamoDB (with '+')
+    const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
+    const businessPk = `BUSINESS#${formattedPhone}`;
     const orderPrefix = 'ORDER#';
 
     const fetchAndSubscribe = async () => {
@@ -285,10 +285,11 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
             setLoading(false);
         }
 
-        // WebSockets: Unfiltered on the server to prevent disconnects, filtered securely on the client
+        // 🟢 SHIELDED WEBSOCKETS
         const handleNewItem = (item) => {
           if (!isMounted.current) return;
           if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
+              console.log("⚡ REAL-TIME: New Order Arrived!", item.sk);
               setOrders(prev => {
                   if (prev.some(o => o.sk === item.sk)) return prev;
                   return [item, ...prev];
@@ -299,6 +300,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
         const handleUpdateItem = (item) => {
           if (!isMounted.current) return;
           if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
+              console.log("⚡ REAL-TIME: Order Updated!", item.sk);
               setOrders(prev => prev.map(o => (o.sk === item.sk ? item : o)));
           }
         };
@@ -306,6 +308,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
         const handleDeleteItem = (item) => {
           if (!isMounted.current) return;
           if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
+              console.log("⚡ REAL-TIME: Order Deleted!", item.sk);
               setOrders(prev => prev.filter(o => o.sk !== item.sk));
           }
         };
@@ -350,7 +353,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     return sortedOrders
       .filter(o => o.orderStatus === 'PREPARED' && o.location !== null)
       .map(order => ({
-        ...order, // 🟢 FIX: This passes ALL properties, including phone and gsi2pk!
+        ...order, 
         location: parseLocation(order.location),
         customer: getCustName(order),
       }));
@@ -361,7 +364,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     return sortedOrders
       .filter(o => ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus) && !o.isPickUp && (o.createdAt ? o.createdAt >= cutoffTime : true) && o.location !== null)
       .map(order => ({
-        ...order, // 🟢 FIX: This passes ALL properties, including phone and gsi2pk!
+        ...order, 
         location: parseLocation(order.location),
         customer: getCustName(order),
         pickupLocation: parseLocation(order.pickupLocation), 
@@ -370,6 +373,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
         totalAmount: order.totalAmount || 0
       }));
   }, [sortedOrders, businessLocation]);
+
   const handleDispatch = async (currentAgents) => {
     try {
       console.log("🤖 Calculating Optimal Routes...");
@@ -397,8 +401,9 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
   const fetchLiveAgentLocations = async () => {
     setLoadingMap(true);
     try {
+        const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
         const { data: allProfiles } = await client.models.BusinessData.listByBusiness({
-            pk: `BUSINESS#${phoneNbr}`,
+            pk: `BUSINESS#${formattedPhone}`,
             sk: { beginsWith: 'AGENT#' }
         });
 
@@ -429,8 +434,9 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     if (!nextToken || isFetchingNextPage) return;
     setIsFetchingNextPage(true);
     try {
+      const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
       const { data, nextToken: newNextToken } = await client.models.BusinessData.listByBusiness({
-        pk: `BUSINESS#${phoneNbr}`,
+        pk: `BUSINESS#${formattedPhone}`,
         sk: { beginsWith: 'ORDER#' },
         sortDirection: 'DESC', 
         nextToken: nextToken,  
@@ -530,7 +536,6 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
                         updatingId={updatingId}
                         onStatusChange={handleStatusChange}
                         getAgentName={getAgentName}
-                        // 🟢 PASS THE OMNI-EXTRACTED NAME TO THE MODAL!
                         onClick={() => !editingId && setModal({ 
                             type: 'orderDetail', 
                             Id: order.sk, 
