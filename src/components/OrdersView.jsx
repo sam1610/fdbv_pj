@@ -272,12 +272,16 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     const fetchAndSubscribe = async () => {
       try {
         // Initial Fetch
-        const { data, nextToken: initialToken } = await client.models.BusinessData.listByBusiness({
-          pk: businessPk,
-          sk: { beginsWith: orderPrefix },
-          sortDirection: 'DESC',
-          limit: 20 
-        });
+        const { data, nextToken: initialToken } = await client.models.BusinessData.listByBusiness(
+          {
+            pk: businessPk,
+            sk: { beginsWith: orderPrefix },
+            sortDirection: 'DESC',
+            limit: 20
+        }, 
+          { 
+            authMode: 'apiKey' // 🟢 FIX: Moved to a separate options object!
+          });
         
         if (isMounted.current) {
             setOrders(data);
@@ -313,16 +317,18 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
           }
         };
 
-        // 🟢 WEBSOCKET CONNECTIONS (WITH ERROR CATCHING)
-        subscriptions.push(client.models.BusinessData.onCreate().subscribe({ 
+        // 🟢 WEBSOCKET CONNECTIONS (PROPER GEN 2 SYNTAX)
+        subscriptions.push(client.models.BusinessData.onCreate(undefined, { authMode: 'apiKey' }).subscribe({ 
             next: handleNewItem,
             error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (CREATE):", err)
         }));
-        subscriptions.push(client.models.BusinessData.onUpdate().subscribe({ 
+        
+        subscriptions.push(client.models.BusinessData.onUpdate(undefined, { authMode: 'apiKey' }).subscribe({ 
             next: handleUpdateItem,
             error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (UPDATE):", err)
         }));
-        subscriptions.push(client.models.BusinessData.onDelete().subscribe({ 
+        
+        subscriptions.push(client.models.BusinessData.onDelete(undefined, { authMode: 'apiKey' }).subscribe({ 
             next: handleDeleteItem,
             error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (DELETE):", err)
         }));
