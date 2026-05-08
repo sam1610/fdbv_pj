@@ -28,7 +28,6 @@ const parseLocation = (loc) => {
     } catch { return null; }
 };
 
-// 🟢 OMNI-EXTRACTOR FOR CUSTOMER NAME
 const getCustName = (order) => {
     try {
         let n = order.name || order.customerName || order.customer;
@@ -38,7 +37,6 @@ const getCustName = (order) => {
     return "Customer";
 };
 
-// 🟢 OMNI-EXTRACTOR FOR CUSTOMER PHONE
 const getCustPhone = (order) => {
     try {
         let p = order.phone || order.customerPhone || order.customer_phone;
@@ -70,12 +68,8 @@ const getPastDateString = (daysAgo) => {
     return d.toISOString().split('T')[0];
 };
 
-/* ------------------------------------------------------------------
-   CUSTOM COMPONENT: Range Calendar
--------------------------------------------------------------------*/
 const RangeCalendar = ({ startDate, endDate, onChange }) => {
     const [viewDate, setViewDate] = useState(new Date(startDate || new Date()));
-
     useEffect(() => { if(startDate) setViewDate(new Date(startDate)); }, [startDate]);
 
     const year = viewDate.getFullYear();
@@ -86,16 +80,8 @@ const RangeCalendar = ({ startDate, endDate, onChange }) => {
     const handleDayClick = (day) => {
         const dateObj = new Date(year, month, day);
         const selectedStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-        
-        if (!startDate || (startDate && endDate)) {
-            onChange(selectedStr, null); 
-        } else {
-            if (selectedStr < startDate) {
-                onChange(selectedStr, startDate);
-            } else {
-                onChange(startDate, selectedStr);
-            }
-        }
+        if (!startDate || (startDate && endDate)) { onChange(selectedStr, null); } 
+        else { selectedStr < startDate ? onChange(selectedStr, startDate) : onChange(startDate, selectedStr); }
     };
 
     const changeMonth = (delta) => {
@@ -117,27 +103,19 @@ const RangeCalendar = ({ startDate, endDate, onChange }) => {
             </div>
             
             <div className="grid grid-cols-7 gap-1 text-center">
-                {['S','M','T','W','T','F','S'].map((d, i) => (
-                    <div key={`h-${i}`} className="text-[9px] text-slate-500 font-bold">{d}</div>
-                ))}
-                
+                {['S','M','T','W','T','F','S'].map((d, i) => <div key={`h-${i}`} className="text-[9px] text-slate-500 font-bold">{d}</div>)}
                 {days.map((d, i) => {
                     if (!d) return <div key={`empty-${i}`} />;
                     const currentStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                     const isStart = currentStr === startDate;
                     const isEnd = currentStr === endDate;
                     const isInRange = startDate && endDate && currentStr > startDate && currentStr < endDate;
-                    
                     let bgClass = "hover:bg-slate-700 text-slate-300";
                     if (isStart || isEnd) bgClass = "bg-indigo-600 text-white font-bold shadow-md transform scale-110 z-10 relative";
                     else if (isInRange) bgClass = "bg-indigo-900/50 text-indigo-200 rounded-none";
                     
                     return (
-                        <button 
-                            key={`day-${i}`} 
-                            onClick={(e) => { e.stopPropagation(); handleDayClick(d); }} 
-                            className={`h-7 w-7 ${isInRange ? '' : 'rounded-full'} text-xs flex items-center justify-center transition-all ${bgClass}`}
-                        >
+                        <button key={`day-${i}`} onClick={(e) => { e.stopPropagation(); handleDayClick(d); }} className={`h-7 w-7 ${isInRange ? '' : 'rounded-full'} text-xs flex items-center justify-center transition-all ${bgClass}`}>
                             {d}
                         </button>
                     );
@@ -155,7 +133,6 @@ const RangeCalendar = ({ startDate, endDate, onChange }) => {
 -------------------------------------------------------------------*/
 const DeliveryOptimizer = ({
   orders, 
-  agents,
   AGENT_COLORS,
   restaurantLocation,
   onClose,
@@ -167,11 +144,14 @@ const DeliveryOptimizer = ({
   const animationFrameId = useRef(null);
   const isMountedRef = useRef(true); 
 
+  // 🟢 NEW STATE: Self-Managing Live Agents
+  const [liveAgents, setLiveAgents] = useState([]);
+  const [isFetchingAgents, setIsFetchingAgents] = useState(true);
+
   const agentAnimationState = useRef({}); 
-  const latestAgentsRef = useRef(agents);
+  const latestAgentsRef = useRef(liveAgents);
   const markersRef = useRef({});          
   
-  // 🛡️ THE PERSISTENT SHIELD 🛡️ (Protects against AppSync null overwrites)
   const persistentInfo = useRef({});
 
   // UI State
@@ -194,25 +174,60 @@ const DeliveryOptimizer = ({
   const [activeTooltipId, setActiveTooltipId] = useState(null); 
   const [orderItemsCache, setOrderItemsCache] = useState({}); 
 
+  // 🟢 NEW EFFECT: Fetch completely fresh agents on mount
+  useEffect(() => {
+      let isMounted = true;
+      const fetchFreshAgents = async () => {
+          setIsFetchingAgents(true);
+          try {
+              const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
+              const { data: allProfiles } = await client.models.BusinessData.listByBusiness(
+                  { pk: `BUSINESS#${formattedPhone}`, sk: { beginsWith: 'AGENT#' } },
+                  { authMode: 'apiKey' } // Ensures no Cognito permission blocks
+              );
+
+              const parsedAgents = allProfiles
+                // 🟢 FIX 1: Filter out inactive agents based on stockStatus BEFORE mapping
+                .filter(profile => profile.stockStatus !== false) 
+                .map(profile => ({
+                  id: profile.sk,
+                  name: profile.name || `Agent ${profile.sk.slice(-4)}`,
+                  maxCapacity: profile.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
+                  currentLoad: profile.capacityLeft ? parseInt(profile.capacityLeft) : 0,
+                  location: parseLocation(profile.location),
+                  phone: profile.phone || profile.sk.replace('AGENT#', '')
+              }));
+
+              if (isMounted) setLiveAgents(parsedAgents);
+          } catch (e) {
+              console.error("Error fetching live agents for Map:", e);
+          } finally {
+              if (isMounted) setIsFetchingAgents(false);
+          }
+      };
+
+      if (phoneNbr) fetchFreshAgents();
+      return () => { isMounted = false; };
+  }, [phoneNbr]);
+
   useEffect(() => { 
-      latestAgentsRef.current = agents; 
+      latestAgentsRef.current = liveAgents; 
       isMountedRef.current = true;
       return () => { isMountedRef.current = false; };
-  }, [agents]);
+  }, [liveAgents]);
 
   const findAgent = (idToFind) => {
       if (!idToFind) return null;
       const cleanToFind = getCleanPhone(idToFind);
-      return agents.find(a => getCleanPhone(a.id || a.sk) === cleanToFind);
+      return liveAgents.find(a => getCleanPhone(a.id || a.sk) === cleanToFind);
   };
 
   const getAgentColor = (agentId) => {
     if (!agentId) return '#64748b'; 
-    const index = agents.findIndex(a => getCleanPhone(a.id || a.sk) === getCleanPhone(agentId)); 
+    const index = liveAgents.findIndex(a => getCleanPhone(a.id || a.sk) === getCleanPhone(agentId)); 
     return AGENT_COLORS[index % AGENT_COLORS.length] || '#64748b';
   };
 
-  // 🟢 SHIELDED DATA MERGE
   const displayedOrders = useMemo(() => {
       const today = getTodayString();
       const isToday = dateFilter.start === today && dateFilter.end === today;
@@ -221,18 +236,11 @@ const DeliveryOptimizer = ({
       return sourceData.map(o => {
           const currentName = getCustName(o);
           const currentPhone = getCustPhone(o);
-
-          if (!persistentInfo.current[o.sk]) {
-              persistentInfo.current[o.sk] = { name: "Customer", phone: "Unknown" };
-          }
+          if (!persistentInfo.current[o.sk]) persistentInfo.current[o.sk] = { name: "Customer", phone: "Unknown" };
           if (currentName !== "Customer") persistentInfo.current[o.sk].name = currentName;
           if (currentPhone !== "Unknown") persistentInfo.current[o.sk].phone = currentPhone;
 
-          return {
-              ...o,
-              _shieldedName: persistentInfo.current[o.sk].name,
-              _shieldedPhone: persistentInfo.current[o.sk].phone
-          };
+          return { ...o, _shieldedName: persistentInfo.current[o.sk].name, _shieldedPhone: persistentInfo.current[o.sk].phone };
       }).filter(o => {
           if (o.orderStatus === 'DELIVERED' && !showDelivered) return false;
           if (o.orderStatus === 'DELIVERING' && !showDelivering) return false;
@@ -242,23 +250,22 @@ const DeliveryOptimizer = ({
 
   const hasActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED', 'DELIVERING'].includes(o.orderStatus));
 
-  // History Fetch Effect
   useEffect(() => {
       const today = getTodayString();
       if (dateFilter.start !== today || dateFilter.end !== today) {
           if (!dateFilter.end) return; 
 
           const fetchHistory = async () => {
-              const pkToUse = phoneNbr ? `BUSINESS#${phoneNbr}` : (orders[0]?.pk); 
+              const pkToUse = phoneNbr ? (String(phoneNbr).startsWith('+') ? `BUSINESS#${phoneNbr}` : `BUSINESS#+${phoneNbr}`) : (orders[0]?.pk); 
               if (!pkToUse) return;
               setIsLoadingHistory(true);
               const startSK = `ORDER#${dateFilter.start}T00:00:00.000Z`;
               const endSK = `ORDER#${dateFilter.end}T23:59:59.999Z`;
               try {
-                  const { data } = await client.models.BusinessData.listByBusiness({
-                      pk: pkToUse,
-                      sk: { between: [startSK, endSK] }
-                  });
+                  const { data } = await client.models.BusinessData.listByBusiness(
+                    { pk: pkToUse, sk: { between: [startSK, endSK] } },
+                    { authMode: 'apiKey'}
+                  );
                   setFetchedHistory(data);
               } catch (e) { console.error("History Fetch Error", e); } 
               finally { setIsLoadingHistory(false); }
@@ -282,18 +289,16 @@ const DeliveryOptimizer = ({
       try {
           const phoneNbrPk = String(order.pk).replace('BUSINESS#', '');
           const orderIdPart = String(order.sk).replace('ORDER#', '');
-          
           const targetPk = `ORDER#${phoneNbrPk}#${orderIdPart}`;
 
-          const { data: lineItems } = await client.models.BusinessData.listByBusiness({
-              pk: targetPk,
-              sk: { beginsWith: 'ITEM#' },
-          });
+          const { data: lineItems } = await client.models.BusinessData.listByBusiness(
+              { pk: targetPk, sk: { beginsWith: 'ITEM#' } },
+              { authMode: 'apiKey' }
+          );
           
           setOrderItemsCache(prev => ({ ...prev, [order.sk]: lineItems }));
           return lineItems;
       } catch (err) { 
-          console.error("Item Fetch Error:", err);
           return []; 
       }
   };
@@ -301,17 +306,11 @@ const DeliveryOptimizer = ({
   const handleOrderClick = async (e, order) => {
       if (e && e.stopPropagation) e.stopPropagation(); 
       if (!order) return;
-
-      if (activeTooltipId === order.sk) { 
-          setActiveTooltipId(null); 
-          return; 
-      }
-      
+      if (activeTooltipId === order.sk) { setActiveTooltipId(null); return; }
       setActiveTooltipId(order.sk);
       await fetchOrderItems(order);
   };
 
-  // Fix Z-Index & Sliding styles
   useEffect(() => {
     const styleId = 'popup-z-index-fix';
     if (!document.getElementById(styleId)) {
@@ -328,7 +327,6 @@ const DeliveryOptimizer = ({
     }
   }, []);
 
-  // --- MAP INIT & LIVE TRACKING ---
   useEffect(() => {
     let isMounted = true;
     async function initializeMap() {
@@ -416,14 +414,8 @@ const DeliveryOptimizer = ({
 
             const enrichedOrders = await Promise.all(relevantOrders.map(async (order) => {
                 try {
-                    const phoneNbrPk = String(order.pk).replace('BUSINESS#', '');
-                    const orderIdPart = String(order.sk).replace('ORDER#', '');
-                    
-                    const { data: lineItems } = await client.models.BusinessData.listByBusiness({
-                        pk: `ORDER#${phoneNbrPk}#${orderIdPart}`,
-                        sk: { beginsWith: 'ITEM#' },
-                    });
-                    return { ...order, itemsList: lineItems };
+                    const items = await fetchOrderItems(order);
+                    return { ...order, itemsList: items };
                 } catch { return { ...order, itemsList: [] }; }
             }));
 
@@ -431,7 +423,6 @@ const DeliveryOptimizer = ({
             if (enrichedOrders.length > 0) {
                 contentHtml = enrichedOrders.map(o => {
                     const icon = '🚚';
-                    // 🟢 FIX: Clean UUID split for Agent Popup
                     const shortId = String(o.sk || "").replace('ORDER#', '').split('#')[0].split('.')[0];
                     const boxColor = '#3b82f6';
                     const bg = '#eff6ff';
@@ -504,10 +495,7 @@ const DeliveryOptimizer = ({
           }
           token = response.NextToken;
         } while (token);
-      } catch (error) { 
-          console.warn("Location Tracking Unavailable or IAM Error:", error.message); 
-      }
-      
+      } catch (error) { }
       if (isMountedRef.current) setTimeout(fetchPositions, REFRESH_RATE_MS);
     };
     fetchPositions();
@@ -558,7 +546,6 @@ const DeliveryOptimizer = ({
       animate();
   };
 
-  // --- ORDER PLOTTING ---
   useEffect(() => { 
       if (mapInstance.current) plotOrdersOnMap(displayedOrders, mapInstance.current, assignments, focusedAgentId); 
   }, [assignments, displayedOrders, focusedAgentId]); 
@@ -589,7 +576,6 @@ const DeliveryOptimizer = ({
                   border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', cursor: 'pointer'
               });
 
-              // 🟢 FIX: Clean UUID split for Map Popup Order ID
               const shortId = String(order.sk || "").replace('ORDER#', '').split('#')[0].split('.')[0];
               const popup = new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(`<div>Loading...</div>`);
               const marker = new maplibregl.Marker({ element: el }).setLngLat([loc.longitude, loc.latitude]).setPopup(popup).addTo(map);
@@ -606,7 +592,6 @@ const DeliveryOptimizer = ({
                   const custName = order._shieldedName;
                   const agentName = agentObj ? agentObj.name : "Unassigned";
 
-                  // 🟢 FIX: Flexbox row for Name and Phone, matching Agent color!
                   popup.setHTML(`
                     <div style="font-family: sans-serif; font-size: 12px; min-width: 180px; color: #334155;">
                         <div style="background:${status === 'DELIVERING' ? '#eff6ff' : '#f0fdf4'}; padding:6px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
@@ -636,7 +621,7 @@ const DeliveryOptimizer = ({
     try {
       const session = await fetchAuthSession();
       const geoClient = new GeoRoutesClient({ region: outputs.geo.aws_region, credentials: session.credentials });
-      const validAgents = agents.filter(a => parseLocation(a.location));
+      const validAgents = liveAgents.filter(a => parseLocation(a.location));
       const orderMetrics = {};
       
       const activeOrders = displayedOrders.filter(o => ['ORDERED', 'PREPARED'].includes(o.orderStatus));
@@ -669,7 +654,7 @@ const DeliveryOptimizer = ({
                 ? JSON.parse(response.data.proposal) 
                 : response.data.proposal;
           }
-      } catch(e) { console.error("Failed to parse proposal JSON", e); }
+      } catch(e) {}
 
       setOptimizationMetrics(orderMetrics); 
       
@@ -743,8 +728,12 @@ const DeliveryOptimizer = ({
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-4 text-center ">Dispatch</h2>
                 {hasActiveOrders ? (
                   <div className="flex gap-2 w-full flex-col">
-                    <button onClick={runOptimization} disabled={loading || saving} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg h-10 flex items-center justify-center text-sm transition-all">{loading ? "Calculating..." : "⚡️ Auto-Assign"}</button>
-                    <button onClick={handleDispatch} disabled={loading || saving || Object.keys(assignments).length === 0} className={`text-white font-bold rounded-lg h-10 flex items-center justify-center text-sm transition-all ${Object.keys(assignments).length > 0 ? 'bg-blue-600 hover:bg-blue-500 shadow-lg' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>{saving ? "Processing..." : "📦 Confirm"}</button>
+                    <button onClick={runOptimization} disabled={loading || saving || isFetchingAgents} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg h-10 flex items-center justify-center text-sm transition-all">
+                        {loading || isFetchingAgents ? "Calculating..." : "⚡️ Auto-Assign"}
+                    </button>
+                    <button onClick={handleDispatch} disabled={loading || saving || Object.keys(assignments).length === 0} className={`text-white font-bold rounded-lg h-10 flex items-center justify-center text-sm transition-all ${Object.keys(assignments).length > 0 ? 'bg-blue-600 hover:bg-blue-500 shadow-lg' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                        {saving ? "Processing..." : "📦 Confirm"}
+                    </button>
                   </div>
                 ) : <div className="text-center py-2 text-slate-400 text-sm bg-slate-700/30 rounded border border-slate-600">No active orders.</div>}
             </div>
@@ -782,7 +771,6 @@ const DeliveryOptimizer = ({
                   const isDelivered = o.orderStatus === 'DELIVERED';
                   const isPending = assignments[o.sk] !== undefined;
 
-                  // 🟢 FIX: Clean UUID split for Sidebar Orders
                   const shortId = String(o.sk || "").replace('ORDER#', '').split('#')[0].split('.')[0];
                   
                   const custPhone = formatPhone(o._shieldedPhone);
@@ -810,7 +798,6 @@ const DeliveryOptimizer = ({
                                   <p className="text-[10px] text-slate-400 font-mono">Agent: <span style={{color: color, fontWeight: 'bold'}}>{agentPhoneStr}</span></p>
                               </div>
                               
-                              {/* Tooltip for delivered items */}
                               {activeTooltipId === o.sk && (
                                   <div onClick={(e) => e.stopPropagation()} className="absolute top-full left-0 right-0 mt-2 bg-slate-700 p-3 rounded-lg shadow-2xl border border-slate-600 z-[5000] animate-fade-in cursor-default">
                                       <h5 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Order Items</h5>
@@ -846,7 +833,7 @@ const DeliveryOptimizer = ({
                             <p className="text-[10px] text-slate-500">{shortId}</p>
                       </div>
                       
-                      {/* Interactive Dropdown */}
+                      {/* 🟢 NEW DROPDOWN: Uses liveAgents directly */}
                       <select 
                         value={strictSelectValue} 
                         onClick={(e) => e.stopPropagation()} 
@@ -854,10 +841,9 @@ const DeliveryOptimizer = ({
                         className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1.5 outline-none focus:border-blue-500 hover:bg-slate-700 transition-colors"
                       >
                           <option value="" disabled>Select Agent</option>
-                          {agents.map((agent, aIndex) => (<option key={`ag-${aIndex}`} value={agent.id || agent.sk}>{agent.name}</option>))}
+                          {liveAgents.map((agent, aIndex) => (<option key={`ag-${aIndex}`} value={agent.id || agent.sk}>{agent.name}</option>))}
                       </select>
 
-                      {/* Tooltip */}
                       {activeTooltipId === o.sk && (
                           <div onClick={(e) => e.stopPropagation()} className="absolute top-full left-0 right-0 mt-2 bg-slate-700 p-3 rounded-lg shadow-2xl border border-slate-600 z-[5000] animate-fade-in cursor-default">
                               <h5 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Order Items</h5>

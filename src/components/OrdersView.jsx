@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { client } from '../DataHook/amplifyClient';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import DeliveryOptimizer from './DeliveryOptimizer';
-
+import OrderDetailModal from './OrderDetailModal';
 // --- Config & Helpers ---
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 const ALL_STATUSES = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'];
@@ -32,7 +32,6 @@ const parseLocation = (loc) => {
   }
 };
 
-// 🟢 OMNI-EXTRACTORS FOR CUSTOMER DATA
 const getCustName = (order) => {
     try {
         let n = order.name || order.customerName || order.customer;
@@ -84,7 +83,8 @@ const TABS = [
   { id: 'all', label: 'All History' }
 ];
 
-const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch, onDispatch, loadingMap }) => (
+// 🟢 REFACTORED OrderFilters: Removed loadingMap entirely. Button just opens the view.
+const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch, onDispatch }) => (
   <div className="flex flex-col space-y-4 mb-6">
     <div className="flex bg-slate-800 p-1.5 rounded-2xl border border-slate-700 shadow-inner">
       {TABS.map((tab) => (
@@ -105,28 +105,13 @@ const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch,
 
     <button
       onClick={onDispatch}
-      disabled={loadingMap}
-      className={classNames(
-        "w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl transition-all active:scale-[0.98]",
-        loadingMap 
-          ? "bg-slate-700 text-slate-500 cursor-not-allowed" 
-          : "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:brightness-110"
-      )}
+      className="w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl transition-all active:scale-[0.98] bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:brightness-110"
     >
       <div className="flex items-center justify-center gap-2">
-        {loadingMap ? (
-          <>
-            <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-            <span>Locating Agents...</span>
-          </>
-        ) : (
-          <>
-            <span>📍 Dispatch Center</span>
-            <span className="bg-white/20 px-2 py-0.5 rounded-lg text-[10px]">
-              {readyForDispatch.length} Ready
-            </span>
-          </>
-        )}
+        <span>📍 Dispatch Center</span>
+        <span className="bg-white/20 px-2 py-0.5 rounded-lg text-[10px]">
+          {readyForDispatch.length} Ready
+        </span>
       </div>
     </button>
   </div>
@@ -162,7 +147,6 @@ const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
 
 const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, onClick, getAgentName, updatingId }) => {
   const isActuallyPickup = order.isPickUp === true || order.isPickUp === 1 || String(order.isPickUp).toLowerCase() === 'true';
-  
   const displayName = getCustName(order);
   const displayPhone = formatPhone(getCustPhone(order));
 
@@ -180,17 +164,12 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
           <p className="font-bold text-cyan-500 truncate text-sm">
             ORD: {order.sk.replace('ORDER#', '').split('.')[0]}
           </p>
-          {isActuallyPickup && (
-            <div className="flex-shrink-0">
-              <PickUpBadge />
-            </div>
-          )}
+          {isActuallyPickup && <div className="flex-shrink-0"><PickUpBadge /></div>}
         </div>
-        
         <p className="text-sm truncate flex items-center">
             <span className="font-bold text-slate-300">{displayName}</span>
             {displayPhone !== "Unknown" && (
-                <span className="ml-2 font-mono text-orange-500 text-[12px]  bg-slate-900/50 px-1.5 py-0.5 rounded">
+                <span className="ml-2 font-mono text-orange-500 text-[12px] bg-slate-900/50 px-1.5 py-0.5 rounded">
                     📞 {displayPhone}
                 </span>
             )}
@@ -199,10 +178,7 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
 
       {['DELIVERING', 'DELIVERED'].includes(order.orderStatus) && (
         <div className="flex flex-col items-center justify-center mx-4 min-w-[120px]">
-          <span className={classNames(
-            "text-[10px] font-bold uppercase tracking-wider mb-0.5",
-            order.orderStatus === 'DELIVERING' ? "text-orange-400" : "text-green-400"
-          )}>
+          <span className={classNames("text-[10px] font-bold uppercase tracking-wider mb-0.5", order.orderStatus === 'DELIVERING' ? "text-orange-400" : "text-green-400")}>
             {order.orderStatus === 'DELIVERING' ? 'Out for Delivery' : 'Delivered By'}
           </span>
           <div className="flex flex-col items-center">
@@ -215,12 +191,7 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
 
       <div className="text-right flex-shrink-0 ml-4 flex flex-col items-end gap-2">
         <p className="font-black text-orange-400">BD {order.totalAmount?.toFixed(3) || '0.000'}</p>
-        <OrderStatusEditor
-          order={order}
-          isEditing={isEditing}
-          onEdit={setEditingId}
-          onStatusChange={onStatusChange}
-        />
+        <OrderStatusEditor order={order} isEditing={isEditing} onEdit={setEditingId} onStatusChange={onStatusChange} />
       </div>
     </div>
   );
@@ -228,9 +199,7 @@ const OrderCard = React.memo(({ order, isEditing, setEditingId, onStatusChange, 
 
 const generateDistinctColors = (count) => {
   const colors = [];
-  for (let i = 0; i < count; i++) {
-    colors.push(`hsl(${Math.floor((360 / count) * i)}, 70%, 50%)`);
-  }
+  for (let i = 0; i < count; i++) colors.push(`hsl(${Math.floor((360 / count) * i)}, 70%, 50%)`);
   return colors;
 };
 
@@ -245,43 +214,28 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
   
   const [nextToken, setNextToken] = useState(null);
   const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
-  
-  const [liveAgents, setLiveAgents] = useState([]); 
-  const [loadingMap, setLoadingMap] = useState(false);
-  const [dispatchProposal, setDispatchProposal] = useState(null);
 
   const isMounted = useRef(true);
-  
+  const [selectedOrder, setSelectedOrder] = useState(null);
   useEffect(() => {
     isMounted.current = true;
     return () => { isMounted.current = false; };
   }, []);
 
-  // 1. Fetch Orders & Subscribe (🔥 WEBSOCKET FIX APPLIED HERE)
   useEffect(() => {
     if (!phoneNbr) return;
     setLoading(true);
-
     const subscriptions = []; 
-    
-    // 🟢 BULLETPROOF PHONE: Guarantees it exactly matches DynamoDB (with '+')
     const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
     const businessPk = `BUSINESS#${formattedPhone}`;
     const orderPrefix = 'ORDER#';
 
     const fetchAndSubscribe = async () => {
       try {
-        // Initial Fetch
         const { data, nextToken: initialToken } = await client.models.BusinessData.listByBusiness(
-          {
-            pk: businessPk,
-            sk: { beginsWith: orderPrefix },
-            sortDirection: 'DESC',
-            limit: 20
-        }, 
-          { 
-            authMode: 'apiKey' // 🟢 FIX: Moved to a separate options object!
-          });
+          { pk: businessPk, sk: { beginsWith: orderPrefix }, sortDirection: 'DESC', limit: 20 }, 
+          { authMode: 'apiKey' }
+        );
         
         if (isMounted.current) {
             setOrders(data);
@@ -289,22 +243,16 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
             setLoading(false);
         }
 
-        // 🟢 SHIELDED WEBSOCKETS WITH LOGGING
         const handleNewItem = (item) => {
           if (!isMounted.current) return;
           if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
-              console.log("⚡ REAL-TIME: New Order Arrived!", item.sk);
-              setOrders(prev => {
-                  if (prev.some(o => o.sk === item.sk)) return prev;
-                  return [item, ...prev];
-              }); 
+              setOrders(prev => prev.some(o => o.sk === item.sk) ? prev : [item, ...prev]); 
           }
         };
 
         const handleUpdateItem = (item) => {
           if (!isMounted.current) return;
           if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
-              console.log("⚡ REAL-TIME: Order Updated!", item.sk);
               setOrders(prev => prev.map(o => (o.sk === item.sk ? item : o)));
           }
         };
@@ -312,49 +260,25 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
         const handleDeleteItem = (item) => {
           if (!isMounted.current) return;
           if (item && item.pk === businessPk && String(item.sk).startsWith(orderPrefix)) {
-              console.log("⚡ REAL-TIME: Order Deleted!", item.sk);
               setOrders(prev => prev.filter(o => o.sk !== item.sk));
           }
         };
 
-        // 🟢 WEBSOCKET CONNECTIONS (PROPER GEN 2 SYNTAX)
-        subscriptions.push(client.models.BusinessData.onCreate(undefined, { authMode: 'apiKey' }).subscribe({ 
-            next: handleNewItem,
-            error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (CREATE):", err)
-        }));
-        
-        subscriptions.push(client.models.BusinessData.onUpdate(undefined, { authMode: 'apiKey' }).subscribe({ 
-            next: handleUpdateItem,
-            error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (UPDATE):", err)
-        }));
-        
-        subscriptions.push(client.models.BusinessData.onDelete(undefined, { authMode: 'apiKey' }).subscribe({ 
-            next: handleDeleteItem,
-            error: (err) => console.error("🔴 WEBSOCKET CONNECT ERROR (DELETE):", err)
-        }));
+        subscriptions.push(client.models.BusinessData.onCreate(undefined, { authMode: 'apiKey' }).subscribe({ next: handleNewItem }));
+        subscriptions.push(client.models.BusinessData.onUpdate(undefined, { authMode: 'apiKey' }).subscribe({ next: handleUpdateItem }));
+        subscriptions.push(client.models.BusinessData.onDelete(undefined, { authMode: 'apiKey' }).subscribe({ next: handleDeleteItem }));
 
       } catch (err) { 
-          if (isMounted.current) {
-              setError(err.message); 
-              setLoading(false);
-          }
+          if (isMounted.current) { setError(err.message); setLoading(false); }
       } 
     };
 
     fetchAndSubscribe();
-    
-    return () => {
-      subscriptions.forEach(sub => sub.unsubscribe());
-    };
+    return () => { subscriptions.forEach(sub => sub.unsubscribe()); };
   }, [phoneNbr]);
 
-  // Computed Values
   const sortedOrders = useMemo(() => {
-    return [...orders].sort((a, b) => {
-      const dateA = new Date(a.orderDate || 0).getTime();
-      const dateB = new Date(b.orderDate || 0).getTime();
-      return dateB - dateA;
-    });
+    return [...orders].sort((a, b) => new Date(b.orderDate || 0).getTime() - new Date(a.orderDate || 0).getTime());
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
@@ -366,13 +290,9 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
   }, [sortedOrders, filter]);
 
   const readyForDispatch = useMemo(() => {
-    return sortedOrders
-      .filter(o => o.orderStatus === 'PREPARED' && o.location !== null)
-      .map(order => ({
-        ...order, 
-        location: parseLocation(order.location),
-        customer: getCustName(order),
-      }));
+    return sortedOrders.filter(o => o.orderStatus === 'PREPARED' && o.location !== null).map(order => ({
+        ...order, location: parseLocation(order.location), customer: getCustName(order),
+    }));
   }, [sortedOrders]);
 
   const allMapOrders = useMemo(() => {
@@ -380,71 +300,10 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     return sortedOrders
       .filter(o => ['PREPARED', 'DELIVERING', 'DELIVERED'].includes(o.orderStatus) && !o.isPickUp && (o.createdAt ? o.createdAt >= cutoffTime : true) && o.location !== null)
       .map(order => ({
-        ...order, 
-        location: parseLocation(order.location),
-        customer: getCustName(order),
-        pickupLocation: parseLocation(order.pickupLocation), 
-        restaurantLocation: parseLocation(businessLocation), 
-        itemsNbr: order.itemsNbr || 1,
-        totalAmount: order.totalAmount || 0
+        ...order, location: parseLocation(order.location), customer: getCustName(order), pickupLocation: parseLocation(order.pickupLocation), 
+        restaurantLocation: parseLocation(businessLocation), itemsNbr: order.itemsNbr || 1, totalAmount: order.totalAmount || 0
       }));
   }, [sortedOrders, businessLocation]);
-
-  const handleDispatch = async (currentAgents) => {
-    try {
-      console.log("🤖 Calculating Optimal Routes...");
-      const formattedAgents = currentAgents.map(a => ({
-        id: a.id, location: a.location, currentLoad: a.currentLoad || 0, maxCapacity: a.maxCapacity || 10, deliveryDurationRemaining: 0 
-      }));
-      const formattedOrders = readyForDispatch.map(o => ({
-        sk: o.sk, restaurantLocation: parseLocation(businessLocation), pickupLocation: parseLocation(o.pickupLocation), size: 'REGULAR' 
-      }));
-
-      const { data } = await client.queries.optimizeDelivery({
-        agents: JSON.stringify(formattedAgents),
-        orders: JSON.stringify(formattedOrders),
-        restaurantLocation: JSON.stringify(parseLocation(businessLocation))
-      });
-
-      if (data && isMounted.current) {
-        setDispatchProposal(data); 
-      }
-    } catch (err) {
-      console.error("❌ Dispatch Error:", err);
-    }
-  };
-
-  const fetchLiveAgentLocations = async () => {
-    setLoadingMap(true);
-    try {
-        const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
-        const { data: allProfiles } = await client.models.BusinessData.listByBusiness({
-            pk: `BUSINESS#${formattedPhone}`,
-            sk: { beginsWith: 'AGENT#' }
-        });
-
-        const results = deliveryAgents.map(agent => {
-            const profile = allProfiles.find(p => p.sk === agent.sk);
-            return {
-                id: agent.sk,
-                name: agent.name,
-                maxCapacity: profile?.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
-                currentLoad: profile?.capacityLeft ? parseInt(profile.capacityLeft) : 0,
-                location: profile?.location ? parseLocation(profile.location) : parseLocation(agent.location)
-            };
-        });
-
-        if (isMounted.current) {
-            setLiveAgents(results); 
-            await handleDispatch(results);
-            setFilter('Auto-Assign');
-        }
-    } catch (e) {
-        console.error("Error fetching live agents", e);
-    } finally {
-        if (isMounted.current) setLoadingMap(false);
-    }
-  };
 
   const fetchNextPage = useCallback(async () => {
     if (!nextToken || isFetchingNextPage) return;
@@ -452,13 +311,8 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
     try {
       const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
       const { data, nextToken: newNextToken } = await client.models.BusinessData.listByBusiness({
-        pk: `BUSINESS#${formattedPhone}`,
-        sk: { beginsWith: 'ORDER#' },
-        sortDirection: 'DESC', 
-        nextToken: nextToken,  
-        limit: 20
+        pk: `BUSINESS#${formattedPhone}`, sk: { beginsWith: 'ORDER#' }, sortDirection: 'DESC', nextToken: nextToken, limit: 20
       });
-
       if (isMounted.current) {
          setOrders(prev => {
              const newItems = data.filter(d => !prev.some(p => p.sk === d.sk));
@@ -466,19 +320,13 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
          }); 
          setNextToken(newNextToken);
       }
-    } catch (err) {
-      console.error("Pagination error:", err);
-    } finally {
-      if (isMounted.current) setIsFetchingNextPage(false);
-    }
+    } catch (err) { console.error("Pagination error:", err); } 
+    finally { if (isMounted.current) setIsFetchingNextPage(false); }
   }, [nextToken, isFetchingNextPage, phoneNbr]);
 
   const parentRef = useRef();
   const rowVirtualizer = useVirtualizer({
-    count: filteredOrders.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 92,
-    overscan: 5,
+    count: filteredOrders.length, getScrollElement: () => parentRef.current, estimateSize: () => 92, overscan: 5,
   });
 
   const agentColors = useMemo(() => generateDistinctColors(deliveryAgents.length), [deliveryAgents.length]);
@@ -487,17 +335,14 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
   useEffect(() => {
     const lastItem = virtualItems[virtualItems.length - 1];
     if (!lastItem) return;
-    if (lastItem.index >= filteredOrders.length - 5 && nextToken && !isFetchingNextPage) {
-      fetchNextPage();
-    }
+    if (lastItem.index >= filteredOrders.length - 5 && nextToken && !isFetchingNextPage) fetchNextPage();
   }, [virtualItems, filteredOrders.length, nextToken, isFetchingNextPage, fetchNextPage]);
 
   const handleStatusChange = useCallback(async (order, newStatus) => {
     if (order.orderStatus === newStatus) return setEditingId(null);
     setUpdatingId(order.sk);
-    try {
-      await client.models.BusinessData.update({ pk: order.pk, sk: order.sk, orderStatus: newStatus });
-    } catch (err) { alert('Update failed'); console.error(err); } 
+    try { await client.models.BusinessData.update({ pk: order.pk, sk: order.sk, orderStatus: newStatus }); } 
+    catch (err) { alert('Update failed'); } 
     finally { if (isMounted.current) { setUpdatingId(null); setEditingId(null); } }
   }, []);
 
@@ -517,9 +362,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
           <h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">
             Orders <span className="text-sky-500">Live</span>
           </h1>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-            Real-time Logistics Manager
-          </p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Real-time Logistics Manager</p>
         </div>
         <div className="text-right">
             <span className="text-xs font-mono text-sky-400 bg-sky-400/10 px-2 py-1 rounded border border-sky-400/20">
@@ -528,13 +371,13 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
         </div>
       </header>
 
+      {/* 🟢 ACTION: The dispatch button now simply opens the map. Map handles fetching agents. */}
       <OrderFilters 
         currentFilter={filter} 
         setFilter={setFilter} 
         hasPrepared={readyForDispatch.length} 
         readyForDispatch={readyForDispatch}
-        onDispatch={fetchLiveAgentLocations} 
-        loadingMap={loadingMap} 
+        onDispatch={() => setFilter('Auto-Assign')} 
       />
 
       {filter !== 'Auto-Assign' ? (
@@ -546,40 +389,45 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
                 return (
                   <div key={order.sk} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: virtualItem.size + 'px', transform: `translateY(${virtualItem.start}px)` }}>
                     <OrderCard
-                        order={order}
-                        isEditing={editingId === order.sk}
-                        setEditingId={setEditingId}
+                        order={order} 
+                        isEditing={editingId === order.sk} 
+                        setEditingId={setEditingId} 
                         updatingId={updatingId}
-                        onStatusChange={handleStatusChange}
+                        onStatusChange={handleStatusChange} 
                         getAgentName={getAgentName}
-                        onClick={() => !editingId && setModal({ 
-                            type: 'orderDetail', 
-                            Id: order.sk, 
-                            orderStatus: order.orderStatus, 
-                            totalAmount: order.totalAmount, 
-                            customerId: order.gsi2pk || order.phone, 
-                            customerName: getCustName(order) 
-                        })}
+                        // 🟢 3. REPLACE global setModal with local setSelectedOrder
+                        onClick={() => !editingId && setSelectedOrder(order)} 
                     />
                   </div>
                 );
               })}
             </div>
-          ) : (
-            <p className="text-slate-400 text-center mt-8">No {filter} orders found.</p>
-          )}
+          ) : <p className="text-slate-400 text-center mt-8">No {filter} orders found.</p>}
         </div>
       ) : (
         <DeliveryOptimizer
           orders={allMapOrders}
-          agents={liveAgents} 
-          proposal={dispatchProposal} 
           AGENT_COLORS={agentColors}
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
-          onAssignmentSaved={() => { /* optional refresh */ }}
           phoneNbr={phoneNbr}
         />
+      )}
+      {/* 🟢 4. RENDER THE NESTED MODAL (Just like in CustomersDetailModal) */}
+      {selectedOrder && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center">
+              <OrderDetailModal
+                  orderId={selectedOrder.sk}
+                  orderStatus={selectedOrder.orderStatus}
+                  orderTotal={selectedOrder.totalAmount}
+                  customerId={selectedOrder.gsi2pk || selectedOrder.phone}
+                  customerName={getCustName(selectedOrder)}
+                  phoneNbr={phoneNbr}
+                  agentId={selectedOrder.gsi1pk || selectedOrder.deliveryAgentId}
+                  agentName={getAgentName(selectedOrder.gsi1pk || selectedOrder.deliveryAgentId)}
+                  onClose={() => setSelectedOrder(null)}
+              />
+          </div>
       )}
     </div>
   );

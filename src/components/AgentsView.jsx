@@ -7,10 +7,11 @@ const classNames = (...classes) => classes.filter(Boolean).join(' ');
 // --- Simple Modal Component (Unchanged) ---
 const CreateAgentModal = ({ onClose, onSubmit, loading }) => {
 const [formData, setFormData] = useState({ name: '', phone: '', email: '', maxCapacity: '10' });
+
   // ✅ Validation: Check if all fields have values
   const isValid = formData.name.trim() !== '' && 
                   formData.phone.trim() !== '' && 
-                  formData.email.trim() !== '';
+                  formData.email.trim() !== '' &&
                   formData.maxCapacity.trim() !== '' &&
                   !isNaN(formData.maxCapacity) && 
                   parseInt(formData.maxCapacity) > 0;
@@ -121,6 +122,7 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
 
     // ✅ FIX 1: Add a Trigger State to force re-fetching
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [deliveryCounts, setDeliveryCounts] = useState({});
 
     // --- 1. Subscription Logic ---
     useEffect(() => {
@@ -221,57 +223,88 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
         estimateSize: () => 76,
         overscan: 5,
     });
+    
+    useEffect(() => {
+        const fetchDeliveryCounts = async () => {
+            if (!phoneNbr) return;
+            const businessPk = String(phoneNbr).startsWith('+') ? `BUSINESS#${phoneNbr}` : `BUSINESS#+${phoneNbr}`;
+
+            try {
+                // 1. Fetch ALL delivered orders for THIS business
+                const { data: deliveredOrders } = await client.models.BusinessData.listByBusiness({
+                    pk: businessPk,
+                    sk: { beginsWith: 'ORDER#' },
+                    filter: { orderStatus: { eq: 'DELIVERED' } }
+                });
+
+                // 2. Count them up by Agent ID (gsi1pk)
+                const counts = {};
+                deliveredOrders.forEach(order => {
+                    const agentId = order.gsi1pk || order.deliveryAgentId;
+                    if (agentId) {
+                        counts[agentId] = (counts[agentId] || 0) + 1;
+                    }
+                });
+
+                setDeliveryCounts(counts);
+            } catch (err) {
+                console.error("Failed to fetch delivery counts:", err);
+            }
+        };
+
+        fetchDeliveryCounts();
+    }, [phoneNbr]);
 
     const virtualItems = rowVirtualizer.getVirtualItems();
 
     if (loading && agents.length === 0) return <div className="p-8 text-center text-slate-400">Loading Agents...</div>;
-
+    
     return (
         <div className="p-4 h-full flex flex-col">
             <div className="flex justify-between items-center mb-6 bg-slate-800/30 p-4 rounded-2xl border border-slate-700/50">
-    <div>
-        <h1 className="text-2xl font-black text-orange-500 tracking-tighter uppercase">
-            Logistics
-        </h1>
-        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-            Manage Delivery Personnel
-        </p>
-    </div>
+                <div>
+                    <h1 className="text-2xl font-black text-orange-500 tracking-tighter uppercase">
+                        Logistics
+                    </h1>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                        Manage Delivery Personnel
+                    </p>
+                </div>
 
-    {/* 🚚 NEW: Delivery Agent Icon Button */}
-    <button 
-        onClick={() => setShowCreateModal(true)}
-        className="group relative flex flex-col items-center justify-center p-2 transition-all active:scale-95"
-        title="Add New Agent"
-    >
-        <div className="relative bg-orange-500/10 p-3 rounded-xl border border-orange-500/20 group-hover:bg-orange-500/20 group-hover:border-orange-500/40 transition-colors">
-            {/* Delivery Agent SVG */}
-            <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                width="32" height="32" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="#f97316" // Orange-500
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round"
-            >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            
-            {/* The Plus (+) Badge */}
-            <div className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-lg">
-                +
+                {/* 🚚 NEW: Delivery Agent Icon Button */}
+                <button 
+                    onClick={() => setShowCreateModal(true)}
+                    className="group relative flex flex-col items-center justify-center p-2 transition-all active:scale-95"
+                    title="Add New Agent"
+                >
+                    <div className="relative bg-orange-500/10 p-3 rounded-xl border border-orange-500/20 group-hover:bg-orange-500/20 group-hover:border-orange-500/40 transition-colors">
+                        {/* Delivery Agent SVG */}
+                        <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            width="32" height="32" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="#f97316" // Orange-500
+                            strokeWidth="2" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                        >
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        
+                        {/* The Plus (+) Badge */}
+                        <div className="absolute -top-1 -right-1 bg-green-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-lg">
+                            +
+                        </div>
+                    </div>
+                    <span className="text-[9px] font-black text-orange-400 mt-1 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
+                        Add Agent
+                    </span>
+                </button>
             </div>
-        </div>
-        <span className="text-[9px] font-black text-orange-400 mt-1 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
-            Add Agent
-        </span>
-    </button>
-</div>
 
             <div ref={parentRef} className="overflow-y-auto flex-1 pr-2">
                 {sortedCustomers.length > 0 ? (
@@ -304,7 +337,8 @@ const AgentsView = ({ phoneNbr, setModal, onAgentAdded }) => {
                                         </div>
                                         <div className="text-right">
                                             <p className="text-slate-400 text-xs">Deliveries</p>
-                                            <p className="font-bold text-white">{agent.itemsNbr || 0}</p>
+                                            {/* 🟢 FIXED: Used deliveryCounts map based on agent.sk */}
+                                            <p className="font-bold text-white">{deliveryCounts[agent.sk] || 0}</p>
                                         </div>
                                     </div>
                                 </div>
