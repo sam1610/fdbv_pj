@@ -20,6 +20,32 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     cutoffDate.setHours(cutoffDate.getHours() - 24 * filterDays);
     const minSk = `ORDER#${cutoffDate.toISOString()}`;
     const [menuCategories, setMenuCategories] = useState([]);
+
+    // --- VIP Marketing State ---
+    const [vipCustomers, setVipCustomers] = useState([]);
+    const [isMarketingOpen, setIsMarketingOpen] = useState(false);
+    const [sendingOfferTo, setSendingOfferTo] = useState({}); // Tracks which button is spinning
+
+    // Fetch VIP Customers
+    useEffect(() => {
+        if (!phoneNbr) return;
+
+        const fetchVIPs = async () => {
+            try {
+                const { data } = await client.models.BusinessData.listByBusiness({
+                    pk: `BUSINESS#${phoneNbr}`,
+                    sk: { beginsWith: 'CUSTOMER#' }
+                });
+
+                // 🟢 Only grab customers who opted into marketing!
+                const vips = data.filter(customer => customer.acceptsMarketing === true);
+                setVipCustomers(vips);
+            } catch (err) {
+                console.error("Error fetching VIPs:", err);
+            }
+        };
+        fetchVIPs();
+    }, [phoneNbr]);
     // ✅ NEW: Fetch available Menu Categories from ITEM# records
     useEffect(() => {
         if (!phoneNbr) return;
@@ -177,6 +203,36 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     };
     if (loading) return <div className="p-4 text-center text-slate-400">Loading Dashboard...</div>;
     if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
+    // 🟢 THE MARKETING TRIGGER
+    const handleSendOffer = async (customer) => {
+        setSendingOfferTo(prev => ({ ...prev, [customer.phone]: true }));
+        try {
+            const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
+            
+            const result = await client.mutations.sendVipOffer({
+                businessPhone: formattedPhone, 
+                customerPhone: customer.phone,
+                customerName: customer.name || "VIP",
+                favoriteItem: "Double Cheese Burger", // Note: You can make this dynamic later based on their order history!
+                offerText: "a 15% discount on your next order",
+                offerType: "PERCENTAGE",
+                offerValue: 15.0,
+                imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80", 
+                validForHours: 48 
+            });
+
+            if (result.data) {
+                alert(`✅ Offer sent to ${customer.name || customer.phone}!`);
+            } else {
+                alert("❌ Failed to send offer.");
+            }
+        } catch (error) {
+            console.error("Mutation failed:", error);
+            alert("Network error.");
+        } finally {
+            setSendingOfferTo(prev => ({ ...prev, [customer.phone]: false }));
+        }
+    };
 
     return (
         <div className="p-4 space-y-6">
@@ -276,6 +332,59 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                             <p className="col-span-full text-center text-slate-500 py-8">
                                 No menu items found. Please add items to your catalogue first.
                             </p>
+                        )}
+                    </div>
+                </div>
+            </div>
+            {/* --- COLLAPSIBLE VIP MARKETING --- */}
+            <div className="border border-slate-700 rounded-lg overflow-hidden transition-all duration-300">
+                <button
+                    onClick={() => setIsMarketingOpen(!isMarketingOpen)}
+                    className="w-full flex items-center justify-between bg-slate-800 p-4 hover:bg-slate-750 transition"
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="text-xl">🎁</span>
+                        <div className="text-left">
+                            <h2 className="text-lg font-bold text-white">VIP Reactivation</h2>
+                            <p className="text-xs text-slate-400">Send direct WhatsApp offers to your opted-in customers</p>
+                        </div>
+                    </div>
+                    <div className={`transform transition-transform duration-300 ${isMarketingOpen ? 'rotate-180' : ''}`}>
+                        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </button>
+
+                <div className={`bg-slate-800/50 transition-all duration-500 ease-in-out ${isMarketingOpen ? 'max-h-[1000px] opacity-100 p-4 border-t border-slate-700 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                    
+                    <div className="space-y-3">
+                        {vipCustomers.length > 0 ? (
+                            vipCustomers.map(customer => (
+                                <div key={customer.sk} className="flex items-center justify-between bg-slate-900/80 p-4 rounded-lg border border-slate-700">
+                                    <div>
+                                        <p className="text-white font-semibold">{customer.name !== "_._" ? customer.name : "Customer"}</p>
+                                        <p className="text-sm text-slate-400">{customer.phone}</p>
+                                        <p className="text-xs text-indigo-400 mt-1">Total Spent: {customer.totalAmount || 0} BD</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleSendOffer(customer)}
+                                        disabled={sendingOfferTo[customer.phone]}
+                                        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+                                    >
+                                        {sendingOfferTo[customer.phone] ? (
+                                            <><span>Sending...</span><div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div></>
+                                        ) : (
+                                            <>
+                                                <span>Send 15% Offer</span>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-center text-slate-500 py-6">No VIP customers found who have opted into marketing.</p>
                         )}
                     </div>
                 </div>
