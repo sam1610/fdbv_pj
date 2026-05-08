@@ -5,8 +5,8 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
-// Ensure this matches your actual table name environment variable in Amplify Gen 2
-const TABLE_NAME = process.env.AMPLIFY_DATA_BUSINESSDATA_TABLE_NAME || process.env.BusinessDataTableName;
+// 🟢 FIX: Look for the exact environment variable we injected in backend.ts
+const TABLE_NAME = process.env.BUSINESS_DATA_TABLE;
 
 export const handler = async (event: any) => {
     console.log("Event Arguments:", event.arguments);

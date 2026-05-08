@@ -8,13 +8,18 @@ import { createAgentUser } from './functions/createAgentUser/resource';
 import { generatePlanHandler } from './functions/generate-plan/resource';
 import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { registerBusinessPhone } from './functions/registerBusinessPhone/resource';
+
+// 🟢 1. IMPORT THE NEW VIP FUNCTION
+import { sendVipOffer } from './functions/sendVipOffer/resource';
+
 const backend = defineBackend({
   auth,
   data,
   optimizeDelivery,
   createAgentUser, 
   generatePlanHandler,
-  registerBusinessPhone
+  registerBusinessPhone,
+  sendVipOffer // 🟢 2. ADD IT TO THE BACKEND
 });
 
 // backend.registerBusinessPhone.addEnvironment('WABA_ID', secret('WABA_ID'));
@@ -37,6 +42,7 @@ backend.registerBusinessPhone.resources.lambda.addToRolePolicy(
     resources: [backend.data.resources.graphqlApi.arn + '/*'],
   })
 );
+
 const businessTable = backend.data.resources.tables['BusinessData'];
 if (businessTable) {
   const cfnTable = businessTable.node.defaultChild as CfnTable;
@@ -48,6 +54,7 @@ if (businessTable) {
     };
   }
 }
+
 // 1. Give the Lambda the Table Name so it can run QueryCommands
 backend.generatePlanHandler.addEnvironment(
   'AMPLIFY_DATA_TABLE_NAME', 
@@ -122,11 +129,6 @@ const myMap = new CfnMap(geoStack, 'DeliveryMap', {
   pricingPlan: 'RequestBasedUsage',
 });
 
-// const myTracker = new CfnTracker(geoStack, 'DeliveryTracker', {
-//   trackerName: uniqueTrackerName,
-//   pricingPlan: 'RequestBasedUsage',
-//   positionFiltering: 'TimeBased', // Optimizes cost by ignoring jitter
-// });
 const myTracker = new CfnTracker(geoStack, 'DeliveryTracker', {
   trackerName: uniqueTrackerName, 
   positionFiltering: 'TimeBased', // (Optional) Keeps cost low by filtering jitter
@@ -164,12 +166,11 @@ backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(routesPolic
 Object.values(backend.auth.resources.groups).forEach((groupResource) => {
   groupResource.role.addToPrincipalPolicy(routesPolicy);
 });
+
 // 4. Grant Map Permissions
 backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(geoPolicy);
 backend.auth.resources.unauthenticatedUserIamRole.addToPrincipalPolicy(geoPolicy);
 backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(trackerPolicy);
-
-
 
 Object.values(backend.auth.resources.groups).forEach((groupResource) => {
   groupResource.role.addToPrincipalPolicy(geoPolicy);
@@ -202,3 +203,13 @@ backend.optimizeDelivery.resources.lambda.addToRolePolicy(new PolicyStatement({
   actions: ['geo-routes:CalculateRouteMatrix'],
   resources: ['*'],
 }));
+
+// ====================================================
+// 🟢 3. VIP OFFER PERMISSIONS & CONFIGURATION
+// ====================================================
+
+// Grant the VIP Offer Lambda permission to Read and Write to the BusinessData table
+businessTable.grantReadWriteData(backend.sendVipOffer.resources.lambda);
+
+// Pass the exact DynamoDB Table Name as an Environment Variable to the Lambda
+backend.sendVipOffer.addEnvironment("BUSINESS_DATA_TABLE", businessTable.tableName);
