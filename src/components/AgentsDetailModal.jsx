@@ -78,12 +78,16 @@ import { useEntityList } from '../DataHook/useEntityList';
 import { client } from '../DataHook/amplifyClient';
 
 const AgentsDetailModal = ({ IdAgent, agentName, phoneNbr, onClose }) => {
+    
+    // 🟢 FIX: Moved businessPk declaration to the VERY TOP of the component
+    const businessPk = String(phoneNbr).startsWith('+') ? `BUSINESS#${phoneNbr}` : `BUSINESS#+${phoneNbr}`;
+
     // 1. Fetch the Agent's Orders
     const { data: lineItems, loading } = useEntityList(
         {
             gsi1pk: IdAgent, 
             sk: { beginsWith: 'ORDER#' },
-            filter: { pk: { eq: businessPk } }, // 🟢 NEW: Strictly isolates orders to THIS restaurant
+            filter: { pk: { eq: businessPk } }, // ✅ Safe to use here now
             sortDirection: 'DESC'
         }, 
         "ByAgent"
@@ -92,8 +96,6 @@ const AgentsDetailModal = ({ IdAgent, agentName, phoneNbr, onClose }) => {
     // 2. Local State for the Agent's Profile Data
     const [agentProfile, setAgentProfile] = useState(null);
     const [isUpdating, setIsUpdating] = useState(false);
-
-    const businessPk = String(phoneNbr).startsWith('+') ? `BUSINESS#${phoneNbr}` : `BUSINESS#+${phoneNbr}`;
 
     // 3. Fetch the specific Agent Profile to check 'stockStatus'
     useEffect(() => {
