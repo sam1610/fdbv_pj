@@ -89,23 +89,45 @@ export const handler = async (event: any) => {
         if (!allCustomers || allCustomers.length === 0) return [];
 
         // 4️⃣ FILTER: Apply RFM Rules
+        // 4️⃣ FILTER: Apply RFM Rules with Detailed Logging
         const qualifiedVIPs = allCustomers.filter(c => {
-            if (!c.acceptsMarketing) return false;
-            if (c.activeOfferType) return false; 
+            const phoneStr = c.phone || "Unknown";
             
+            if (!c.acceptsMarketing) { 
+                console.log(`❌ ${phoneStr} rejected: acceptsMarketing is false or missing.`); 
+                return false; 
+            }
+            if (c.activeOfferType) { 
+                console.log(`❌ ${phoneStr} rejected: Already has an active offer.`); 
+                return false; 
+            }
             if (c.lastOfferSentAt) {
                 const daysSinceLastOffer = Math.floor((now - new Date(c.lastOfferSentAt).getTime()) / (1000 * 3600 * 24));
-                if (daysSinceLastOffer < 30) return false; 
+                if (daysSinceLastOffer < 30) { 
+                    console.log(`❌ ${phoneStr} rejected: In 30-day cooldown (sent ${daysSinceLastOffer} days ago).`); 
+                    return false; 
+                }
             }
-
-            if ((c.totalAmount || 0) < minSpent) return false;
-            if ((c.orderCount || 0) < minOrders) return false;
+            if ((c.totalAmount || 0) < minSpent) { 
+                console.log(`❌ ${phoneStr} rejected: totalAmount (${c.totalAmount || 0}) is less than ${minSpent}.`); 
+                return false; 
+            }
+            if ((c.orderCount || 0) < minOrders) { 
+                console.log(`❌ ${phoneStr} rejected: orderCount (${c.orderCount || 0}) is less than ${minOrders}. (Note: Old customers might need a new order to trigger this field)`); 
+                return false; 
+            }
+            if (!c.lastOrderDate) { 
+                console.log(`❌ ${phoneStr} rejected: lastOrderDate is missing. This is an old record from before crm.js was updated.`); 
+                return false; 
+            }
             
-            if (!c.lastOrderDate) return false;
             const daysAbsent = Math.floor((now - new Date(c.lastOrderDate).getTime()) / (1000 * 3600 * 24));
+            if (daysAbsent < churnDaysMin || daysAbsent > churnDaysMax) { 
+                console.log(`❌ ${phoneStr} rejected: daysAbsent is ${daysAbsent}, which is not between ${churnDaysMin} and ${churnDaysMax}.`); 
+                return false; 
+            }
             
-            if (daysAbsent < churnDaysMin || daysAbsent > churnDaysMax) return false;
-            
+            console.log(`✅ ${phoneStr} PASSED ALL RULES! Added to AI List.`);
             c.daysAbsent = daysAbsent;
             return true;
         });
