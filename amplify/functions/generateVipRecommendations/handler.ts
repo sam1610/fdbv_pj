@@ -32,11 +32,16 @@ export const handler = async (event: any) => {
             
             if (settingsItem && settingsItem.location) {
                 try {
-                    const parsed = JSON.parse(settingsItem.location);
-                    minSpent = parsed.minSpent || 50;
-                    minOrders = parsed.minOrders || 3;
-                    churnDaysMin = parsed.churnDaysMin || 14;
-                    churnDaysMax = parsed.churnDaysMax || 45;
+                    // 🟢 FIX: Safely handle both String (AppSync format) and Object/Map (DynamoDB format)
+                    const parsed = typeof settingsItem.location === 'string' 
+                        ? JSON.parse(settingsItem.location) 
+                        : settingsItem.location;
+                    
+                    // 🟢 Force them to be numbers in case DynamoDB passes them as stringified numbers
+                    minSpent = Number(parsed.minSpent) || 20;
+                    minOrders = Number(parsed.minOrders) || 3;
+                    churnDaysMin = Number(parsed.churnDaysMin) || 7;
+                    churnDaysMax = Number(parsed.churnDaysMax) || 20;
                 } catch (e) {
                     console.error("Error parsing marketing settings", e);
                 }
