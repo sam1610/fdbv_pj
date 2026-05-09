@@ -178,8 +178,9 @@ import { createAgentUser } from '../functions/createAgentUser/resource';
 import { generatePlanHandler } from '../functions/generate-plan/resource'; 
 import { registerBusinessPhone } from '../functions/registerBusinessPhone/resource';
 
+
 // 🟢 1. NEW IMPORT: Import the sendVipOffer function resource
-import { sendVipOffer } from '../functions/sendVipOffer/resource';
+import { sendVipOffer } from "../functions/sendVipOffer/resource";
 
 const orderStatus = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'] as const;
 
@@ -212,6 +213,7 @@ const schema = a.schema({
       activeOfferType: a.string(),      // e.g., "PERCENTAGE" or "FREE_ITEM"
       activeOfferValue: a.float(),      // e.g., 15 (for 15%)
       offerExpiresAt: a.string(),
+      lastOfferSentAt: a.datetime(),
       
       totalAmount: a.float(),
       orderStatus: a.ref('OrderStatus'),

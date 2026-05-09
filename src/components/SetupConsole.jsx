@@ -4,9 +4,7 @@ import AgentsView from './AgentsView';
 
 // ✅ GLOBAL CONSTANTS
 // Removed 'Templates' from tabs
-const TABS = ['Restaurant', 'Branches', 'Items', 'Agents'];
-
-// Helper: Parse Location Data safely
+const TABS = ['Restaurant', 'AI VIP Settings', 'Items', 'Agents'];// Helper: Parse Location Data safely
 const parseConfigLocation = (loc) => {
     if (!loc) return null;
     try {
@@ -64,7 +62,7 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
                     />
                 )}
 
-                {activeTab === 'Branches' && <BranchesSection pk={businessPk} />}
+                {activeTab === 'AI VIP Settings' && <MarketingSettingsSection pk={businessPk} />}
                 {activeTab === 'Items' && <ItemsSection pk={businessPk} onUpdate={onDataChange} />}
 
                 {activeTab === 'Agents' && (
@@ -853,14 +851,162 @@ const PrivacyPolicySection = () => {
         </div>
     );
 };
-const BranchesSection = ({ pk }) => {
+// const BranchesSection = ({ pk }) => {
+//     return (
+//         <div className="p-8 bg-slate-800/40 rounded-xl border border-slate-700 text-center animate-fade-in">
+//             <div className="w-12 h-12 mx-auto bg-slate-700 rounded-full flex items-center justify-center mb-4">
+//                 <span className="text-xl">🏪</span>
+//             </div>
+//             <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest mb-2">Branch Management</h2>
+//             <p className="text-slate-400 text-xs">Branch configuration UI is coming soon.</p>
+//         </div>
+//     );
+// };
+
+// =========================================================
+// 4️⃣ NEW SUB-COMPONENT: MarketingSettingsSection (RFM Rules)
+// =========================================================
+const MarketingSettingsSection = ({ pk }) => {
+    const [settings, setSettings] = useState({
+        minSpent: 50,
+        minOrders: 3,
+        churnDaysMin: 14,
+        churnDaysMax: 45
+    });
+    const [saving, setSaving] = useState(false);
+    const [feedback, setFeedback] = useState({ msg: '', type: '' });
+
+    const showMessage = (msg, type = 'success') => {
+        setFeedback({ msg, type });
+        setTimeout(() => setFeedback({ msg: '', type: '' }), 4000);
+    };
+
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const { data } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
+                if (data && data.location) {
+                    const parsed = JSON.parse(data.location);
+                    setSettings({
+                        minSpent: parsed.minSpent || 50,
+                        minOrders: parsed.minOrders || 3,
+                        churnDaysMin: parsed.churnDaysMin || 14,
+                        churnDaysMax: parsed.churnDaysMax || 45
+                    });
+                }
+            } catch (e) { console.error("Failed to load marketing settings", e); }
+        };
+        fetchSettings();
+    }, [pk]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await client.models.BusinessData.update({
+                pk: pk,
+                sk: "MARKETING_SETTINGS",
+                entityType: 'Settings',
+                location: JSON.stringify(settings) 
+            });
+            // If the record doesn't exist, create it:
+            const { data } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
+            if (!data) {
+                await client.models.BusinessData.create({
+                    pk: pk,
+                    sk: "MARKETING_SETTINGS",
+                    entityType: 'Settings',
+                    location: JSON.stringify(settings)
+                });
+            }
+            showMessage("✅ AI Marketing Settings Saved!");
+        } catch (err) {
+            showMessage(`Error saving: ${err.message}`, "error");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
-        <div className="p-8 bg-slate-800/40 rounded-xl border border-slate-700 text-center animate-fade-in">
-            <div className="w-12 h-12 mx-auto bg-slate-700 rounded-full flex items-center justify-center mb-4">
-                <span className="text-xl">🏪</span>
+        <div className="max-w-2xl mx-auto space-y-6 pt-4 animate-fade-in">
+            <header className="border-l-4 border-fuchsia-500 pl-4 mb-6">
+                <h2 className="text-2xl font-bold text-white">AI Agent Parameters</h2>
+                <p className="text-xs text-fuchsia-400 mt-1">Define the rules for your automated VIP win-back campaigns.</p>
+            </header>
+
+            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl space-y-6">
+                
+                {/* 1. Monetary */}
+                <div>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                        <span>💰 Minimum Lifetime Spend (BD)</span>
+                    </label>
+                    <p className="text-[10px] text-slate-500 mb-2">The AI will only target customers who have spent at least this much.</p>
+                    <input 
+                        type="number" 
+                        value={settings.minSpent} 
+                        onChange={e => setSettings({...settings, minSpent: parseInt(e.target.value) || 0})}
+                        className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 focus:ring-2 ring-fuchsia-500 outline-none"
+                    />
+                </div>
+
+                {/* 2. Frequency */}
+                <div>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                        <span>🔄 Minimum Order Count</span>
+                    </label>
+                    <p className="text-[10px] text-slate-500 mb-2">The minimum number of separate orders placed to be considered a VIP.</p>
+                    <input 
+                        type="number" 
+                        value={settings.minOrders} 
+                        onChange={e => setSettings({...settings, minOrders: parseInt(e.target.value) || 0})}
+                        className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 focus:ring-2 ring-fuchsia-500 outline-none"
+                    />
+                </div>
+
+                {/* 3. Recency */}
+                <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                        <span>⏳ The "Churn Window" (Days Absent)</span>
+                    </label>
+                    <p className="text-[10px] text-slate-500 mb-4">Target customers who haven't ordered recently, but haven't been gone forever.</p>
+                    
+                    <div className="flex items-center gap-4">
+                        <div className="flex-1">
+                            <span className="text-[10px] text-slate-400 block mb-1">More than (Days)</span>
+                            <input 
+                                type="number" 
+                                value={settings.churnDaysMin} 
+                                onChange={e => setSettings({...settings, churnDaysMin: parseInt(e.target.value) || 0})}
+                                className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 outline-none"
+                            />
+                        </div>
+                        <span className="text-slate-500 font-bold mt-4">TO</span>
+                        <div className="flex-1">
+                            <span className="text-[10px] text-slate-400 block mb-1">Less than (Days)</span>
+                            <input 
+                                type="number" 
+                                value={settings.churnDaysMax} 
+                                onChange={e => setSettings({...settings, churnDaysMax: parseInt(e.target.value) || 0})}
+                                className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 outline-none"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <button 
+                    onClick={handleSave} 
+                    disabled={saving}
+                    className="w-full py-4 rounded-xl font-black text-white bg-fuchsia-600 hover:bg-fuchsia-500 shadow-lg transition-all"
+                >
+                    {saving ? "SAVING..." : "SAVE AI PARAMETERS"}
+                </button>
+
+                {feedback.msg && (
+                    <div className={`text-center text-[10px] font-bold py-2 rounded-lg border ${feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border-red-500/30' : 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30'}`}>
+                        {feedback.msg}
+                    </div>
+                )}
             </div>
-            <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest mb-2">Branch Management</h2>
-            <p className="text-slate-400 text-xs">Branch configuration UI is coming soon.</p>
         </div>
     );
 };

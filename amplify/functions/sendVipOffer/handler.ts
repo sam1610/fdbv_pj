@@ -76,16 +76,19 @@ export const handler = async (event: any) => {
         // 3️⃣ UPDATE CUSTOMER DIGITAL WALLET
         const expiresAt = new Date();
         expiresAt.setHours(expiresAt.getHours() + validForHours);
+        const nowIso = new Date().toISOString(); // 🟢 Get current time
 
         const updateCmd = new UpdateCommand({
             TableName: TABLE_NAME,
             Key: { pk: BUSINESS_PK, sk: CUSTOMER_SK },
-            UpdateExpression: "SET activeOfferText = :t, activeOfferType = :type, activeOfferValue = :v, offerExpiresAt = :exp",
+            // 🟢 Add lastOfferSentAt to the UpdateExpression
+            UpdateExpression: "SET activeOfferText = :t, activeOfferType = :type, activeOfferValue = :v, offerExpiresAt = :exp, lastOfferSentAt = :sent",
             ExpressionAttributeValues: {
                 ":t": offerText,
                 ":type": offerType,
                 ":v": offerValue,
-                ":exp": expiresAt.toISOString()
+                ":exp": expiresAt.toISOString(),
+                ":sent": nowIso // 🟢 Stamp the record!
             }
         });
 

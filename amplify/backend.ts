@@ -8,9 +8,12 @@ import { createAgentUser } from './functions/createAgentUser/resource';
 import { generatePlanHandler } from './functions/generate-plan/resource';
 import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { registerBusinessPhone } from './functions/registerBusinessPhone/resource';
+import { generateVipRecommendationsLambda } from './functions/generateVipRecommendations/resource';
 
 // 🟢 1. IMPORT THE NEW VIP FUNCTION
 import { sendVipOffer } from './functions/sendVipOffer/resource';
+import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 
 const backend = defineBackend({
   auth,
@@ -19,7 +22,8 @@ const backend = defineBackend({
   createAgentUser, 
   generatePlanHandler,
   registerBusinessPhone,
-  sendVipOffer // 🟢 2. ADD IT TO THE BACKEND
+  sendVipOffer,
+  generateVipRecommendationsLambda
 });
 
 // backend.registerBusinessPhone.addEnvironment('WABA_ID', secret('WABA_ID'));
@@ -213,3 +217,25 @@ businessTable.grantReadWriteData(backend.sendVipOffer.resources.lambda);
 
 // Pass the exact DynamoDB Table Name as an Environment Variable to the Lambda
 backend.sendVipOffer.addEnvironment("BUSINESS_DATA_TABLE", businessTable.tableName);
+backend.generateVipRecommendationsLambda.addEnvironment("BUSINESS_DATA_TABLE", businessTable.tableName);
+businessTable.grantReadWriteData(backend.generateVipRecommendationsLambda.resources.lambda);
+
+backend.generateVipRecommendationsLambda.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['bedrock:InvokeModel'],
+    resources: ['arn:aws:bedrock:us-east-1::foundation-model/*'], // Adjust region if your Bedrock is not us-east-1
+  })
+);
+
+// ====================================================
+// 🟢 4. EVENTBRIDGE SCHEDULE (TWICE DAILY AI AGENT)
+// ====================================================
+const vipAiFunction = backend.generateVipRecommendationsLambda.resources.lambda;
+
+// Define a schedule: Twice a day (9:00 AM and 9:00 PM UTC)
+const dailyRule = new Rule(backend.createStack('MarketingScheduleStack'), 'VipAiScheduleRule', {
+  schedule: Schedule.expression('cron(0 9,21 * * ? *)'),
+});
+
+// Add your Lambda as the target for this rule
+dailyRule.addTarget(new LambdaFunction(vipAiFunction));

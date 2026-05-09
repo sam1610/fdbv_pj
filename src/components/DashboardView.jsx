@@ -3,8 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import * as Recharts from 'recharts';
 import { client } from '../DataHook/amplifyClient';
 
-
-
 const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     // --- Existing State ---
     const [orders, setOrders] = useState([]);
@@ -21,44 +19,21 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
     const minSk = `ORDER#${cutoffDate.toISOString()}`;
     const [menuCategories, setMenuCategories] = useState([]);
 
-    // --- VIP Marketing State ---
-    const [vipCustomers, setVipCustomers] = useState([]);
+    // --- 🟢 AI VIP Marketing State ---
+    const [aiRecommendations, setAiRecommendations] = useState([]);
     const [isMarketingOpen, setIsMarketingOpen] = useState(false);
-    const [sendingOfferTo, setSendingOfferTo] = useState({}); // Tracks which button is spinning
+    const [sendingOfferTo, setSendingOfferTo] = useState({}); 
 
-    // Fetch VIP Customers
-    useEffect(() => {
-        if (!phoneNbr) return;
-
-        const fetchVIPs = async () => {
-            try {
-                const { data } = await client.models.BusinessData.listByBusiness({
-                    pk: `BUSINESS#${phoneNbr}`,
-                    sk: { beginsWith: 'CUSTOMER#' }
-                });
-
-                // 🟢 Only grab customers who opted into marketing!
-                const vips = data.filter(customer => customer.acceptsMarketing === true);
-                setVipCustomers(vips);
-            } catch (err) {
-                console.error("Error fetching VIPs:", err);
-            }
-        };
-        fetchVIPs();
-    }, [phoneNbr]);
-    // ✅ NEW: Fetch available Menu Categories from ITEM# records
+    // Fetch available Menu Categories from ITEM# records
     useEffect(() => {
         if (!phoneNbr) return;
 
         const fetchMenu = async () => {
             try {
-                // Query the ByBusiness GSI specifically for ITEM# records
                 const { data } = await client.models.BusinessData.listByBusiness({
                     pk: `BUSINESS#${phoneNbr}`,
                     sk: { beginsWith: 'ITEM#' }
                 });
-
-                // Extract unique categories defined in your catalogue
                 const cats = [...new Set(data.map(item => item.itemCategory).filter(Boolean))];
                 setMenuCategories(cats);
             } catch (err) {
@@ -68,8 +43,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         fetchMenu();
     }, [phoneNbr]);
 
-
-    // --- 1. Fetch & Subscribe (Unchanged) ---
+    // --- Fetch & Subscribe (Unchanged) ---
     useEffect(() => {
         if (!phoneNbr) return;
         const subFilter = { pk: { eq: `BUSINESS#${phoneNbr}` } };
@@ -122,7 +96,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         };
     }, [phoneNbr]);
 
-    // --- 2. KPIs & Chart Data (Unchanged) ---
+    // --- KPIs & Chart Data (Unchanged) ---
     const filteredOrders = useMemo(() => {
         if (!orders || orders.length === 0) return [];
         const now = new Date();
@@ -164,24 +138,14 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
         filteredOrders.filter((o) => o.orderStatus === 'PREPARED'),
         [filteredOrders]);
 
-    // =========================================================
-    // 🚀 3. THE FIXED FORECAST LOGIC
-    // We removed all the manual data fetching.
-    // We simply call the new Backend Query: client.queries.generateKitchenPlan
-    // =========================================================
-    // 1. Identify categories that actually exist in your fetched data
- 
-
+    // --- FORECAST LOGIC ---
     const generateForecasts = async () => {
-        // ✅ Now using categories derived from your ITEM# records
         if (menuCategories.length === 0) return;
-
         setIsForecasting(true);
         const newForecasts = {};
         const targetDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
         try {
-            // Only run forecasts for categories actually defined in your Item list
             const promiseList = menuCategories.map(async (category) => {
                 const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
                 const response = await client.queries.generateKitchenPlan({
@@ -201,28 +165,73 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
             setIsForecasting(false);
         }
     };
-    if (loading) return <div className="p-4 text-center text-slate-400">Loading Dashboard...</div>;
-    if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
-    // 🟢 THE MARKETING TRIGGER
-    const handleSendOffer = async (customer) => {
-        setSendingOfferTo(prev => ({ ...prev, [customer.phone]: true }));
+
+    // =========================================================
+    // 🟢 SCHEDULED AI VIP MARKETING LOGIC
+    // =========================================================
+    
+    // Automatically load the cached AI list when the accordion is opened
+    useEffect(() => {
+        if (!phoneNbr || !isMarketingOpen) return;
+
+        const fetchAiCache = async () => {
+            try {
+                const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
+                
+                // 1. Fetch the cached list generated by the 9:00 AM / 9:00 PM cron job
+                const { data: cacheData } = await client.models.BusinessData.get({
+                    pk: `BUSINESS#${formattedPhone}`,
+                    sk: 'CACHE#AI_RECOMMENDATIONS'
+                });
+
+                if (cacheData && cacheData.recommendations) {
+                    const cachedList = JSON.parse(cacheData.recommendations);
+                    
+                    // 2. Fetch live customers to filter out anyone who was already sent an offer today
+                    const { data: liveCustomers } = await client.models.BusinessData.listByBusiness({
+                        pk: `BUSINESS#${formattedPhone}`,
+                        sk: { beginsWith: 'CUSTOMER#' }
+                    });
+                    
+                    const eligiblePhones = (liveCustomers || [])
+                        .filter(c => !c.activeOfferType) // Must NOT have an active offer
+                        .map(c => c.phone);
+
+                    // Display only the VIPs who still need an offer
+                    setAiRecommendations(cachedList.filter(rec => eligiblePhones.includes(rec.phone)));
+                } else {
+                    setAiRecommendations([]);
+                }
+            } catch (e) {
+                console.error("Error loading AI recommendations:", e);
+            }
+        };
+
+        fetchAiCache();
+    }, [phoneNbr, isMarketingOpen]);
+
+    // Approve and Send the AI's Recommendation
+    const handleSendAIOffer = async (rec) => {
+        setSendingOfferTo(prev => ({ ...prev, [rec.phone]: true }));
         try {
             const formattedPhone = phoneNbr.startsWith('+') ? phoneNbr : `+${phoneNbr}`;
             
             const result = await client.mutations.sendVipOffer({
                 businessPhone: formattedPhone, 
-                customerPhone: customer.phone,
-                customerName: customer.name || "VIP",
-                favoriteItem: "Double Cheese Burger", // Note: You can make this dynamic later based on their order history!
-                offerText: "a 15% discount on your next order",
-                offerType: "PERCENTAGE",
-                offerValue: 15.0,
+                customerPhone: rec.phone,
+                customerName: rec.name || "VIP",
+                favoriteItem: rec.favoriteItem || "Meal",
+                offerText: rec.recommendedOfferText, 
+                offerType: rec.recommendedOfferType, 
+                offerValue: rec.recommendedOfferValue || 15.0, 
                 imageUrl: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80", 
                 validForHours: 48 
             });
 
             if (result.data) {
-                alert(`✅ Offer sent to ${customer.name || customer.phone}!`);
+                // Instantly remove the customer from the UI list so they don't get spammed!
+                setAiRecommendations(prev => prev.filter(c => c.phone !== rec.phone));
+                alert(`✅ Offer sent to ${rec.name || rec.phone}!`);
             } else {
                 alert("❌ Failed to send offer.");
             }
@@ -230,9 +239,12 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
             console.error("Mutation failed:", error);
             alert("Network error.");
         } finally {
-            setSendingOfferTo(prev => ({ ...prev, [customer.phone]: false }));
+            setSendingOfferTo(prev => ({ ...prev, [rec.phone]: false }));
         }
     };
+
+    if (loading) return <div className="p-4 text-center text-slate-400">Loading Dashboard...</div>;
+    if (error) return <div className="p-4 text-center text-red-400">{error}</div>;
 
     return (
         <div className="p-4 space-y-6">
@@ -324,7 +336,6 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                                         <h3 className="text-slate-300 font-semibold mb-3 border-b border-slate-700 pb-2">
                                             {cat.replace(/_/g, ' ')}
                                         </h3>
-                                        {/* ... (Existing card logic for displaying f.predictedQuantity) ... */}
                                     </div>
                                 );
                             })
@@ -336,17 +347,18 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                     </div>
                 </div>
             </div>
-            {/* --- COLLAPSIBLE VIP MARKETING --- */}
-            <div className="border border-slate-700 rounded-lg overflow-hidden transition-all duration-300">
+
+            {/* --- COLLAPSIBLE VIP MARKETING (SCHEDULED) --- */}
+            <div className="border border-fuchsia-900 rounded-lg overflow-hidden transition-all duration-300 mt-6">
                 <button
                     onClick={() => setIsMarketingOpen(!isMarketingOpen)}
                     className="w-full flex items-center justify-between bg-slate-800 p-4 hover:bg-slate-750 transition"
                 >
                     <div className="flex items-center gap-3">
-                        <span className="text-xl">🎁</span>
+                        <span className="text-xl">✨</span>
                         <div className="text-left">
-                            <h2 className="text-lg font-bold text-white">VIP Reactivation</h2>
-                            <p className="text-xs text-slate-400">Send direct WhatsApp offers to your opted-in customers</p>
+                            <h2 className="text-lg font-bold text-white">AI VIP Reactivation</h2>
+                            <p className="text-xs text-fuchsia-400">Smart win-back campaigns updated daily</p>
                         </div>
                     </div>
                     <div className={`transform transition-transform duration-300 ${isMarketingOpen ? 'rotate-180' : ''}`}>
@@ -356,35 +368,45 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                     </div>
                 </button>
 
-                <div className={`bg-slate-800/50 transition-all duration-500 ease-in-out ${isMarketingOpen ? 'max-h-[1000px] opacity-100 p-4 border-t border-slate-700 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                <div className={`bg-slate-800/50 transition-all duration-500 ease-in-out ${isMarketingOpen ? 'max-h-[1000px] opacity-100 p-4 border-t border-fuchsia-900 overflow-y-auto' : 'max-h-0 opacity-0 overflow-hidden'}`}>
                     
-                    <div className="space-y-3">
-                        {vipCustomers.length > 0 ? (
-                            vipCustomers.map(customer => (
-                                <div key={customer.sk} className="flex items-center justify-between bg-slate-900/80 p-4 rounded-lg border border-slate-700">
-                                    <div>
-                                        <p className="text-white font-semibold">{customer.name !== "_._" ? customer.name : "Customer"}</p>
-                                        <p className="text-sm text-slate-400">{customer.phone}</p>
-                                        <p className="text-xs text-indigo-400 mt-1">Total Spent: {customer.totalAmount || 0} BD</p>
+                    {/* AI RECOMMENDATIONS LIST */}
+                    <div className="space-y-4 pt-2">
+                        {aiRecommendations.length > 0 ? (
+                            aiRecommendations.map(rec => (
+                                <div key={rec.phone} className="flex flex-col md:flex-row items-start md:items-center justify-between bg-slate-900/80 p-5 rounded-xl border border-fuchsia-500/30 gap-4">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <p className="text-white font-bold text-lg">{rec.name !== "_._" ? rec.name : "Customer"}</p>
+                                            <span className="text-[10px] uppercase font-black tracking-widest text-red-400 bg-red-900/30 px-2 py-1 rounded">Absent {rec.daysAbsent} days</span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mb-3">
+                                            Favors: <span className="text-white font-semibold">{rec.favoriteItem}</span> &bull; Lifetime: {rec.totalSpent} BD
+                                        </p>
+                                        
+                                        <div className="bg-fuchsia-900/20 border border-fuchsia-500/20 p-3 rounded-lg text-xs text-fuchsia-300 leading-relaxed">
+                                            <strong>🤖 AI Strategy:</strong> {rec.reasoning}
+                                        </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleSendOffer(customer)}
-                                        disabled={sendingOfferTo[customer.phone]}
-                                        className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
-                                    >
-                                        {sendingOfferTo[customer.phone] ? (
-                                            <><span>Sending...</span><div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div></>
-                                        ) : (
-                                            <>
-                                                <span>Send 15% Offer</span>
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                                            </>
-                                        )}
-                                    </button>
+                                    
+                                    <div className="shrink-0 w-full md:w-auto flex flex-col items-stretch md:items-end gap-2 bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                        <p className="text-emerald-400 font-bold text-sm text-center md:text-right">{rec.recommendedOfferText}</p>
+                                        <button
+                                            onClick={() => handleSendAIOffer(rec)}
+                                            disabled={sendingOfferTo[rec.phone]}
+                                            className="px-5 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-black tracking-wide transition disabled:opacity-50"
+                                        >
+                                            {sendingOfferTo[rec.phone] ? "SENDING..." : "APPROVE & SEND 🚀"}
+                                        </button>
+                                    </div>
                                 </div>
                             ))
                         ) : (
-                            <p className="text-center text-slate-500 py-6">No VIP customers found who have opted into marketing.</p>
+                            <div className="text-center py-8 bg-slate-900/50 rounded-xl border border-dashed border-slate-700">
+                                <span className="text-3xl mb-2 block">🎯</span>
+                                <p className="text-slate-400 text-sm">No VIPs meet your churn criteria right now.</p>
+                                <p className="text-slate-500 text-xs mt-1">The AI evaluates your database automatically twice a day.</p>
+                            </div>
                         )}
                     </div>
                 </div>
