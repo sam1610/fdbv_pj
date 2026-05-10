@@ -71,15 +71,18 @@ const CustomersView = ({ phoneNbr, setModal }) => {
 
     // --- 4. Sort Customers by Name (BULLETPROOF FIX) ---
     const sortedCustomers = useMemo(() => {
-        if (!customers || !Array.isArray(customers) || customers.length === 0) return [];
+        // 1. If it's not a valid array, bail out immediately
+        if (!Array.isArray(customers) || customers.length === 0) return [];
         
         return [...customers]
-            // 🟢 1. Filter out any null, undefined, or empty ghost records
-            .filter(c => c && typeof c === 'object') 
-            // 🟢 2. Use optional chaining (?.) so it never crashes if 'name' is missing
-            .sort((a, b) => 
-                (a?.name || '').localeCompare(b?.name || '')
-            );
+            // 2. The Firewall: Explicitly block null, undefined, and non-objects
+            .filter(customer => customer !== null && customer !== undefined && typeof customer === 'object') 
+            // 3. The Safe Sort: Extract names manually without fancy modern syntax
+            .sort((a, b) => {
+                const nameA = (a && a.name) ? String(a.name) : "";
+                const nameB = (b && b.name) ? String(b.name) : "";
+                return nameA.localeCompare(nameB);
+            });
 
     }, [customers]);
 
