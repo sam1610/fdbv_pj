@@ -166,21 +166,32 @@ export const handler = async (event: any) => {
         
         Return strictly a valid JSON array matching the input structure, adding your recommendation fields. No markdown formatting.`;
 
+        // 🟢 NEW: Amazon Nova Pro Configuration
         const command = new InvokeModelCommand({
-            modelId: "anthropic.claude-3-sonnet-20240229-v1:0", 
+            modelId: "us.amazon.nova-pro-v1:0", 
             contentType: "application/json",
             accept: "application/json",
             body: JSON.stringify({
-                anthropic_version: "bedrock-2023-05-31",
-                max_tokens: 1000,
-                messages: [{ role: "user", content: prompt }]
+                inferenceConfig: { 
+                    maxTokens: 1000,
+                    temperature: 0.7 
+                },
+                messages: [
+                    { 
+                        role: "user", 
+                        content: [ { text: prompt } ] 
+                    }
+                ]
             })
         });
 
         const response = await bedrockClient.send(command);
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-        let aiResultText = responseBody.content[0].text;
         
+        // 🟢 NEW: Extracting text from Nova's specific response structure
+        let aiResultText = responseBody.output.message.content[0].text;
+        
+        // Clean markdown if Nova included it accidentally
         aiResultText = aiResultText.replace(/```json/g, '').replace(/```/g, '').trim();
         const finalRecommendations = JSON.parse(aiResultText);
 
