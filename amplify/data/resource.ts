@@ -214,6 +214,8 @@ const schema = a.schema({
       activeOfferValue: a.float(),      // e.g., 15 (for 15%)
       offerExpiresAt: a.string(),
       lastOfferSentAt: a.datetime(),
+      recommendations: a.string(),
+      timestamp: a.float(),
       
       totalAmount: a.float(),
       orderStatus: a.ref('OrderStatus'),
