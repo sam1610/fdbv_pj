@@ -211,7 +211,7 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                     });
                     
                     const eligiblePhones = (liveCustomers || [])
-                        .filter(c => !c.activeOfferType)
+                        .filter(c => c && !c.activeOfferType) // 🟢 FIX: Ensures 'c' actually exists first!
                         .map(c => {
                             const skParts = c.sk ? c.sk.split('#') : [];
                             return skParts.length > 2 ? skParts[2] : c.phone;
