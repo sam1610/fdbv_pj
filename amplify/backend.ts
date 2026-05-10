@@ -224,8 +224,8 @@ backend.generateVipRecommendationsLambda.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['bedrock:InvokeModel'],
     resources: [
-      'arn:aws:bedrock:us-east-1::foundation-model/*',
-      'arn:aws:bedrock:us-east-1:*:inference-profile/*' // 🟢 NEW: Allows Amazon Nova cross-region profiles
+      'arn:aws:bedrock:*::foundation-model/*',      // 🟢 FIX: Allows fallback to us-west-2, etc.
+      'arn:aws:bedrock:*:*:inference-profile/*'     // 🟢 FIX: Allows cross-region profiles anywhere
     ],
   })
 );
