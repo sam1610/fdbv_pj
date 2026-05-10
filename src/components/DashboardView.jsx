@@ -185,7 +185,15 @@ const DashboardView = ({ phoneNbr, filterDays = 1, setModal }) => {
                 });
 
                 if (cacheData && cacheData.recommendations) {
-                    const cachedList = JSON.parse(cacheData.recommendations);
+                    let cachedList = JSON.parse(cacheData.recommendations);
+                    
+                    // 🟢 FIX: The Bulletproof Parser
+                    // If Amazon Nova wrapped the array in an object, extract the array!
+                    if (!Array.isArray(cachedList)) {
+                        console.log("🤖 Nova returned an object, extracting array...");
+                        // Find the first array inside the object and use it
+                        cachedList = cachedList.recommendations || cachedList.customers || cachedList.vips || Object.values(cachedList).find(val => Array.isArray(val)) || [];
+                    }
                     
                     // 2. Fetch live customers to filter out anyone who was already sent an offer today
                     const { data: liveCustomers } = await client.models.BusinessData.listByBusiness({
