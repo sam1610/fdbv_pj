@@ -49,7 +49,9 @@ export const handler = async (event: any) => {
         
         console.log(`⚙️ Using Rules -> MinSpent: ${minSpent}, MinOrders: ${minOrders}, Churn Window: ${churnDaysMin}-${churnDaysMax} days`);
 
+        // 🟢 Generate standard AWS DateTimes
         const now = new Date().getTime();
+        const isoDate = new Date(now).toISOString(); 
 
         // 2️⃣ CHECK CACHE (ONLY IF MANUALLY TRIGGERED)
         if (!isScheduled) {
@@ -89,7 +91,6 @@ export const handler = async (event: any) => {
         if (!allCustomers || allCustomers.length === 0) return [];
 
         // 4️⃣ FILTER: Apply RFM Rules
-        // 4️⃣ FILTER: Apply RFM Rules with Detailed Logging
         const qualifiedVIPs = allCustomers.filter(c => {
             const phoneStr = c.phone || "Unknown";
             
@@ -138,12 +139,20 @@ export const handler = async (event: any) => {
             console.log("⚠️ No VIPs matched the criteria. Saving empty cache and exiting.");
             await dbClient.send(new PutCommand({
                 TableName: TABLE_NAME,
-                Item: { pk: BUSINESS_PK, sk: CACHE_SK, entityType: "AICache", timestamp: now, recommendations: "[]" }
+                Item: { 
+                    pk: BUSINESS_PK, 
+                    sk: CACHE_SK, 
+                    entityType: "AICache", 
+                    timestamp: now,
+                    createdAt: isoDate, // 🟢 ADDED required field
+                    updatedAt: isoDate, // 🟢 ADDED required field
+                    recommendations: "[]" 
+                }
             }));
             return [];
         }
 
-        console.log(`🤖 Triggering Claude 3.5 Sonnet to generate marketing strategies...`);
+        console.log(`🤖 Triggering Amazon Nova Pro to generate marketing strategies...`);
 
         // 5️⃣ PREPARE THE AI PAYLOAD
         const aiInputData = qualifiedVIPs.map(c => ({
@@ -166,7 +175,7 @@ export const handler = async (event: any) => {
         
         Return strictly a valid JSON array matching the input structure, adding your recommendation fields. No markdown formatting.`;
 
-        // 🟢 NEW: Amazon Nova Pro Configuration
+        // 🟢 Amazon Nova Pro Configuration
         const command = new InvokeModelCommand({
             modelId: "us.amazon.nova-pro-v1:0", 
             contentType: "application/json",
@@ -188,7 +197,7 @@ export const handler = async (event: any) => {
         const response = await bedrockClient.send(command);
         const responseBody = JSON.parse(new TextDecoder().decode(response.body));
         
-        // 🟢 NEW: Extracting text from Nova's specific response structure
+        // Extracting text from Nova's specific response structure
         let aiResultText = responseBody.output.message.content[0].text;
         
         // Clean markdown if Nova included it accidentally
@@ -205,6 +214,8 @@ export const handler = async (event: any) => {
                 sk: CACHE_SK,
                 entityType: "AICache",
                 timestamp: now,
+                createdAt: isoDate, // 🟢 ADDED required field
+                updatedAt: isoDate, // 🟢 ADDED required field
                 recommendations: JSON.stringify(finalRecommendations)
             }
         }));
