@@ -223,7 +223,10 @@ businessTable.grantReadWriteData(backend.generateVipRecommendationsLambda.resour
 backend.generateVipRecommendationsLambda.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     actions: ['bedrock:InvokeModel'],
-    resources: ['arn:aws:bedrock:us-east-1::foundation-model/*'], // Adjust region if your Bedrock is not us-east-1
+    resources: [
+      'arn:aws:bedrock:us-east-1::foundation-model/*',
+      'arn:aws:bedrock:us-east-1:*:inference-profile/*' // 🟢 NEW: Allows Amazon Nova cross-region profiles
+    ],
   })
 );
 
