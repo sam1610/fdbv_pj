@@ -1,16 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { client } from '../DataHook/amplifyClient'; // Use shared client
-import { useVirtualizer } from '@tanstack/react-virtual'; // Use virtualization
+import { client } from '../DataHook/amplifyClient'; 
+import { useVirtualizer } from '@tanstack/react-virtual'; 
 
-// --- Component Setup ---
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 
-/**
- * A real-time, virtualized component to display all business customers.
- * @param {object} props
- * @param {string | null} props.phoneNbr - The phone number of the business owner.
- * @param {Function} props.setModal - A function to open a modal window.
- */
 const CustomersView = ({ phoneNbr, setModal }) => {
     
     // --- 1. State for Real-Time Data ---
@@ -18,11 +11,9 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-
     useEffect(() => {
         if (!phoneNbr) return;
 
-        // Define filter for subscriptions (Server-side)
         const subFilter = { 
             pk: { eq: `BUSINESS#${phoneNbr}` },
             sk: { beginsWith: 'CUSTOMER#' }
@@ -34,7 +25,7 @@ const CustomersView = ({ phoneNbr, setModal }) => {
         const fetchAndSubscribe = async () => {
             setLoading(true);
             try {
-                // A. INITIAL FETCH: Use the Index (Query)
+                // A. INITIAL FETCH
                 const { data } = await client.models.BusinessData.listByBusiness({
                     pk: `BUSINESS#${phoneNbr}`,
                     sk: { beginsWith: 'CUSTOMER#' }
@@ -46,17 +37,19 @@ const CustomersView = ({ phoneNbr, setModal }) => {
                 // B. SUBSCRIBE: Listen for NEW customers
                 createSub = client.models.BusinessData.onCreate({ filter: subFilter }).subscribe({
                     next: (item) => {
-                        setCustomers(prev => [...prev, item]);
+                        if (item) setCustomers(prev => [...prev, item]);
                     },
                     error: (err) => console.error("Customer Create Sub Error:", err)
                 });
 
-                // C. SUBSCRIBE: Listen for UPDATES (e.g., totalAmount changes)
+                // C. SUBSCRIBE: Listen for UPDATES
                 updateSub = client.models.BusinessData.onUpdate({ filter: subFilter }).subscribe({
                     next: (item) => {
-                        setCustomers(prev => prev.map(c => 
-                            (c.pk === item.pk && c.sk === item.sk) ? item : c
-                        ));
+                        if (item) {
+                            setCustomers(prev => prev.map(c => 
+                                (c?.pk === item.pk && c?.sk === item.sk) ? item : c
+                            ));
+                        }
                     },
                     error: (err) => console.error("Customer Update Sub Error:", err)
                 });
@@ -70,21 +63,23 @@ const CustomersView = ({ phoneNbr, setModal }) => {
 
         fetchAndSubscribe();
 
-        // Cleanup
         return () => {
             if (createSub) createSub.unsubscribe();
             if (updateSub) updateSub.unsubscribe();
         };
     }, [phoneNbr]);
 
-    // --- 4. Sort Customers by Name ---
+    // --- 4. Sort Customers by Name (BULLETPROOF FIX) ---
     const sortedCustomers = useMemo(() => {
-        if (!customers || customers.length === 0) return [];
+        if (!customers || !Array.isArray(customers) || customers.length === 0) return [];
         
-        // Sort all customers by name (alphabetical)
-        return [...customers].sort((a, b) => 
-            (a.name || '').localeCompare(b.name || '')
-        );
+        return [...customers]
+            // 🟢 1. Filter out any null, undefined, or empty ghost records
+            .filter(c => c && typeof c === 'object') 
+            // 🟢 2. Use optional chaining (?.) so it never crashes if 'name' is missing
+            .sort((a, b) => 
+                (a?.name || '').localeCompare(b?.name || '')
+            );
 
     }, [customers]);
 
@@ -92,9 +87,9 @@ const CustomersView = ({ phoneNbr, setModal }) => {
     const parentRef = useRef();
 
     const rowVirtualizer = useVirtualizer({
-        count: sortedCustomers.length, // Use the sorted list
+        count: sortedCustomers.length,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => 76, // Estimate 76px height for a customer row
+        estimateSize: () => 76, 
         overscan: 5,
     });
 
@@ -108,13 +103,11 @@ const CustomersView = ({ phoneNbr, setModal }) => {
         <div className="p-4">
             <h1 className="text-2xl font-bold text-orange-500 mb-4">Customers</h1>
             
-            {/* Scrolling container with a fixed height */}
             <div 
                 ref={parentRef} 
-                className="overflow-y-auto h-[600px] pr-2" // Adjust h-[600px] as needed
+                className="overflow-y-auto h-[600px] pr-2" 
             >
                 {sortedCustomers.length > 0 ? (
-                    // Sizer div for the scrollbar
                     <div 
                         style={{ 
                             height: `${rowVirtualizer.getTotalSize()}px`, 
@@ -122,13 +115,19 @@ const CustomersView = ({ phoneNbr, setModal }) => {
                             width: '100%' 
                         }}
                     >
-                        {/* Map over virtual items */}
                         {virtualItems.map(virtualItem => {
                             const customer = sortedCustomers[virtualItem.index];
+                            
+                            // 🟢 Safe phone extraction just in case SK is malformed
+                            const phoneParts = customer?.sk?.split('#') || [];
+                            const rawPhone = phoneParts.length > 2 ? phoneParts[2] : (customer?.phone || 'Unknown');
+                            const displayPhone = rawPhone.length >= 11 
+                                ? `+(${rawPhone.substring(0, 3)})-${rawPhone.substring(3, 5)} ${rawPhone.substring(5, 11)}`
+                                : rawPhone;
 
                             return (
                                 <div 
-                                    key={customer.sk} 
+                                    key={customer.sk || virtualItem.index} 
                                     style={{
                                         position: 'absolute',
                                         top: 0,
@@ -138,23 +137,20 @@ const CustomersView = ({ phoneNbr, setModal }) => {
                                         transform: `translateY(${virtualItem.start}px)`,
                                     }}
                                 >
-                                    {/* Your Original Customer Component */}
                                     <div 
                                         onClick={() => setModal({ type: 'CustomerDetail', IdCustomer: customer.sk , customerName: customer.name })} 
                                         className={classNames(
-        // ✅ TERNARY OPERATOR FOR ZEBRA STRIPING:
-        virtualItem.index % 2 === 0 ? 'bg-slate-800' : 'bg-slate-700', // Even rows
-        "p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-600 h-full" // Removed hardcoded bg, added hover:bg-slate-600
-    )}
->
+                                            virtualItem.index % 2 === 0 ? 'bg-slate-800' : 'bg-slate-700', 
+                                            "p-3 rounded-lg flex justify-between items-center cursor-pointer transition hover:bg-slate-600 h-full"
+                                        )}
+                                    >
                                         <div>
-                                            <p className="font-bold text-white">{customer.name}</p>
-                                            <p className="text-amber-400 text-sm ">+({customer.sk.split('#')[2].substring(0, 3)})-{customer.sk.split('#')[2].substring(3, 5)} {customer.sk.split('#')[2].substring(5, 11)}</p>
+                                            <p className="font-bold text-white">{customer?.name || 'Unknown Customer'}</p>
+                                            <p className="text-amber-400 text-sm ">{displayPhone}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-slate-400 text-sm">Total Orders</p>
-                                            {/* <p className="font-bold text-white"> {sortedCustomers.length}</p> */}
-                                            <p className="font-bold text-white">BD {customer.totalAmount ? customer.totalAmount.toFixed(2) : '0.00'}</p>
+                                            <p className="font-bold text-white">BD {customer?.totalAmount ? customer.totalAmount.toFixed(2) : '0.00'}</p>
                                         </div>
                                     </div>
                                 </div>

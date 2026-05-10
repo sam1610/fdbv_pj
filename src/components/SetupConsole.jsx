@@ -863,6 +863,7 @@ const PrivacyPolicySection = () => {
 //     );
 // };
 
+
 // =========================================================
 // 4️⃣ NEW SUB-COMPONENT: MarketingSettingsSection (RFM Rules)
 // =========================================================
@@ -886,12 +887,14 @@ const MarketingSettingsSection = ({ pk }) => {
             try {
                 const { data } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
                 if (data && data.location) {
-                    const parsed = JSON.parse(data.location);
+                    // Safe parsing for Map vs String
+                    const parsed = typeof data.location === 'string' ? JSON.parse(data.location) : data.location;
                     setSettings({
-                        minSpent: parsed.minSpent || 50,
-                        minOrders: parsed.minOrders || 3,
-                        churnDaysMin: parsed.churnDaysMin || 14,
-                        churnDaysMax: parsed.churnDaysMax || 45
+                        minSpent: parsed.minSpent !== undefined ? Number(parsed.minSpent) : 50,
+                        minOrders: parsed.minOrders !== undefined ? Number(parsed.minOrders) : 3,
+                        // Ensure it loads at least 1, even if 0 was somehow saved previously
+                        churnDaysMin: parsed.churnDaysMin !== undefined ? Math.max(1, Number(parsed.churnDaysMin)) : 14,
+                        churnDaysMax: parsed.churnDaysMax !== undefined ? Number(parsed.churnDaysMax) : 45
                     });
                 }
             } catch (e) { console.error("Failed to load marketing settings", e); }
@@ -900,6 +903,14 @@ const MarketingSettingsSection = ({ pk }) => {
     }, [pk]);
 
     const handleSave = async () => {
+        // 🟢 NEW: STRICT ADMIN VALIDATION
+        if (settings.churnDaysMin < 1) {
+            return showMessage("⚠️ The Minimum Churn Window must be at least 1 day.", "error");
+        }
+        if (settings.churnDaysMin >= settings.churnDaysMax) {
+            return showMessage("⚠️ The Minimum days must be strictly less than the Maximum days.", "error");
+        }
+
         setSaving(true);
         try {
             await client.models.BusinessData.update({
@@ -908,7 +919,7 @@ const MarketingSettingsSection = ({ pk }) => {
                 entityType: 'Settings',
                 location: JSON.stringify(settings) 
             });
-            // If the record doesn't exist, create it:
+            
             const { data } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
             if (!data) {
                 await client.models.BusinessData.create({
@@ -943,6 +954,7 @@ const MarketingSettingsSection = ({ pk }) => {
                     <p className="text-[10px] text-slate-500 mb-2">The AI will only target customers who have spent at least this much.</p>
                     <input 
                         type="number" 
+                        min="0"
                         value={settings.minSpent} 
                         onChange={e => setSettings({...settings, minSpent: parseInt(e.target.value) || 0})}
                         className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 focus:ring-2 ring-fuchsia-500 outline-none"
@@ -957,8 +969,9 @@ const MarketingSettingsSection = ({ pk }) => {
                     <p className="text-[10px] text-slate-500 mb-2">The minimum number of separate orders placed to be considered a VIP.</p>
                     <input 
                         type="number" 
+                        min="1"
                         value={settings.minOrders} 
-                        onChange={e => setSettings({...settings, minOrders: parseInt(e.target.value) || 0})}
+                        onChange={e => setSettings({...settings, minOrders: parseInt(e.target.value) || 1})}
                         className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 focus:ring-2 ring-fuchsia-500 outline-none"
                     />
                 </div>
@@ -972,12 +985,13 @@ const MarketingSettingsSection = ({ pk }) => {
                     
                     <div className="flex items-center gap-4">
                         <div className="flex-1">
-                            <span className="text-[10px] text-slate-400 block mb-1">More than (Days)</span>
+                            <span className="text-[10px] text-slate-400 block mb-1">More than (Days) <span className="text-red-400">*</span></span>
                             <input 
                                 type="number" 
+                                min="1"
                                 value={settings.churnDaysMin} 
-                                onChange={e => setSettings({...settings, churnDaysMin: parseInt(e.target.value) || 0})}
-                                className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 outline-none"
+                                onChange={e => setSettings({...settings, churnDaysMin: parseInt(e.target.value) || 1})}
+                                className={`w-full bg-slate-900 p-3 rounded-lg text-white outline-none border ${settings.churnDaysMin < 1 ? 'border-red-500 focus:ring-2 ring-red-500' : 'border-slate-600 focus:ring-2 ring-fuchsia-500'}`}
                             />
                         </div>
                         <span className="text-slate-500 font-bold mt-4">TO</span>
@@ -985,9 +999,10 @@ const MarketingSettingsSection = ({ pk }) => {
                             <span className="text-[10px] text-slate-400 block mb-1">Less than (Days)</span>
                             <input 
                                 type="number" 
+                                min="2"
                                 value={settings.churnDaysMax} 
-                                onChange={e => setSettings({...settings, churnDaysMax: parseInt(e.target.value) || 0})}
-                                className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 outline-none"
+                                onChange={e => setSettings({...settings, churnDaysMax: parseInt(e.target.value) || 2})}
+                                className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 focus:ring-2 ring-fuchsia-500 outline-none"
                             />
                         </div>
                     </div>
@@ -1002,7 +1017,7 @@ const MarketingSettingsSection = ({ pk }) => {
                 </button>
 
                 {feedback.msg && (
-                    <div className={`text-center text-[10px] font-bold py-2 rounded-lg border ${feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border-red-500/30' : 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30'}`}>
+                    <div className={`text-center text-[11px] font-bold py-3 rounded-lg border shadow-lg ${feedback.type === 'error' ? 'bg-red-900/50 text-red-300 border-red-500/50' : 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30'}`}>
                         {feedback.msg}
                     </div>
                 )}
