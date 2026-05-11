@@ -108,7 +108,7 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal, customerId, custom
                 <div className="p-4 border-b border-slate-700 flex justify-between items-start shrink-0">
                     <div className="flex flex-col gap-1">
                         <h2 className="text-sm font-bold text-orange-400 bg-black/10 px-2 py-0.5 rounded inline-block w-fit">
-                            {exactOrderId}
+                            {exactOrderId.split('-')[0]}
                         </h2>
                         
                         <div className="mt-2">
