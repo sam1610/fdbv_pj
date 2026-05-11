@@ -1378,6 +1378,9 @@ const PrivacyPolicySection = () => {
 // =========================================================
 // 4️⃣ NEW SUB-COMPONENT: MarketingSettingsSection (RFM Rules)
 // =========================================================
+// =========================================================
+// 4️⃣ SUB-COMPONENT: MarketingSettingsSection (RFM Rules + VIP Discount)
+// =========================================================
 const MarketingSettingsSection = ({ pk }) => {
     const [settings, setSettings] = useState({
         minSpent: 50,
@@ -1385,6 +1388,8 @@ const MarketingSettingsSection = ({ pk }) => {
         churnDaysMin: 14,
         churnDaysMax: 45
     });
+    const [vipDiscount, setVipDiscount] = useState(15); // 🟢 NEW: Global VIP Discount State
+
     const [saving, setSaving] = useState(false);
     const [feedback, setFeedback] = useState({ msg: '', type: '' });
 
@@ -1396,17 +1401,22 @@ const MarketingSettingsSection = ({ pk }) => {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const { data } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
-                if (data && data.location) {
-                    // Safe parsing for Map vs String
-                    const parsed = typeof data.location === 'string' ? JSON.parse(data.location) : data.location;
+                // 1. Fetch AI Marketing Rules
+                const { data: mktData } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
+                if (mktData && mktData.location) {
+                    const parsed = typeof mktData.location === 'string' ? JSON.parse(mktData.location) : mktData.location;
                     setSettings({
                         minSpent: parsed.minSpent !== undefined ? Number(parsed.minSpent) : 50,
                         minOrders: parsed.minOrders !== undefined ? Number(parsed.minOrders) : 3,
-                        // Ensure it loads at least 1, even if 0 was somehow saved previously
                         churnDaysMin: parsed.churnDaysMin !== undefined ? Math.max(1, Number(parsed.churnDaysMin)) : 14,
                         churnDaysMax: parsed.churnDaysMax !== undefined ? Number(parsed.churnDaysMax) : 45
                     });
+                }
+
+                // 2. Fetch Global VIP Discount from CONFIG
+                const { data: configData } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
+                if (configData && configData.vipDiscount !== undefined && configData.vipDiscount !== null) {
+                    setVipDiscount(Number(configData.vipDiscount));
                 }
             } catch (e) { console.error("Failed to load marketing settings", e); }
         };
@@ -1414,7 +1424,7 @@ const MarketingSettingsSection = ({ pk }) => {
     }, [pk]);
 
     const handleSave = async () => {
-        // 🟢 NEW: STRICT ADMIN VALIDATION
+        // STRICT ADMIN VALIDATION
         if (settings.churnDaysMin < 1) {
             return showMessage("⚠️ The Minimum Churn Window must be at least 1 day.", "error");
         }
@@ -1424,23 +1434,34 @@ const MarketingSettingsSection = ({ pk }) => {
 
         setSaving(true);
         try {
-            await client.models.BusinessData.update({
-                pk: pk,
-                sk: "MARKETING_SETTINGS",
-                entityType: 'Settings',
-                location: JSON.stringify(settings) 
-            });
-            
-            const { data } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
-            if (!data) {
+            // 1. Save AI Rules to MARKETING_SETTINGS
+            const { data: mktData } = await client.models.BusinessData.get({ pk, sk: 'MARKETING_SETTINGS' });
+            if (!mktData) {
                 await client.models.BusinessData.create({
                     pk: pk,
                     sk: "MARKETING_SETTINGS",
                     entityType: 'Settings',
                     location: JSON.stringify(settings)
                 });
+            } else {
+                await client.models.BusinessData.update({
+                    pk: pk,
+                    sk: "MARKETING_SETTINGS",
+                    location: JSON.stringify(settings) 
+                });
             }
-            showMessage("✅ AI Marketing Settings Saved!");
+
+            // 2. Save Global VIP Discount to CONFIG
+            const { data: configData } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
+            if (configData) {
+                await client.models.BusinessData.update({
+                    pk: pk,
+                    sk: "CONFIG",
+                    vipDiscount: parseFloat(vipDiscount) || 0
+                });
+            }
+
+            showMessage("✅ AI Marketing Settings & VIP Discount Saved!");
         } catch (err) {
             showMessage(`Error saving: ${err.message}`, "error");
         } finally {
@@ -1457,6 +1478,26 @@ const MarketingSettingsSection = ({ pk }) => {
 
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl space-y-6">
                 
+                {/* 🟢 NEW: Global VIP Discount */}
+                <div className="p-4 bg-fuchsia-900/10 rounded-lg border border-fuchsia-900/30">
+                    <label className="text-xs font-black text-fuchsia-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                        <span>⭐ Global VIP Discount (%)</span>
+                    </label>
+                    <p className="text-[10px] text-slate-400 mb-2">
+                        Applied to the entire cart if the AI selects a PERCENTAGE offer for a VIP customer.
+                    </p>
+                    <input 
+                        type="number" 
+                        min="0"
+                        max="100"
+                        value={vipDiscount} 
+                        onChange={e => setVipDiscount(e.target.value)}
+                        className="w-full bg-slate-900 p-3 rounded-lg text-white border border-slate-600 focus:ring-2 ring-fuchsia-500 outline-none font-bold"
+                    />
+                </div>
+
+                <hr className="border-slate-700 my-4" />
+
                 {/* 1. Monetary */}
                 <div>
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2">
