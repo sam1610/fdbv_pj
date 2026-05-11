@@ -42,15 +42,26 @@ export const handler = async (event: any) => {
             to: cleanCustomerPhone, 
             type: "template",
             template: {
-                name: "vip_favorite_item", 
+                name: "vip_favorite_item", // You kept the same name, so we leave this
                 language: { code: "en" },
                 components: [
-                    { type: "header", parameters: [{ type: "image", image: { link: imageUrl } }] },
-                    { type: "body", parameters: [
-                        { type: "text", text: customerName || "VIP" },
-                        { type: "text", text: favoriteItem },
-                        { type: "text", text: offerText }
-                    ]}
+                    { 
+                        type: "header", 
+                        parameters: [
+                            // 🟢 This fills the {{1}} in your new Text Header
+                            // I am using the business name from your Meta screenshot
+                            { type: "text", text: "1st-Hub-IT" } 
+                        ] 
+                    },
+                    { 
+                        type: "body", 
+                        parameters: [
+                            // 🟢 These fill the {{1}}, {{2}}, {{3}} in your Body
+                            { type: "text", text: customerName || "VIP" },
+                            { type: "text", text: favoriteItem },
+                            { type: "text", text: offerText }
+                        ]
+                    }
                 ]
             }
         };
