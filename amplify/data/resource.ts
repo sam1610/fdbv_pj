@@ -208,6 +208,15 @@ const schema = a.schema({
       orderDate: a.datetime(),
       vat: a.float(),
       vipDiscount: a.float(),
+
+      orderCount: a.integer(),
+      favoriteItem: a.string(),
+      lastOrderDate: a.string(),
+      discount: a.float(),
+      originalSubtotal: a.float(), 
+      discountAmount: a.float(),  
+      vatAmount: a.float(),          
+      vatRate: a.float(),            
       
       // 🟢 The "Digital Wallet" for Marketing
       acceptsMarketing: a.boolean(),
