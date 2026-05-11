@@ -206,6 +206,8 @@ const schema = a.schema({
       phoneNumberId: a.string(),
       businessPhone: a.string(),
       orderDate: a.datetime(),
+      vat: a.float(),
+      vipDiscount: a.float(),
       
       // 🟢 The "Digital Wallet" for Marketing
       acceptsMarketing: a.boolean(),

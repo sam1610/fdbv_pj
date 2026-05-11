@@ -84,10 +84,476 @@ export default function SetupConsole({ phoneNbr, onDataChange, businessLocation,
 // =========================================================
 // 2️⃣ SUB-COMPONENT: RestaurantSection (SaaS Upgraded)
 // =========================================================
+// const RestaurantSection = ({ pk, phoneNbr }) => {
+//     // Identity State
+//     const [name, setName] = useState('');
+//     const [coords, setCoords] = useState({ lat: '', lng: '' });
+//     const [saving, setSaving] = useState(false);
+//     const [hasLoaded, setHasLoaded] = useState(false);
+
+//     // Phone Registration State
+//     const [verificationMethod, setVerificationMethod] = useState('SMS');
+//     const [phoneVerificationStep, setPhoneVerificationStep] = useState(null);
+//     const [otpCode, setOtpCode] = useState('');
+//     const [tempPhoneId, setTempPhoneId] = useState(null);
+//     const [otpAttempts, setOtpAttempts] = useState(0);
+
+//     // Meta Data State
+//     const [metaData, setMetaData] = useState({
+//         metaBusinessAccountId: '',
+//         phoneNumber: '',
+//         phoneNumberId: '',
+//         wabaId: '',
+//         registrationStatus: 'PENDING',
+//         assignedPin: ''
+//     });
+
+//     const [feedback, setFeedback] = useState({ msg: '', type: '' });
+
+//     const showMessage = (msg, type = 'success') => {
+//         setFeedback({ msg, type });
+//         setTimeout(() => setFeedback({ msg: '', type: '' }), 5000);
+//     };
+
+//     const handleCoordChange = (field, value) => {
+//         const isFloat = /^-?[0-9]*\.?[0-9]*$/.test(value);
+//         if (isFloat || value === "") {
+//             setCoords(prev => ({ ...prev, [field]: value }));
+//         }
+//     };
+
+//     // --- FETCH DATA ---
+//     useEffect(() => {
+//         const fetchInitialData = async () => {
+//             if (!client || hasLoaded) return;
+            
+//             // 1. Check for UI Locks
+//             const lockTime = localStorage.getItem(`meta_lock_${phoneNbr}`);
+//             if (lockTime && (Date.now() - parseInt(lockTime) < 2 * 60 * 60 * 1000)) {
+//                 setPhoneVerificationStep('PENDING_REVIEW');
+//             }
+            
+//             // 2. Check for 2-Try OTP Failures
+//             const savedAttempts = parseInt(localStorage.getItem(`otp_attempts_${phoneNbr}`) || "0");
+//             setOtpAttempts(savedAttempts);
+//             if (savedAttempts >= 2) {
+//                 setPhoneVerificationStep('LOCKED_OUT');
+//             }
+
+//             try {
+//                 let isAlreadyActive = false;
+//                 let existingPhoneId = '';
+
+//                 // A. Fetch from BusinessData (CONFIG)
+//                 const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
+//                 if (config) {
+//                     setName(config.name || '');
+//                     try {
+//                         const loc = typeof config.location === 'string' ? JSON.parse(config.location) : config.location;
+//                         const lat = loc?.latitude?.N || loc?.latitude || loc?.lat;
+//                         const lng = loc?.longitude?.N || loc?.longitude || loc?.lng;
+//                         if (lat) setCoords({ lat: String(lat), lng: String(lng) });
+//                     } catch (e) { }
+
+//                     // 🟢 FIX: Check if phoneNumberId already exists on the CONFIG record
+//                     if (config.phoneNumberId) {
+//                         isAlreadyActive = true;
+//                         existingPhoneId = config.phoneNumberId;
+//                         setMetaData(prev => ({
+//                             ...prev,
+//                             phoneNumber: phoneNbr,
+//                             phoneNumberId: config.phoneNumberId,
+//                             registrationStatus: 'ACTIVE'
+//                         }));
+//                     }
+//                 }
+
+//                 // B. Fetch from RestaurantMetaAccount (New Table)
+//                 const { data: metaRecords } = await client.models.RestaurantMetaAccount.list({
+//                     filter: { restaurantId: { eq: phoneNbr } }
+//                 });
+
+//                 if (metaRecords && metaRecords.length > 0) {
+//                     const metaRecord = metaRecords[0];
+//                     setMetaData({
+//                         metaBusinessAccountId: metaRecord.metaBusinessAccountId || '',
+//                         phoneNumber: metaRecord.phoneNumber || phoneNbr,
+//                         phoneNumberId: metaRecord.phoneNumberId || existingPhoneId,
+//                         wabaId: metaRecord.wabaId || '',
+//                         registrationStatus: metaRecord.registrationStatus || 'PENDING',
+//                         assignedPin: ''
+//                     });
+
+//                     if (metaRecord.registrationStatus === 'ACTIVE') {
+//                         isAlreadyActive = true;
+//                     }
+//                 }
+
+//                 // 🟢 Lock UI permanently if Active in EITHER table
+//                 if (isAlreadyActive) {
+//                     setPhoneVerificationStep('ACTIVE');
+//                 }
+
+//                 setHasLoaded(true);
+//             } catch (err) {
+//                 console.error("Fetch error:", err);
+//             }
+//         };
+//         fetchInitialData();
+//     }, [pk, phoneNbr, hasLoaded]);
+
+//     // --- SAVE BUSINESS IDENTITY ---
+//     const handleUpdateBusinessConfig = async () => {
+//         const trimmedName = name.trim();
+//         if (!trimmedName) return showMessage("Please fill in Business Name", "error");
+
+//         if (trimmedName.toLowerCase() === 'home') {
+//             return showMessage("Meta policy: 'Home' is a forbidden Business Name. Please use a real brand name.", "error");
+//         }
+//         setSaving(true);
+//         try {
+//             await client.models.BusinessData.update({
+//                 pk: pk,
+//                 sk: "CONFIG",
+//                 name: name.trim(),
+//                 entityType: 'Business',
+//                 location: JSON.stringify({
+//                     latitude: parseFloat(coords.lat),
+//                     longitude: parseFloat(coords.lng)
+//                 })
+//             });
+//             showMessage("✅ Business config saved!");
+//         } catch (err) {
+//             showMessage(`Failed: ${err.message}`, "error");
+//         } finally {
+//             setSaving(false);
+//         }
+//     };
+
+//     // --- STEP 1: REQUEST OTP ---
+//     const handleRequestPhoneVerification = async () => {
+//         if (!name.trim()) return showMessage("Please fill in Business Name first", "error");
+        
+//         setPhoneVerificationStep('REQUESTING_CODE');
+//         try {
+//             const response = await client.mutations.registerPhoneNumber({
+//                 action: 'REQUEST_PHONE_VERIFICATION',
+//                 businessPhone: phoneNbr,
+//                 businessPhoneOwner: phoneNbr,
+//                 verificationMethod: verificationMethod,
+//                 businessName: name.trim() 
+//             });
+
+//             if (response.data?.success) {
+//                 const innerData = response.data.data ? JSON.parse(response.data.data) : {};
+//                 if (innerData.phoneNumberId) setTempPhoneId(innerData.phoneNumberId);
+                
+//                 setPhoneVerificationStep('WAITING_OTP');
+//                 showMessage(`Code sent via ${verificationMethod}!`, "success");
+//             } else {
+//                 setPhoneVerificationStep(null);
+//                 showMessage(`Failed: ${response.data?.message || "Check Browser Console"}`, "error");
+//             }
+//         } catch (err) {
+//             setPhoneVerificationStep(null);
+//             showMessage(`Network error: ${err.message}`, "error");
+//         }
+//     };
+
+//     // --- STEP 2: VERIFY OTP ---
+//     const handleVerifyPhoneOTP = async () => {
+//         if (!otpCode.trim()) return showMessage("Please enter the OTP code", "error");
+//         setPhoneVerificationStep('VERIFYING_OTP');
+
+//         try {
+//             const { data: response } = await client.mutations.registerPhoneNumber({
+//                 action: 'VERIFY_PHONE_OTP',
+//                 businessPhone: phoneNbr,
+//                 otpCode: otpCode.trim(),
+//                 phoneNumberId: tempPhoneId,
+//                 businessPhoneOwner: phoneNbr,
+//                 businessName: name.trim()
+//             });
+
+//             if (response && response.success) {
+//                 const innerData = response.data ? JSON.parse(response.data) : {};
+                
+//                 setMetaData({
+//                     metaBusinessAccountId: innerData.wabaId || '',
+//                     phoneNumber: phoneNbr,
+//                     phoneNumberId: innerData.phoneNumberId || '',
+//                     wabaId: innerData.wabaId || '',
+//                     registrationStatus: 'ACTIVE',
+//                     assignedPin: innerData.assignedPin || ''
+//                 });
+
+//                 try {
+//                      await client.models.RestaurantMetaAccount.create({
+//                         restaurantId: phoneNbr,
+//                         metaBusinessAccessToken: innerData.accessToken || process.env.REACT_APP_META_SYSTEM_USER_TOKEN,
+//                         phoneNumberId: innerData.phoneNumberId,
+//                         wabaId: innerData.wabaId,
+//                         phoneNumber: phoneNbr,
+//                         registrationStatus: 'ACTIVE'
+//                     });
+//                 } catch (dbErr) { console.error("Failed to save DB credentials:", dbErr); }
+
+//                 localStorage.removeItem(`otp_attempts_${phoneNbr}`); // Reset attempts on success
+//                 setPhoneVerificationStep('ACTIVE');
+//                 setOtpCode('');
+//                 showMessage("✅ Phone securely registered to WhatsApp API!", "success");
+//             }
+//             else if (response && response.message === "PENDING_META_REVIEW") {
+//                 setPhoneVerificationStep('PENDING_REVIEW');
+//             }
+//             else {
+//                 // ENFORCE 2-TRY LIMIT ON FAILURE
+//                 const newAttempts = otpAttempts + 1;
+//                 setOtpAttempts(newAttempts);
+//                 localStorage.setItem(`otp_attempts_${phoneNbr}`, newAttempts);
+
+//                 if (newAttempts >= 2) {
+//                     setPhoneVerificationStep('LOCKED_OUT');
+//                     showMessage("Maximum verification attempts reached.", "error");
+//                 } else {
+//                     setPhoneVerificationStep('WAITING_OTP');
+//                     showMessage(`Verification failed. You have ${2 - newAttempts} attempt left.`, "error");
+//                 }
+//             }
+//         } catch (err) {
+//             setPhoneVerificationStep('WAITING_OTP');
+//             showMessage(`Network error: ${err.message}`, "error");
+//         }
+//     };
+
+//     // Helper variable to determine if the controls should be grayed out
+//     const isSetupDisabled = ['ACTIVE', 'LOCKED_OUT', 'PENDING_REVIEW'].includes(phoneVerificationStep);
+
+//     // --- RENDER UI ---
+//     return (
+//         <div className="max-w-5xl mx-auto pt-4 flex flex-col lg:flex-row gap-8 items-start">
+            
+//             {/* LEFT COLUMN: THE FORMS */}
+//             <div className="space-y-8 w-full lg:w-[400px] shrink-0">
+//                 {/* 1. BUSINESS IDENTITY */}
+//                 <div className="bg-slate-800/40 p-6 rounded-xl border border-slate-700">
+//                     <header className="border-l-4 border-sky-500 pl-3 mb-4">
+//                         <h2 className="text-sky-400 font-bold uppercase text-xs tracking-widest">1. Business Identity</h2>
+//                         <p className="text-[9px] text-slate-500 mt-1">Your restaurant's basic info</p>
+//                     </header>
+
+//                     <div className="space-y-4">
+//                         <div className="space-y-1">
+//                             <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Business Name <span className="text-red-500">*</span></label>
+//                             <input
+//                                 className="w-full bg-slate-900 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none"
+//                                 value={name}
+//                                 onChange={e => setName(e.target.value)}
+//                                 disabled={phoneVerificationStep === 'ACTIVE'}
+//                             />
+//                         </div>
+
+//                         <div className="space-y-1">
+//                             <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Location Coordinates</label>
+//                             <div className="flex gap-2">
+//                                 <input className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:ring-2 ring-sky-500 outline-none font-mono" placeholder="Latitude" value={coords.lat} onChange={e => handleCoordChange('lat', e.target.value)} />
+//                                 <input className="flex-1 bg-slate-900 p-3 rounded-xl text-white text-xs border border-slate-700 focus:ring-2 ring-sky-500 outline-none font-mono" placeholder="Longitude" value={coords.lng} onChange={e => handleCoordChange('lng', e.target.value)} />
+//                             </div>
+//                         </div>
+
+//                         <button onClick={() => navigator.geolocation.getCurrentPosition(pos => setCoords({ lat: pos.coords.latitude.toString(), lng: pos.coords.longitude.toString() }))} className="w-full bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-[10px] font-bold py-2 rounded-xl border border-sky-500/20 transition-all mb-2">
+//                             📍 Capture Current Location
+//                         </button>
+//                         <button onClick={handleUpdateBusinessConfig} disabled={saving} className="w-full py-3 rounded-xl font-black text-white bg-sky-600 hover:bg-sky-500 shadow-lg transition-all disabled:opacity-50">
+//                             {saving ? "SAVING..." : "SAVE BUSINESS INFO"}
+//                         </button>
+//                     </div>
+//                 </div>
+
+//                 {/* 2. PHONE NUMBER REGISTRATION */}
+//                 <div className="bg-slate-800/40 p-6 rounded-xl border border-slate-700 relative">
+//                     <header className="flex items-center gap-2 mb-4">
+//                         <div className={`w-6 h-6 rounded-full flex items-center justify-center ${phoneVerificationStep === 'ACTIVE' ? 'bg-green-500' : 'bg-slate-600'}`}>
+//                             <span className="text-white font-bold text-xs">W</span>
+//                         </div>
+//                         <div>
+//                             <h2 className="text-green-400 font-bold uppercase text-xs tracking-widest">2. WhatsApp Activation</h2>
+//                             <p className="text-[9px] text-slate-500 mt-0.5">Link your account phone number</p>
+//                         </div>
+//                     </header>
+
+//                     {/* --- BANNERS FOR DISABLED STATES --- */}
+//                     {phoneVerificationStep === 'ACTIVE' && (
+//                         <div className="mb-6 p-4 bg-green-900/20 rounded-lg border border-green-500/30 text-center shadow-inner">
+//                             <p className="text-green-400 text-sm font-black uppercase tracking-wider mb-2">✅ Connected</p>
+//                             <p className="text-[10px] text-slate-300">Your phone number is actively verified in the database.</p>
+//                         </div>
+//                     )}
+
+//                     {phoneVerificationStep === 'LOCKED_OUT' && (
+//                         <div className="mb-6 p-5 bg-slate-900/80 rounded-xl border border-red-500/50 text-center shadow-lg">
+//                             <div className="w-10 h-10 mx-auto bg-red-500/20 rounded-full flex items-center justify-center mb-3">
+//                                 <span className="text-red-500 text-lg">⚠️</span>
+//                             </div>
+//                             <p className="text-red-400 text-sm font-black mb-2 uppercase tracking-wide">Registration Locked</p>
+//                             <p className="text-[10px] text-slate-300 mb-4 leading-relaxed">
+//                                 You have exceeded the maximum (2) verification attempts. To protect your account from spam filters, please contact our support team to securely complete the setup.
+//                             </p>
+//                             <button 
+//                                 onClick={() => window.open('https://your-custom-chat-link.com', '_blank')} 
+//                                 className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold text-white text-xs shadow-md transition-all border border-indigo-500"
+//                             >
+//                                 💬 START SUPPORT CHAT
+//                             </button>
+//                         </div>
+//                     )}
+
+//                     {phoneVerificationStep === 'PENDING_REVIEW' && (
+//                          <div className="mb-6 p-4 bg-yellow-900/20 rounded-lg border border-yellow-500/30 text-center shadow-inner">
+//                             <p className="text-yellow-400 text-xs font-bold mb-2">⏳ Pending Meta Approval</p>
+//                             <p className="text-[10px] text-slate-300">Your business name is under review. Controls are temporarily locked.</p>
+//                          </div>
+//                     )}
+
+//                     {/* --- THE GRAYED-OUT CONTROLS AREA --- */}
+//                     <div className={`space-y-4 transition-all duration-300 ${isSetupDisabled ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
+                        
+//                         <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex items-center justify-between shadow-inner">
+//                             <div>
+//                                 <p className="text-[9px] font-black text-slate-500 uppercase">Principal Phone</p>
+//                                 <p className="text-white font-mono text-lg font-bold tracking-wide mt-1">{phoneNbr}</p>
+//                             </div>
+//                             <div className={`h-2 w-2 rounded-full ${phoneVerificationStep === 'ACTIVE' ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></div>
+//                         </div>
+
+//                         {phoneVerificationStep === 'WAITING_OTP' || phoneVerificationStep === 'VERIFYING_OTP' ? (
+//                             // OTP INPUT MODE
+//                             <div className="space-y-3 p-4 bg-slate-900/50 rounded-xl border border-slate-700">
+//                                 <p className="text-[10px] text-blue-200 text-center mb-2">
+//                                     Code sent via <strong>{verificationMethod}</strong>
+//                                 </p>
+//                                 <div>
+//                                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1 block mb-2">Enter 6-Digit Code</label>
+//                                     <input 
+//                                         type="text" 
+//                                         maxLength="6" 
+//                                         inputMode="numeric" 
+//                                         placeholder="000000" 
+//                                         value={otpCode} 
+//                                         onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))} 
+//                                         className="w-full bg-slate-900 p-4 rounded-xl text-white text-center text-2xl font-bold tracking-[0.5em] border border-slate-700 focus:ring-2 ring-green-500 outline-none" 
+//                                         disabled={phoneVerificationStep === 'VERIFYING_OTP'}
+//                                     />
+//                                 </div>
+//                                 <button 
+//                                     onClick={handleVerifyPhoneOTP} 
+//                                     disabled={otpCode.length !== 6 || phoneVerificationStep === 'VERIFYING_OTP'} 
+//                                     className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 py-3 rounded-lg font-bold text-white text-xs shadow-md transition-all flex justify-center items-center gap-2"
+//                                 >
+//                                     {phoneVerificationStep === 'VERIFYING_OTP' ? (
+//                                        <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> VERIFYING...</>
+//                                     ) : "VERIFY & ACTIVATE"}
+//                                 </button>
+//                                 <button onClick={() => { setPhoneVerificationStep(null); setOtpCode(''); }} className="w-full text-slate-400 text-[9px] font-bold py-2 transition-all hover:text-slate-300">← Cancel</button>
+//                             </div>
+//                         ) : (
+//                             // REQUEST MODE
+//                             <div className="space-y-4">
+//                                 <div className="grid grid-cols-2 gap-2 bg-slate-900/50 p-1 rounded-lg border border-slate-700">
+//                                     <button onClick={() => setVerificationMethod('SMS')} className={`py-2 rounded-md text-xs font-bold transition-all ${verificationMethod === 'SMS' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>
+//                                         📩 Send SMS
+//                                     </button>
+//                                     <button onClick={() => setVerificationMethod('VOICE')} className={`py-2 rounded-md text-xs font-bold transition-all ${verificationMethod === 'VOICE' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}>
+//                                         📞 Call Me
+//                                     </button>
+//                                 </div>
+
+//                                 <button 
+//                                     onClick={handleRequestPhoneVerification} 
+//                                     disabled={phoneVerificationStep === 'REQUESTING_CODE'} 
+//                                     className="w-full bg-green-600 hover:bg-green-500 disabled:opacity-50 py-3 rounded-lg font-bold text-white text-xs shadow-md transition-all flex justify-center items-center gap-2"
+//                                 >
+//                                     {phoneVerificationStep === 'REQUESTING_CODE' ? (
+//                                        <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> REQUESTING...</>
+//                                     ) : "SEND CODE & CONNECT"}
+//                                 </button>
+//                             </div>
+//                         )}
+//                     </div>
+//                 </div>
+
+//                 {/* FEEDBACK */}
+//                 {feedback.msg && (
+//                     <div className={`text-center text-[10px] font-bold py-3 px-3 rounded-lg border ${feedback.type === 'error' ? 'bg-red-900/30 text-red-400 border-red-500/30' : 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30'}`}>
+//                         {feedback.msg}
+//                     </div>
+//                 )}
+//             </div>
+
+//             {/* RIGHT COLUMN: CRITICAL GUIDELINES */}
+//             <div className="flex-1 w-full bg-red-900/10 p-6 rounded-xl border border-red-900/40 shadow-inner">
+//                 <header className="flex items-center gap-3 mb-6 border-b border-red-900/40 pb-4">
+//                     <span className="text-red-500 text-2xl animate-pulse">🚨</span>
+//                     <h2 className="text-red-400 font-black uppercase text-xs tracking-widest">Critical WhatsApp Setup Guidelines</h2>
+//                 </header>
+
+//                 <ul className="space-y-6 text-xs text-slate-300 leading-relaxed">
+//                     <li className="flex items-start gap-3">
+//                         <span className="text-yellow-500 text-base shrink-0 mt-0.5">⚠️</span>
+//                         <div>
+//                             <strong className="text-slate-200 block mb-1 uppercase tracking-wider text-[10px]">Choose Your Business Name Carefully</strong>
+//                             Meta manually reviews your display name. It must match your real-world brand. Using generic words (like "Home" or "Restaurant") or attempting to change the name later will immediately lock your account for compliance review.
+//                         </div>
+//                     </li>
+//                     <li className="flex items-start gap-3">
+//                         <span className="text-yellow-500 text-base shrink-0 mt-0.5">⚠️</span>
+//                         <div>
+//                             <strong className="text-slate-200 block mb-1 uppercase tracking-wider text-[10px]">Use a "Clean" Phone Number</strong>
+//                             The phone number you enter <strong className="text-red-400 font-bold">cannot</strong> be currently active on the standard WhatsApp or WhatsApp Business mobile apps. You must delete the account from your mobile phone before connecting it to this API.
+//                         </div>
+//                     </li>
+//                    <li className="flex items-start gap-3">
+//                         <span className="text-red-500 text-base shrink-0 mt-0.5">🚨</span>
+//                         <div className="w-full">
+//                             <strong className="text-red-400 block mb-1 uppercase tracking-wider text-[10px]">Strict 2-Attempt Limit</strong>
+//                             <p className="mb-3">
+//                                 You only have <strong className="text-white font-bold">2 attempts</strong> to request your 6-digit verification code. Do not spam the "Send Code" button. If you exceed this limit, Meta's fraud system will completely block your number for 24 hours.
+//                             </p>
+                            
+//                             {/* --- HIGHLIGHTED CONTACT BOX --- */}
+//                             <div className="p-3 bg-slate-900/60 border-l-2 border-blue-500 rounded-r-lg text-[11px] italic text-slate-300 shadow-inner flex flex-col space-y-0.5">
+//                                 <span><strong className="text-blue-400 not-italic mr-1">Locked out?</strong> Please email</span>
+//                                 <span> <a href="mailto:info@1st-hub.com" className="text-sky-400 font-bold hover:underline not-italic">info@1st-hub.com</a></span>
+//                                 <span>or call/message</span>
+//                                 <span><strong className="text-white font-bold tracking-wider not-italic mr-1">+973 3378 7388</strong> for assistance.</span>
+//                             </div>
+//                         </div>
+//                     </li>
+//                     <li className="flex items-start gap-3">
+//                         <span className="text-blue-400 text-base shrink-0 mt-0.5">📞</span>
+//                         <div>
+//                             <strong className="text-slate-200 block mb-1 uppercase tracking-wider text-[10px]">Voice vs. SMS Fallback</strong>
+//                             If the SMS text message does not arrive on your first attempt, do not immediately click SMS again. Wait 2 minutes and select the <strong className="text-white font-bold">📞 Call Me</strong> option for your second attempt.
+//                         </div>
+//                     </li>
+//                     <li className="flex items-start gap-3">
+//                         <span className="text-orange-400 text-base shrink-0 mt-0.5">⏳</span>
+//                         <div>
+//                             <strong className="text-slate-200 block mb-1 uppercase tracking-wider text-[10px]">Pending Approvals</strong>
+//                             If your setup gets locked in a "Pending Review" state, this means a human at Meta is reviewing your business name. Do not try to re-register; you must wait until Meta lifts the restriction on their end.
+//                         </div>
+//                     </li>
+//                 </ul>
+//             </div>
+
+//         </div>
+//     );
+// };
 const RestaurantSection = ({ pk, phoneNbr }) => {
     // Identity State
     const [name, setName] = useState('');
     const [coords, setCoords] = useState({ lat: '', lng: '' });
+    const [vat, setVat] = useState('0'); // 🟢 NEW: VAT State
     const [saving, setSaving] = useState(false);
     const [hasLoaded, setHasLoaded] = useState(false);
 
@@ -148,6 +614,10 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                 const { data: config } = await client.models.BusinessData.get({ pk, sk: 'CONFIG' });
                 if (config) {
                     setName(config.name || '');
+                    if (config.vat !== undefined && config.vat !== null) {
+                        setVat(config.vat.toString()); // 🟢 NEW: Load VAT
+                    }
+
                     try {
                         const loc = typeof config.location === 'string' ? JSON.parse(config.location) : config.location;
                         const lat = loc?.latitude?.N || loc?.latitude || loc?.lat;
@@ -155,7 +625,6 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                         if (lat) setCoords({ lat: String(lat), lng: String(lng) });
                     } catch (e) { }
 
-                    // 🟢 FIX: Check if phoneNumberId already exists on the CONFIG record
                     if (config.phoneNumberId) {
                         isAlreadyActive = true;
                         existingPhoneId = config.phoneNumberId;
@@ -189,7 +658,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                     }
                 }
 
-                // 🟢 Lock UI permanently if Active in EITHER table
+                // Lock UI permanently if Active in EITHER table
                 if (isAlreadyActive) {
                     setPhoneVerificationStep('ACTIVE');
                 }
@@ -217,6 +686,7 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                 sk: "CONFIG",
                 name: name.trim(),
                 entityType: 'Business',
+                vat: parseFloat(vat) || 0, // 🟢 NEW: Save VAT to database
                 location: JSON.stringify({
                     latitude: parseFloat(coords.lat),
                     longitude: parseFloat(coords.lng)
@@ -350,6 +820,19 @@ const RestaurantSection = ({ pk, phoneNbr }) => {
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 disabled={phoneVerificationStep === 'ACTIVE'}
+                            />
+                        </div>
+
+                        {/* 🟢 NEW: VAT Input */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">VAT Percentage (%)</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                className="w-full bg-slate-900 p-4 rounded-xl text-white border border-slate-700 focus:ring-2 ring-sky-500 outline-none"
+                                value={vat}
+                                onChange={e => setVat(e.target.value)}
+                                placeholder="e.g. 5 or 10"
                             />
                         </div>
 
@@ -554,7 +1037,8 @@ const ItemsSection = ({ pk, onUpdate }) => {
     const [item, setItem] = useState({
         name: '', price: '', description: '', quantity: '',
         stockStatus: true,
-        imageUrl: ''
+        imageUrl: '',
+        vipDiscount: '0' 
     });
     const [allItems, setAllItems] = useState([]);
     const [editingId, setEditingId] = useState(null);
@@ -604,19 +1088,19 @@ const ItemsSection = ({ pk, onUpdate }) => {
             description: selectedItem.description || '',
             quantity: selectedItem.quantity || '',
             stockStatus: selectedItem.stockStatus !== false,
-            imageUrl: previewImage
+            imageUrl: previewImage,
+            vipDiscount: selectedItem.vipDiscount ? selectedItem.vipDiscount.toString() : '0' 
         });
         setCategory(selectedItem.itemCategory || '');
         setShowItemSuggestions(false);
     };
 
     const clearForm = () => {
-        setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true, imageUrl: '' });
+        setItem({ name: '', price: '', description: '', quantity: '', stockStatus: true, imageUrl: '', vipDiscount: '0' });
         setCategory('');
         setEditingId(null);
     };
 
-    // ✅ UPDATED SUBMIT LOGIC: Queries DB for the latest ITEM ID
     const submit = async () => {
         if (!item.name.trim() || !item.price || !category.trim()) return alert("Missing fields");
         setSaving(true);
@@ -630,6 +1114,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
             description: item.description,
             stockStatus: item.stockStatus,
             quantity: item.quantity ? parseInt(item.quantity) : 0,
+            vipDiscount: item.vipDiscount ? parseFloat(item.vipDiscount) : 0, 
             imageUrl: dbImageString
         };
 
@@ -637,24 +1122,23 @@ const ItemsSection = ({ pk, onUpdate }) => {
             if (editingId) {
                 await client.models.BusinessData.update({ ...payload, sk: editingId });
             } else {
-                // Query Database for the Highest ITEM ID
                 const { data: latestItemData } = await client.models.BusinessData.listByBusiness({
                     pk: pk,
                     sk: { beginsWith: 'ITEM#' },
-                    sortDirection: 'DESC', // Get greatest first
-                    limit: 1 // Only need the top 1
+                    sortDirection: 'DESC', 
+                    limit: 1 
                 });
 
                 let nextNum = 1;
                 if (latestItemData && latestItemData.length > 0) {
-                    const latestSk = latestItemData[0].sk; // e.g. "ITEM#015"
+                    const latestSk = latestItemData[0].sk; 
                     const parsedNum = parseInt(latestSk.split('#')[1], 10);
                     if (!isNaN(parsedNum)) {
-                        nextNum = parsedNum + 1; // Increment
+                        nextNum = parsedNum + 1; 
                     }
                 }
 
-                const newSk = `ITEM#${String(nextNum).padStart(3, '0')}`; // Format e.g. "ITEM#016"
+                const newSk = `ITEM#${String(nextNum).padStart(3, '0')}`; 
 
                 await client.models.BusinessData.create({ ...payload, sk: newSk, entityType: 'ITEM' });
             }
@@ -687,7 +1171,7 @@ const ItemsSection = ({ pk, onUpdate }) => {
 
             {/* Image and Category */}
             <div className="flex gap-2 items-end">
-                <div className="relative w-[70px] h-[70px] bg-slate-800 rounded-lg border border-slate-700 overflow-hidden cursor-pointer">
+                <div className="relative w-[70px] h-[70px] bg-slate-800 rounded-lg border border-slate-700 overflow-hidden cursor-pointer shrink-0">
                     <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleImageUpload} />
                     {item.imageUrl ? <img src={item.imageUrl} className="w-full h-full object-cover" alt="prev" /> : <div className="w-full h-full flex items-center justify-center text-slate-500 text-xl">+</div>}
                 </div>
@@ -701,32 +1185,59 @@ const ItemsSection = ({ pk, onUpdate }) => {
                 </div>
             </div>
 
-            {/* Price, Qty, and Stock Status */}
-            <div className="flex gap-2">
-                <button
-                    onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
-                    className={`px-3 rounded-lg font-bold text-[10px] uppercase tracking-wide border transition-all ${item.stockStatus
-                            ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
-                            : 'bg-red-900/30 text-red-400 border-red-500/30'
-                        }`}
-                >
-                    {item.stockStatus ? 'In Stock' : 'Sold Out'}
-                </button>
+            {/* 🟢 UPDATED: Price, Qty, VIP Discount, and Stock Status with Labels */}
+            <div className="flex gap-2 items-end">
+                {/* Status Column */}
+                <div className="flex flex-col gap-1 shrink-0">
+                    <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Status</label>
+                    <button
+                        onClick={() => setItem(prev => ({ ...prev, stockStatus: !prev.stockStatus }))}
+                        className={`h-[46px] px-3 rounded-lg font-bold text-[10px] uppercase tracking-wide border transition-all ${item.stockStatus
+                                ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30'
+                                : 'bg-red-900/30 text-red-400 border-red-500/30'
+                            }`}
+                    >
+                        {item.stockStatus ? 'In Stock' : 'Sold Out'}
+                    </button>
+                </div>
 
+                {/* Qty Column */}
+                <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Stock Qty</label>
+                    <input
+                        className="w-16 h-[46px] bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm"
+                        type="number"
+                        placeholder="0"
+                        value={item.quantity}
+                        onChange={e => setItem({ ...item, quantity: e.target.value })}
+                    />
+                </div>
 
-                <input
-                    className=" w-28 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm"
-                    type="number"
-                    placeholder="Qty"
-                    value={item.quantity}
-                    onChange={e => setItem({ ...item, quantity: e.target.value })}
-                />
-                <input
-                    className="flex-1 w-20 bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm"
-                    placeholder="Price"
-                    value={item.price}
-                    onChange={e => setItem({ ...item, price: e.target.value })}
-                />
+                {/* VIP Discount Column */}
+                <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-amber-500 uppercase ml-1">VIP Disc %</label>
+                    <input
+                        className="w-20 h-[46px] bg-slate-800 p-3 rounded-lg text-amber-400 border border-slate-700 outline-none text-sm placeholder:text-slate-500"
+                        type="number"
+                        placeholder="0"
+                        value={item.vipDiscount}
+                        onChange={e => setItem({ ...item, vipDiscount: e.target.value })}
+                        title="Discount percentage exclusively for VIP customers"
+                    />
+                </div>
+
+                {/* Price Column */}
+                <div className="flex flex-col gap-1 flex-1">
+                    <label className="text-[9px] font-black text-slate-500 uppercase ml-1">Price (BD)</label>
+                    <input
+                        className="w-full h-[46px] bg-slate-800 p-3 rounded-lg text-white border border-slate-700 outline-none text-sm"
+                        placeholder="0.000"
+                        type="number"
+                        step="0.001"
+                        value={item.price}
+                        onChange={e => setItem({ ...item, price: e.target.value })}
+                    />
+                </div>
             </div>
 
             {/* Description Input */}
