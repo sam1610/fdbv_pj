@@ -1,19 +1,25 @@
-// amplify/functions/sendVipOffer/handler.ts
+
 // import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 // import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 // const client = new DynamoDBClient({});
 // const docClient = DynamoDBDocumentClient.from(client);
 
-// // 🟢 FIX: Look for the exact environment variable we injected in backend.ts
 // const TABLE_NAME = process.env.BUSINESS_DATA_TABLE;
 
 // export const handler = async (event: any) => {
 //     console.log("Event Arguments:", event.arguments);
+//     const args = event.arguments || {}; 
+
 //     const { 
 //         businessPhone, customerPhone, customerName, favoriteItem, 
 //         offerText, offerType, offerValue, imageUrl, validForHours 
-//     } = event.arguments;
+//     } = args;
+
+//     if (!businessPhone || !customerPhone) {
+//         console.error("❌ Missing required arguments.");
+//         return false;
+//     }
 
 //     try {
 //         const formattedBusiness = businessPhone.startsWith('+') ? businessPhone : `+${businessPhone}`;
@@ -22,7 +28,7 @@
 //         const BUSINESS_PK = `BUSINESS#${formattedBusiness}`;
 //         const CUSTOMER_SK = `CUSTOMER#${formattedBusiness}#${cleanCustomerPhone}`;
 
-//         // 1️⃣ FETCH CREDENTIALS DIRECTLY FROM DYNAMODB
+//         // 1️⃣ FETCH CREDENTIALS & RESTAURANT NAME
 //         const getConfigCmd = new GetCommand({
 //             TableName: TABLE_NAME,
 //             Key: { pk: BUSINESS_PK, sk: "CONFIG" }
@@ -35,28 +41,30 @@
 //             return false;
 //         }
 
-//         // 2️⃣ SEND WHATSAPP TEMPLATE (Self-contained fetch)
+//         // 🟢 FIX 1: Dynamically grab the Restaurant Name from the DB Config!
+//         const dynamicRestaurantName = credentials?.name || "VIP Rewards";
+
+//         // 2️⃣ SEND WHATSAPP TEMPLATE
 //         const waPayload = {
 //             messaging_product: "whatsapp",
 //             recipient_type: "individual",
 //             to: cleanCustomerPhone, 
 //             type: "template",
 //             template: {
-//                 name: "vip_favorite_item", // You kept the same name, so we leave this
+//                 // 🟢 FIX 2: Pointing to your brand new template!
+//                 name: "ai_vip_offer", 
 //                 language: { code: "en" },
 //                 components: [
 //                     { 
 //                         type: "header", 
 //                         parameters: [
-//                             // 🟢 This fills the {{1}} in your new Text Header
-//                             // I am using the business name from your Meta screenshot
-//                             { type: "text", text: "1st-Hub-IT" } 
+//                             // 🟢 Injecting the dynamic name here!
+//                             { type: "text", text: dynamicRestaurantName } 
 //                         ] 
 //                     },
 //                     { 
 //                         type: "body", 
 //                         parameters: [
-//                             // 🟢 These fill the {{1}}, {{2}}, {{3}} in your Body
 //                             { type: "text", text: customerName || "VIP" },
 //                             { type: "text", text: favoriteItem },
 //                             { type: "text", text: offerText }
@@ -87,19 +95,18 @@
 //         // 3️⃣ UPDATE CUSTOMER DIGITAL WALLET
 //         const expiresAt = new Date();
 //         expiresAt.setHours(expiresAt.getHours() + validForHours);
-//         const nowIso = new Date().toISOString(); // 🟢 Get current time
+//         const nowIso = new Date().toISOString(); 
 
 //         const updateCmd = new UpdateCommand({
 //             TableName: TABLE_NAME,
 //             Key: { pk: BUSINESS_PK, sk: CUSTOMER_SK },
-//             // 🟢 Add lastOfferSentAt to the UpdateExpression
 //             UpdateExpression: "SET activeOfferText = :t, activeOfferType = :type, activeOfferValue = :v, offerExpiresAt = :exp, lastOfferSentAt = :sent",
 //             ExpressionAttributeValues: {
 //                 ":t": offerText,
 //                 ":type": offerType,
 //                 ":v": offerValue,
 //                 ":exp": expiresAt.toISOString(),
-//                 ":sent": nowIso // 🟢 Stamp the record!
+//                 ":sent": nowIso 
 //             }
 //         });
 
@@ -113,8 +120,11 @@
 //         return false;
 //     }
 // };
+
+
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import * as crypto from 'crypto'; // 🟢 Added to generate the unique flow token
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
@@ -155,8 +165,11 @@ export const handler = async (event: any) => {
             return false;
         }
 
-        // 🟢 FIX 1: Dynamically grab the Restaurant Name from the DB Config!
         const dynamicRestaurantName = credentials?.name || "VIP Rewards";
+
+        // 🟢 GENERATE DYNAMIC FLOW TOKEN
+        // This is REQUIRED so the webhook knows who is opening the menu!
+        const flowToken = `flow_${crypto.randomUUID()}---ph_${cleanCustomerPhone}---biz_${formattedBusiness}---name_${encodeURIComponent(customerName || "VIP")}`;
 
         // 2️⃣ SEND WHATSAPP TEMPLATE
         const waPayload = {
@@ -165,14 +178,13 @@ export const handler = async (event: any) => {
             to: cleanCustomerPhone, 
             type: "template",
             template: {
-                // 🟢 FIX 2: Pointing to your brand new template!
-                name: "ai_vip_offer", 
+                // 🟢 Change this to your NEW template name (e.g., ai_vip_offer_v2)
+                name: "ai_vip_offer_v2", 
                 language: { code: "en" },
                 components: [
                     { 
                         type: "header", 
                         parameters: [
-                            // 🟢 Injecting the dynamic name here!
                             { type: "text", text: dynamicRestaurantName } 
                         ] 
                     },
@@ -182,6 +194,20 @@ export const handler = async (event: any) => {
                             { type: "text", text: customerName || "VIP" },
                             { type: "text", text: favoriteItem },
                             { type: "text", text: offerText }
+                        ]
+                    },
+                    // 🟢 THE NEW FLOW BUTTON INJECTION
+                    {
+                        type: "button",
+                        sub_type: "flow",
+                        index: "0", // Assumes the Flow button is the first/only button
+                        parameters: [
+                            {
+                                type: "action",
+                                action: {
+                                    flow_token: flowToken
+                                }
+                            }
                         ]
                     }
                 ]
