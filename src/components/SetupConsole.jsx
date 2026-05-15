@@ -1215,16 +1215,16 @@ const ItemsSection = ({ pk, onUpdate }) => {
 
                 {/* VIP Discount Column */}
                 <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-black text-amber-500 uppercase ml-1">VIP Disc %</label>
-                    <input
-                        className="w-20 h-[46px] bg-slate-800 p-3 rounded-lg text-amber-400 border border-slate-700 outline-none text-sm placeholder:text-slate-500"
-                        type="number"
-                        placeholder="0"
-                        value={item.vipDiscount}
-                        onChange={e => setItem({ ...item, vipDiscount: e.target.value })}
-                        title="Discount percentage exclusively for VIP customers"
-                    />
-                </div>
+    <label className="text-[9px] font-black text-amber-500 uppercase ml-1">Item Promo %</label>
+    <input
+        className="w-20 h-[46px] bg-slate-800 p-3 rounded-lg text-amber-400 border border-slate-700 outline-none text-sm placeholder:text-slate-500"
+        type="number"
+        placeholder="0"
+        value={item.vipDiscount} // Leaves the backend code the same
+        onChange={e => setItem({ ...item, vipDiscount: e.target.value })}
+        title="Discount percentage applied to this item for EVERYONE"
+    />
+</div>
 
                 {/* Price Column */}
                 <div className="flex flex-col gap-1 flex-1">
