@@ -108,17 +108,17 @@ const OrderDetailModal = ({ orderId, orderStatus, orderTotal, customerId, custom
                 <div className="p-4 border-b border-slate-700 flex justify-between items-start shrink-0">
                     <div className="flex flex-col gap-1">
                         <h2 className="text-sm font-bold text-orange-400 bg-black/10 px-2 py-0.5 rounded inline-block w-fit">
-                            {exactOrderId.split('-')[0]}
+                            {exactOrderId.split('#')[0]}
                         </h2>
                         
                         <div className="mt-2">
                             <h2 className="text-base font-bold text-white flex items-center gap-2">
                                 {displayName}
-                                {orderSummary?.discountAmount > 0 && (
-                                    <span className="text-[9px] bg-fuchsia-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                        VIP Member
-                                    </span>
-                                )}
+                                {orderSummary?.activeOfferType && orderSummary.activeOfferType !== "NONE" && (
+    <span className="text-[9px] bg-fuchsia-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+        VIP Member
+    </span>
+)}
                             </h2>
                             <h2 className="text-xs font-medium text-slate-400 font-mono tracking-wide">{displayPhone}</h2>
                         </div>

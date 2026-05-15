@@ -3,6 +3,7 @@ import { client } from '../DataHook/amplifyClient';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import DeliveryOptimizer from './DeliveryOptimizer';
 import OrderDetailModal from './OrderDetailModal';
+
 // --- Config & Helpers ---
 const classNames = (...classes) => classes.filter(Boolean).join(' ');
 const ALL_STATUSES = ['ORDERED', 'IN_PREPARATION', 'PREPARED', 'DELIVERING', 'DELIVERED'];
@@ -82,40 +83,6 @@ const TABS = [
   { id: 'Prepared', label: 'Prepared' },
   { id: 'all', label: 'All History' }
 ];
-
-// 🟢 REFACTORED OrderFilters: Removed loadingMap entirely. Button just opens the view.
-const OrderFilters = ({ currentFilter, setFilter, hasPrepared, readyForDispatch, onDispatch }) => (
-  <div className="flex flex-col space-y-4 mb-6">
-    <div className="flex bg-slate-800 p-1.5 rounded-2xl border border-slate-700 shadow-inner">
-      {TABS.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => setFilter(tab.id)}
-          className={classNames(
-            'flex-1 py-3 px-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200',
-            currentFilter === tab.id 
-              ? 'bg-sky-600 text-white shadow-lg' 
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-          )}
-        >
-          {tab.label} {tab.id === 'Prepared' && hasPrepared > 0 ? `(${hasPrepared})` : ''}
-        </button>
-      ))}
-    </div>
-
-    <button
-      onClick={onDispatch}
-      className="w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl transition-all active:scale-[0.98] bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white hover:brightness-110"
-    >
-      <div className="flex items-center justify-center gap-2">
-        <span>📍 Dispatch Center</span>
-        <span className="bg-white/20 px-2 py-0.5 rounded-lg text-[10px]">
-          {readyForDispatch.length} Ready
-        </span>
-      </div>
-    </button>
-  </div>
-);
 
 const OrderStatusEditor = ({ order, isEditing, onEdit, onStatusChange }) => {
   if (isEditing) {
@@ -209,6 +176,8 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('active');
+  const [searchQuery, setSearchQuery] = useState(''); 
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false); // 🟢 Tracks expanding UI
   const [editingId, setEditingId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
   
@@ -216,11 +185,20 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
   const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
 
   const isMounted = useRef(true);
+  const searchInputRef = useRef(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  
   useEffect(() => {
     isMounted.current = true;
     return () => { isMounted.current = false; };
   }, []);
+
+  // Focus the input automatically when the search bar slides open
+  useEffect(() => {
+    if (isSearchExpanded && searchInputRef.current) {
+        searchInputRef.current.focus();
+    }
+  }, [isSearchExpanded]);
 
   useEffect(() => {
     if (!phoneNbr) return;
@@ -283,11 +261,28 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
 
   const filteredOrders = useMemo(() => {
     if (!sortedOrders.length) return [];
-    if (filter === 'active') return sortedOrders.filter(o => ['ORDERED', 'IN_PREPARATION'].includes(o.orderStatus));
-    if (filter === 'Prepared') return sortedOrders.filter(o => o.orderStatus === 'PREPARED');
-    if (filter === 'all') return sortedOrders;
-    return [];
-  }, [sortedOrders, filter]);
+    
+    // 1. Filter by Tab
+    let result = sortedOrders;
+    if (filter === 'active') {
+        result = result.filter(o => ['ORDERED', 'IN_PREPARATION'].includes(o.orderStatus));
+    } else if (filter === 'Prepared') {
+        result = result.filter(o => o.orderStatus === 'PREPARED');
+    }
+
+    // 2. Filter by Phone Search
+    if (searchQuery) {
+        const cleanQuery = searchQuery.replace(/\D/g, ''); 
+        if (cleanQuery) {
+            result = result.filter(o => {
+                const phone = getCustPhone(o);
+                return phone && phone.includes(cleanQuery);
+            });
+        }
+    }
+    
+    return result;
+  }, [sortedOrders, filter, searchQuery]);
 
   const readyForDispatch = useMemo(() => {
     return sortedOrders.filter(o => o.orderStatus === 'PREPARED' && o.location !== null).map(order => ({
@@ -357,7 +352,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
-      <header className="flex justify-between items-end mb-6">
+      <header className="flex justify-between items-end mb-4">
         <div>
           <h1 className="text-2xl font-black text-white tracking-tighter uppercase leading-none">
             Orders <span className="text-sky-500">Live</span>
@@ -371,15 +366,90 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
         </div>
       </header>
 
-      {/* 🟢 ACTION: The dispatch button now simply opens the map. Map handles fetching agents. */}
-      <OrderFilters 
-        currentFilter={filter} 
-        setFilter={setFilter} 
-        hasPrepared={readyForDispatch.length} 
-        readyForDispatch={readyForDispatch}
-        onDispatch={() => setFilter('Auto-Assign')} 
-      />
+      {/* 🟢 UNIFIED TOOLBAR: Tabs + Dispatch + Expandable Search on ONE LINE */}
+      <div className="flex items-center gap-2 mb-6 h-[52px]">
+          
+          {/* Main Controls Container */}
+          <div className="flex h-full bg-slate-800 p-1 rounded-2xl border border-slate-700 shadow-inner flex-grow overflow-x-auto no-scrollbar">
+              {TABS.map((tab) => (
+                  <button
+                      key={tab.id}
+                      onClick={() => setFilter(tab.id)}
+                      className={classNames(
+                          'flex-1 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 whitespace-nowrap',
+                          filter === tab.id
+                              ? 'bg-sky-600 text-white shadow-lg'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                      )}
+                  >
+                      {tab.label} {tab.id === 'Prepared' && readyForDispatch.length > 0 ? `(${readyForDispatch.length})` : ''}
+                  </button>
+              ))}
 
+              {/* Dispatch Center Button (Acts as a Tab) */}
+              <button
+                  onClick={() => setFilter('Auto-Assign')}
+                  className={classNames(
+                      'flex-1 flex items-center justify-center gap-2 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 whitespace-nowrap ml-1',
+                      filter === 'Auto-Assign'
+                          ? 'bg-fuchsia-600 text-white shadow-lg' 
+                          : 'bg-gradient-to-r from-indigo-600/80 via-purple-600/80 to-pink-600/80 text-white hover:brightness-110 shadow-md'
+                  )}
+              >
+                  <span>📍 Dispatch Center</span>
+                  {readyForDispatch.length > 0 && (
+                      <span className="bg-white/20 px-1.5 py-0.5 rounded-md text-[9px]">
+                          {readyForDispatch.length} Ready
+                      </span>
+                  )}
+              </button>
+          </div>
+
+          {/* Expandable Search Input */}
+          <div 
+              className={classNames(
+                  "relative h-full flex items-center bg-slate-800 border border-slate-700 rounded-2xl transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0",
+                  isSearchExpanded || searchQuery ? "w-64" : "w-[52px] cursor-pointer hover:bg-slate-700"
+              )}
+              onClick={() => { if (!isSearchExpanded) setIsSearchExpanded(true); }}
+          >
+              <div className="absolute left-0 w-[52px] h-full flex items-center justify-center text-slate-400">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+              </div>
+              
+              <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search phone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onBlur={() => { if (!searchQuery) setIsSearchExpanded(false); }}
+                  className={classNames(
+                      "h-full w-full bg-transparent text-white text-sm outline-none transition-all duration-300 placeholder:text-slate-500",
+                      isSearchExpanded || searchQuery ? "pl-10 pr-10 opacity-100" : "px-0 opacity-0 cursor-pointer"
+                  )}
+              />
+
+              {(isSearchExpanded || searchQuery) && (
+                  <button
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          setSearchQuery('');
+                          setIsSearchExpanded(false);
+                      }}
+                      className="absolute right-0 w-[40px] h-full flex items-center justify-center text-slate-400 hover:text-white"
+                  >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                  </button>
+              )}
+          </div>
+      </div>
+
+      {/* Main Content Area */}
       {filter !== 'Auto-Assign' ? (
         <div ref={parentRef} className="overflow-y-auto h-[600px] pr-2">
           {filteredOrders.length > 0 ? (
@@ -395,14 +465,17 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
                         updatingId={updatingId}
                         onStatusChange={handleStatusChange} 
                         getAgentName={getAgentName}
-                        // 🟢 3. REPLACE global setModal with local setSelectedOrder
                         onClick={() => !editingId && setSelectedOrder(order)} 
                     />
                   </div>
                 );
               })}
             </div>
-          ) : <p className="text-slate-400 text-center mt-8">No {filter} orders found.</p>}
+          ) : (
+            <p className="text-slate-400 text-center mt-8 font-mono">
+                {searchQuery ? `No ${filter} orders found for "${searchQuery}".` : `No ${filter} orders found.`}
+            </p>
+          )}
         </div>
       ) : (
         <DeliveryOptimizer
@@ -413,7 +486,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
           phoneNbr={phoneNbr}
         />
       )}
-      {/* 🟢 4. RENDER THE NESTED MODAL (Just like in CustomersDetailModal) */}
+      
       {selectedOrder && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center">
               <OrderDetailModal
