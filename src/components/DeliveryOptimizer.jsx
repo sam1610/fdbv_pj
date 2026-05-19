@@ -144,7 +144,6 @@ const DeliveryOptimizer = ({
   const animationFrameId = useRef(null);
   const isMountedRef = useRef(true); 
 
-  // Self-Managing Live Agents State
   const [liveAgents, setLiveAgents] = useState([]);
   const [isFetchingAgents, setIsFetchingAgents] = useState(true);
 
@@ -154,18 +153,15 @@ const DeliveryOptimizer = ({
   
   const persistentInfo = useRef({});
 
-  // UI State
   const [isMenuOpen, setIsMenuOpen] = useState(true); 
   const [showDelivered, setShowDelivered] = useState(false); 
   const [showDelivering, setShowDelivering] = useState(true);
   
-  // Date & History
   const [dateFilter, setDateFilter] = useState({ start: getTodayString(), end: getTodayString(), label: 'Today' });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [fetchedHistory, setFetchedHistory] = useState([]); 
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // Logic State
   const [assignments, setAssignments] = useState({}); 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false); 
@@ -174,7 +170,7 @@ const DeliveryOptimizer = ({
   const [activeTooltipId, setActiveTooltipId] = useState(null); 
   const [orderItemsCache, setOrderItemsCache] = useState({}); 
 
-  // Fetch completely fresh agents on mount
+  // Fetch agents on mount with STRICT SHIELD
   useEffect(() => {
       let isMounted = true;
       const fetchFreshAgents = async () => {
@@ -187,16 +183,17 @@ const DeliveryOptimizer = ({
               );
 
               const parsedAgents = allProfiles
-                .filter(profile => profile.stockStatus !== false) 
+                // 🟢 STRICT FIX: Reject anything that isn't explicitly an AGENT link
+                .filter(profile => String(profile.sk).startsWith('AGENT#') && profile.stockStatus !== false) 
                 .map(profile => ({
-                  id: profile.sk, // e.g., "AGENT#97333787388"
+                  id: profile.sk, 
                   name: profile.name || `Agent ${profile.sk.slice(-4)}`,
                   maxCapacity: profile.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
                   currentLoad: profile.capacityLeft ? parseInt(profile.capacityLeft) : 0,
                   location: parseLocation(profile.location),
                   phone: profile.phone || profile.sk.replace('AGENT#', '')
               }));
-
+              
               if (isMounted) setLiveAgents(parsedAgents);
           } catch (e) {
               console.error("Error fetching live agents for Map:", e);
@@ -215,20 +212,17 @@ const DeliveryOptimizer = ({
       return () => { isMountedRef.current = false; };
   }, [liveAgents]);
 
- const findAgent = (idToFind) => {
+  const findAgent = (idToFind) => {
       if (!idToFind) return null;
       const cleanToFind = getCleanPhone(idToFind);
-      // 🟢 FIX: Check against agent.sk or agent.id
-      return liveAgents.find(a => getCleanPhone(a.sk || a.id) === cleanToFind);
+      return liveAgents.find(a => getCleanPhone(a.id) === cleanToFind);
   };
 
   const getAgentColor = (agentId) => {
     if (!agentId) return '#64748b'; 
-    // 🟢 FIX: Check against agent.sk or agent.id to locate index
-    const index = liveAgents.findIndex(a => getCleanPhone(a.sk || a.id) === getCleanPhone(agentId)); 
+    const index = liveAgents.findIndex(a => getCleanPhone(a.id) === getCleanPhone(agentId)); 
     return AGENT_COLORS[index % AGENT_COLORS.length] || '#64748b';
   };
-
 
   const displayedOrders = useMemo(() => {
       const today = getTodayString();
@@ -250,14 +244,12 @@ const DeliveryOptimizer = ({
       });
   }, [orders, fetchedHistory, dateFilter, showDelivered, showDelivering]);
 
-  const hasActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED', 'DELIVERING'].includes(o.orderStatus));
-
-  // 🟢 AUTOMATIC INTERACTION ENGINE TRIGGER
+  // 🟢 AUTOMATIC AI ROUTING ENGINE TRIGGER
   useEffect(() => {
       if (!isFetchingAgents && liveAgents.length > 0 && displayedOrders.length > 0) {
           const hasUnassignedActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED'].includes(o.orderStatus));
           if (hasUnassignedActiveOrders && !loading) {
-              console.log("🤖 Dispatch Center Active: Automatically calculating optimized fleets...");
+              console.log("🤖 Dispatch Center Active: Calculating optimized fleets...");
               runOptimization();
           }
       }
@@ -311,9 +303,7 @@ const DeliveryOptimizer = ({
           
           setOrderItemsCache(prev => ({ ...prev, [order.sk]: lineItems }));
           return lineItems;
-      } catch (err) { 
-          return []; 
-      }
+      } catch (err) { return []; }
   };
 
   const handleOrderClick = async (e, order) => {
@@ -676,7 +666,6 @@ const DeliveryOptimizer = ({
           proposal.forEach(p => { 
               if (p.assignedOrders) { 
                   p.assignedOrders.forEach(orderSk => { 
-                      // 🟢 INTEGRATION FIX: Map the short id back to the full primary AGENT# string
                       const fullAgentObj = latestAgentsRef.current.find(a => getCleanPhone(a.id) === getCleanPhone(p.agentId));
                       if (fullAgentObj) {
                           newAssignments[orderSk] = fullAgentObj.id; 
@@ -739,14 +728,20 @@ const DeliveryOptimizer = ({
         
         <div className={`absolute top-0 bottom-0 left-0 w-80 bg-slate-900 border-r border-slate-700 shadow-2xl transform transition-transform duration-300 flex flex-col ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             
-            {/* Header: Dispatch Buttons (🟢 REMOVED "RECALCULATE MATRIX" BUTTON) */}
+            {/* Header: Dispatch Buttons */}
             <div className="p-6 border-b border-slate-700 bg-slate-800">
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-4 text-center ">Dispatch</h2>
                 {hasActiveOrders ? (
                   <div className="w-full">
-                    <button onClick={handleDispatch} disabled={loading || saving || Object.keys(assignments).length === 0} className={`text-white font-bold rounded-lg h-12 w-full flex items-center justify-center text-sm transition-all ${Object.keys(assignments).length > 0 ? 'bg-blue-600 hover:bg-blue-500 shadow-lg' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
-                        {saving ? "Deploying Fleet..." : "📦 Confirm Fleet Assignments"}
-                    </button>
+                    {loading ? (
+                        <div className="text-emerald-400 text-xs font-bold text-center py-2 animate-pulse bg-emerald-900/20 rounded-lg border border-emerald-500/30">
+                            🤖 AI Route Matrix Calculating...
+                        </div>
+                    ) : (
+                        <button onClick={handleDispatch} disabled={saving || Object.keys(assignments).length === 0} className={`text-white font-bold rounded-lg h-12 w-full flex items-center justify-center text-sm transition-all ${Object.keys(assignments).length > 0 ? 'bg-blue-600 hover:bg-blue-500 shadow-lg' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                            {saving ? "Deploying Fleet..." : "📦 Confirm Fleet Assignments"}
+                        </button>
+                    )}
                   </div>
                 ) : <div className="text-center py-2 text-slate-400 text-sm bg-slate-700/30 rounded border border-slate-600">No active orders.</div>}
             </div>
@@ -858,14 +853,11 @@ const DeliveryOptimizer = ({
                       >
                           <option value="" className="text-slate-500 font-bold">Unassigned</option>
                           {liveAgents.map((agent, aIndex) => {
-                              // 🟢 FIX: Access key via agent.sk or agent.id
-                              const currentAgentValue = agent.sk || agent.id;
-                              const optionColorHex = getAgentColor(currentAgentValue);
-                              
+                              const optionColorHex = getAgentColor(agent.id);
                               return (
                                 <option 
                                   key={`ag-${aIndex}`} 
-                                  value={currentAgentValue}
+                                  value={agent.id}
                                   style={{ color: optionColorHex }}
                                   className="bg-slate-900 font-bold text-xs"
                                 >
