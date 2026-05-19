@@ -183,7 +183,6 @@ const DeliveryOptimizer = ({
               );
 
               const parsedAgents = allProfiles
-                // 🟢 STRICT FIX: Reject anything that isn't explicitly an AGENT link
                 .filter(profile => String(profile.sk).startsWith('AGENT#') && profile.stockStatus !== false) 
                 .map(profile => ({
                   id: profile.sk, 
@@ -243,6 +242,9 @@ const DeliveryOptimizer = ({
           return true;
       });
   }, [orders, fetchedHistory, dateFilter, showDelivered, showDelivering]);
+
+  // 🟢 ADDED MISSING VARIABLE BACK IN
+  const hasActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED', 'DELIVERING'].includes(o.orderStatus));
 
   // 🟢 AUTOMATIC AI ROUTING ENGINE TRIGGER
   useEffect(() => {
