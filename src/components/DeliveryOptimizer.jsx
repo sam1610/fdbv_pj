@@ -144,7 +144,7 @@ const DeliveryOptimizer = ({
   const animationFrameId = useRef(null);
   const isMountedRef = useRef(true); 
 
-  // 🟢 NEW STATE: Self-Managing Live Agents
+  // Self-Managing Live Agents State
   const [liveAgents, setLiveAgents] = useState([]);
   const [isFetchingAgents, setIsFetchingAgents] = useState(true);
 
@@ -174,7 +174,7 @@ const DeliveryOptimizer = ({
   const [activeTooltipId, setActiveTooltipId] = useState(null); 
   const [orderItemsCache, setOrderItemsCache] = useState({}); 
 
-  // 🟢 NEW EFFECT: Fetch completely fresh agents on mount
+  // Fetch completely fresh agents on mount
   useEffect(() => {
       let isMounted = true;
       const fetchFreshAgents = async () => {
@@ -183,11 +183,10 @@ const DeliveryOptimizer = ({
               const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
               const { data: allProfiles } = await client.models.BusinessData.listByBusiness(
                   { pk: `BUSINESS#${formattedPhone}`, sk: { beginsWith: 'AGENT#' } },
-                  { authMode: 'apiKey' } // Ensures no Cognito permission blocks
+                  { authMode: 'apiKey' } 
               );
 
               const parsedAgents = allProfiles
-                // 🟢 FIX 1: Filter out inactive agents based on stockStatus BEFORE mapping
                 .filter(profile => profile.stockStatus !== false) 
                 .map(profile => ({
                   id: profile.sk,
@@ -249,6 +248,18 @@ const DeliveryOptimizer = ({
   }, [orders, fetchedHistory, dateFilter, showDelivered, showDelivering]);
 
   const hasActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED', 'DELIVERING'].includes(o.orderStatus));
+
+  // 🟢 NEW AUTOMATIC AI TRIGGER EFFECT
+  // Triggers optimization metrics and AI routing immediately once ready
+  useEffect(() => {
+      if (!isFetchingAgents && liveAgents.length > 0 && displayedOrders.length > 0) {
+          const hasUnassignedActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED'].includes(o.orderStatus));
+          if (hasUnassignedActiveOrders && !loading) {
+              console.log("🤖 Dispatch Center Active: Automatically calculation optimized fleets...");
+              runOptimization();
+          }
+      }
+  }, [isFetchingAgents, liveAgents.length, orders]);
 
   useEffect(() => {
       const today = getTodayString();
@@ -373,7 +384,7 @@ const DeliveryOptimizer = ({
           new maplibregl.Marker({ element: el }).setLngLat([restaurantLocation.longitude, restaurantLocation.latitude]).addTo(map);
         }
 
-        plotOrdersOnMap(displayedOrders, map, assignments, focusedAgentId);
+        plotOrdersOnMap(displayedOrders, mapInstance.current, assignments, focusedAgentId);
 
       } catch (error) { console.error("Map Error:", error); }
     }
@@ -621,7 +632,7 @@ const DeliveryOptimizer = ({
     try {
       const session = await fetchAuthSession();
       const geoClient = new GeoRoutesClient({ region: outputs.geo.aws_region, credentials: session.credentials });
-      const validAgents = liveAgents.filter(a => parseLocation(a.location));
+      const validAgents = latestAgentsRef.current.filter(a => parseLocation(a.location));
       const orderMetrics = {};
       
       const activeOrders = displayedOrders.filter(o => ['ORDERED', 'PREPARED'].includes(o.orderStatus));
@@ -729,10 +740,10 @@ const DeliveryOptimizer = ({
                 {hasActiveOrders ? (
                   <div className="flex gap-2 w-full flex-col">
                     <button onClick={runOptimization} disabled={loading || saving || isFetchingAgents} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg h-10 flex items-center justify-center text-sm transition-all">
-                        {loading || isFetchingAgents ? "Calculating..." : "⚡️ Auto-Assign"}
+                        {loading || isFetchingAgents ? "Calculating Routes..." : "⚡️ Recalculate Matrix"}
                     </button>
                     <button onClick={handleDispatch} disabled={loading || saving || Object.keys(assignments).length === 0} className={`text-white font-bold rounded-lg h-10 flex items-center justify-center text-sm transition-all ${Object.keys(assignments).length > 0 ? 'bg-blue-600 hover:bg-blue-500 shadow-lg' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
-                        {saving ? "Processing..." : "📦 Confirm"}
+                        {saving ? "Processing..." : "📦 Confirm Assignments"}
                     </button>
                   </div>
                 ) : <div className="text-center py-2 text-slate-400 text-sm bg-slate-700/30 rounded border border-slate-600">No active orders.</div>}
@@ -776,7 +787,9 @@ const DeliveryOptimizer = ({
                   const custPhone = formatPhone(o._shieldedPhone);
                   const agentPhoneStr = formatPhone(agentObj?.phone || getCleanPhone(assignedAgentId));
                   const custName = o._shieldedName;
-                  const color = agentObj ? getAgentColor(strictSelectValue) : '#475569'; 
+                  
+                  // 🟢 Fetch matching indicator color for active selection text
+                  const activeColorHex = agentObj ? getAgentColor(strictSelectValue) : '#ffffff'; 
 
                   if (isDelivered) {
                       return (
@@ -795,7 +808,7 @@ const DeliveryOptimizer = ({
                                   <p className="font-bold text-xs text-slate-200 truncate">
                                       {custName} <span className="text-slate-400 font-normal ml-1">({custPhone})</span>
                                   </p>
-                                  <p className="text-[10px] text-slate-400 font-mono">Agent: <span style={{color: color, fontWeight: 'bold'}}>{agentPhoneStr}</span></p>
+                                  <p className="text-[10px] text-slate-400 font-mono">Agent: <span style={{color: activeColorHex, fontWeight: 'bold'}}>{agentPhoneStr}</span></p>
                               </div>
                               
                               {activeTooltipId === o.sk && (
@@ -819,10 +832,10 @@ const DeliveryOptimizer = ({
                     key={o.sk || i} 
                     onClick={(e) => { handleOrderClick(e, o); setIsMenuOpen(false); }} 
                     className={`bg-slate-800 rounded-lg border p-3 cursor-pointer shadow-sm group relative transition-colors ${isPending ? 'bg-slate-800 border-l-4' : 'border-slate-700 hover:border-blue-400 border-l-4'}`} 
-                    style={{ borderLeftColor: color }} 
+                    style={{ borderLeftColor: activeColorHex }} 
                   >
                       <div className="flex items-center justify-between mb-2">
-                          <span className="text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: color }}>{i+1}</span>
+                          <span className="text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: activeColorHex }}>{i+1}</span>
                           {optimizationMetrics[o.sk] && (<span className="text-[10px] text-emerald-400 font-mono bg-emerald-900/30 px-2 py-0.5 rounded">{optimizationMetrics[o.sk].dist}km</span>)}
                       </div>
                       
@@ -833,15 +846,28 @@ const DeliveryOptimizer = ({
                             <p className="text-[10px] text-slate-500">{shortId}</p>
                       </div>
                       
-                      {/* 🟢 NEW DROPDOWN: Uses liveAgents directly */}
+                      {/* 🟢 UPGRADED DROPDOWN LIST: Color-coded entries + matching select fonts */}
                       <select 
                         value={strictSelectValue} 
+                        style={{ color: activeColorHex }}
                         onClick={(e) => e.stopPropagation()} 
                         onChange={(e) => setAssignments(prev => ({...prev, [o.sk]: e.target.value}))} 
-                        className="w-full bg-slate-900 border border-slate-600 text-[10px] text-white rounded p-1.5 outline-none focus:border-blue-500 hover:bg-slate-700 transition-colors"
+                        className="w-full bg-slate-900 border border-slate-600 text-xs font-black rounded-lg p-2 outline-none focus:border-blue-500 transition-colors"
                       >
-                          <option value="" disabled>Select Agent</option>
-                          {liveAgents.map((agent, aIndex) => (<option key={`ag-${aIndex}`} value={agent.id || agent.sk}>{agent.name}</option>))}
+                          <option value="" className="text-slate-500 font-bold">Unassigned</option>
+                          {liveAgents.map((agent, aIndex) => {
+                              const optionColorHex = getAgentColor(agent.id || agent.sk);
+                              return (
+                                <option 
+                                  key={`ag-${aIndex}`} 
+                                  value={agent.id || agent.sk}
+                                  style={{ color: optionColorHex }}
+                                  className="bg-slate-900 font-bold text-xs"
+                                >
+                                    {agent.name}
+                                </option>
+                              );
+                          })}
                       </select>
 
                       {activeTooltipId === o.sk && (
