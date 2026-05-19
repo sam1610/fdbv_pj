@@ -215,17 +215,20 @@ const DeliveryOptimizer = ({
       return () => { isMountedRef.current = false; };
   }, [liveAgents]);
 
-  const findAgent = (idToFind) => {
+ const findAgent = (idToFind) => {
       if (!idToFind) return null;
       const cleanToFind = getCleanPhone(idToFind);
-      return liveAgents.find(a => getCleanPhone(a.id) === cleanToFind);
+      // 🟢 FIX: Check against agent.sk or agent.id
+      return liveAgents.find(a => getCleanPhone(a.sk || a.id) === cleanToFind);
   };
 
   const getAgentColor = (agentId) => {
     if (!agentId) return '#64748b'; 
-    const index = liveAgents.findIndex(a => getCleanPhone(a.id) === getCleanPhone(agentId)); 
+    // 🟢 FIX: Check against agent.sk or agent.id to locate index
+    const index = liveAgents.findIndex(a => getCleanPhone(a.sk || a.id) === getCleanPhone(agentId)); 
     return AGENT_COLORS[index % AGENT_COLORS.length] || '#64748b';
   };
+
 
   const displayedOrders = useMemo(() => {
       const today = getTodayString();
@@ -855,11 +858,14 @@ const DeliveryOptimizer = ({
                       >
                           <option value="" className="text-slate-500 font-bold">Unassigned</option>
                           {liveAgents.map((agent, aIndex) => {
-                              const optionColorHex = getAgentColor(agent.id);
+                              // 🟢 FIX: Access key via agent.sk or agent.id
+                              const currentAgentValue = agent.sk || agent.id;
+                              const optionColorHex = getAgentColor(currentAgentValue);
+                              
                               return (
                                 <option 
                                   key={`ag-${aIndex}`} 
-                                  value={agent.id}
+                                  value={currentAgentValue}
                                   style={{ color: optionColorHex }}
                                   className="bg-slate-900 font-bold text-xs"
                                 >
