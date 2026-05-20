@@ -602,7 +602,11 @@ const DeliveryOptimizer = ({
     try {
       const session = await fetchAuthSession();
       const geoClient = new GeoRoutesClient({ region: outputs.geo.aws_region, credentials: session.credentials });
-      const validAgents = latestAgentsRef.current.filter(a => parseLocation(a.location));
+      
+      // 🟢 FIX: Remove the .filter() so we send ALL agents to the AI, even if they don't have GPS yet!
+      // (The Lambda will automatically assume they are waiting at the Restaurant)
+      const validAgents = latestAgentsRef.current; 
+      
       const orderMetrics = {};
       
       const activeOrders = displayedOrders.filter(o => ['ORDERED', 'PREPARED'].includes(o.orderStatus));
