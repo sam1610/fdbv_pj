@@ -133,6 +133,7 @@ const RangeCalendar = ({ startDate, endDate, onChange }) => {
 -------------------------------------------------------------------*/
 const DeliveryOptimizer = ({
   orders, 
+  deliveryAgents = [], // 🟢 RESTORED PARENT PROP
   AGENT_COLORS,
   restaurantLocation,
   onClose,
@@ -144,8 +145,19 @@ const DeliveryOptimizer = ({
   const animationFrameId = useRef(null);
   const isMountedRef = useRef(true); 
 
-  const [liveAgents, setLiveAgents] = useState([]);
-  const [isFetchingAgents, setIsFetchingAgents] = useState(true);
+  // 🟢 INSTANT SYNC: Derive liveAgents strictly from the prop
+  const liveAgents = useMemo(() => {
+      return deliveryAgents
+        .filter(profile => String(profile.sk || profile.id).startsWith('AGENT#') && profile.stockStatus !== false)
+        .map(profile => ({
+          id: profile.sk || profile.id,
+          name: profile.name || `Agent ${String(profile.sk || profile.id).slice(-4)}`,
+          maxCapacity: profile.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
+          currentLoad: profile.capacityLeft ? parseInt(profile.capacityLeft) : 0,
+          location: parseLocation(profile.location),
+          phone: profile.phone || String(profile.sk || profile.id).replace('AGENT#', '')
+      }));
+  }, [deliveryAgents]);
 
   const agentAnimationState = useRef({}); 
   const latestAgentsRef = useRef(liveAgents);
@@ -169,41 +181,6 @@ const DeliveryOptimizer = ({
   const [optimizationMetrics, setOptimizationMetrics] = useState({});
   const [activeTooltipId, setActiveTooltipId] = useState(null); 
   const [orderItemsCache, setOrderItemsCache] = useState({}); 
-
-  // Fetch agents on mount with STRICT SHIELD
-  useEffect(() => {
-      let isMounted = true;
-      const fetchFreshAgents = async () => {
-          setIsFetchingAgents(true);
-          try {
-              const formattedPhone = String(phoneNbr).startsWith('+') ? String(phoneNbr) : `+${phoneNbr}`;
-              const { data: allProfiles } = await client.models.BusinessData.listByBusiness(
-                  { pk: `BUSINESS#${formattedPhone}`, sk: { beginsWith: 'AGENT#' } },
-                  { authMode: 'apiKey' } 
-              );
-
-              const parsedAgents = allProfiles
-                .filter(profile => String(profile.sk).startsWith('AGENT#') && profile.stockStatus !== false) 
-                .map(profile => ({
-                  id: profile.sk, 
-                  name: profile.name || `Agent ${profile.sk.slice(-4)}`,
-                  maxCapacity: profile.maxCapacityUnit ? parseInt(profile.maxCapacityUnit) : 10,
-                  currentLoad: profile.capacityLeft ? parseInt(profile.capacityLeft) : 0,
-                  location: parseLocation(profile.location),
-                  phone: profile.phone || profile.sk.replace('AGENT#', '')
-              }));
-              
-              if (isMounted) setLiveAgents(parsedAgents);
-          } catch (e) {
-              console.error("Error fetching live agents for Map:", e);
-          } finally {
-              if (isMounted) setIsFetchingAgents(false);
-          }
-      };
-
-      if (phoneNbr) fetchFreshAgents();
-      return () => { isMounted = false; };
-  }, [phoneNbr]);
 
   useEffect(() => { 
       latestAgentsRef.current = liveAgents; 
@@ -243,19 +220,18 @@ const DeliveryOptimizer = ({
       });
   }, [orders, fetchedHistory, dateFilter, showDelivered, showDelivering]);
 
-  // 🟢 ADDED MISSING VARIABLE BACK IN
   const hasActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED', 'DELIVERING'].includes(o.orderStatus));
 
   // 🟢 AUTOMATIC AI ROUTING ENGINE TRIGGER
   useEffect(() => {
-      if (!isFetchingAgents && liveAgents.length > 0 && displayedOrders.length > 0) {
+      if (liveAgents.length > 0 && displayedOrders.length > 0) {
           const hasUnassignedActiveOrders = displayedOrders.some(o => ['ORDERED', 'PREPARED'].includes(o.orderStatus));
           if (hasUnassignedActiveOrders && !loading) {
               console.log("🤖 Dispatch Center Active: Calculating optimized fleets...");
               runOptimization();
           }
       }
-  }, [isFetchingAgents, liveAgents.length, orders]);
+  }, [liveAgents.length, orders]);
 
   useEffect(() => {
       const today = getTodayString();
@@ -512,7 +488,7 @@ const DeliveryOptimizer = ({
           const now = Date.now();
           const features = [];
           
-          const validAgents = latestAgentsRef.current;
+          const validAgents = latestAgentsRef.current || [];
           const validAgentPhones = validAgents.map(a => getCleanPhone(a.id));
 
           Object.entries(agentAnimationState.current).forEach(([id, state]) => {

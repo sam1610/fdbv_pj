@@ -480,6 +480,7 @@ export default function OrdersView({ phoneNbr, setModal, deliveryAgents = [], bu
       ) : (
         <DeliveryOptimizer
           orders={allMapOrders}
+          deliveryAgents={deliveryAgents}  // 🟢 ADD THIS LINE BACK!
           AGENT_COLORS={agentColors}
           restaurantLocation={parseLocation(businessLocation)}
           onClose={() => setFilter('Prepared')}
