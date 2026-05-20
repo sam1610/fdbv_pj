@@ -13,6 +13,9 @@ const getOrderLoad = (order: any): number => {
 };
 
 export const handler = async (event: any) => {
+  // 🟢 1. LOG THE ENTIRE INCOMING PAYLOAD FROM APPSYNC
+  console.log("🔥 INCOMING EVENT:", JSON.stringify(event, null, 2));
+
   // --- PARSING HELPERS ---
   const parse = (input: any) => {
       if (!input) return null;
@@ -28,21 +31,32 @@ export const handler = async (event: any) => {
       (loc && !isNaN(loc.longitude) && !isNaN(loc.latitude)) ? [loc.longitude, loc.latitude] : undefined;
 
   // --- INPUTS ---
-  const orders = parse(event.arguments.orders) || [];
-  const rawAgents = parse(event.arguments.agents) || [];
-  const defaultRepo = parse(event.arguments.restaurantLocation);
+  // Safely access event.arguments in case the structure is nested differently
+  const orders = parse(event.arguments?.orders) || [];
+  const rawAgents = parse(event.arguments?.agents) || [];
+  const defaultRepo = parse(event.arguments?.restaurantLocation);
 
-  if (!orders.length || !rawAgents.length) return { proposal: [], routeMetrics: [] };
+  // 🟢 2. LOG THE RESULTS OF THE PARSING
+  console.log(`📦 Parsed Orders Count: ${orders.length}`);
+  console.log(`🚚 Parsed Agents Count: ${rawAgents.length}`);
+
+  if (!orders.length || !rawAgents.length) {
+      // 🟢 3. LOG THE EXACT REASON FOR THE EARLY EXIT
+      console.log("❌ EARLY EXIT: Either orders or agents array is empty. Aborting matrix.");
+      return { proposal: [], routeMetrics: [] };
+  }
 
   // --- STEP 1: PREPARE AGENTS & PREDICTIVE TIMING ---
   const agentLiveLoad: Record<string, number> = {};
   const agentReadyInSeconds: Record<string, number> = {};
 
-  // 🟢 FIX: Allow all agents. If they have no live GPS location, assume they are at the Restaurant.
   const validAgents = rawAgents.map((a: any) => {
       const position = getPos(parse(a.location)) || getPos(defaultRepo);
       return { ...a, Position: position };
-  }).filter((a: any) => a.Position); // Failsafe
+  }).filter((a: any) => a.Position); 
+
+  // 🟢 4. LOG THE VALIDATED AGENTS
+  console.log(`🎯 Validated Agents (with coordinates): ${validAgents.length}`);
 
   validAgents.forEach((a: any) => {
       const id = a.id || a.sk;
@@ -52,10 +66,10 @@ export const handler = async (event: any) => {
 
   try {
       // --- STEP 2: CALCULATE ROUTE MATRIX ---
+      console.log("🚀 Firing CalculateRouteMatrixCommand...");
       const origins = validAgents.map((a: any) => ({ Position: a.Position }));
       
       const destinations = orders.map((o: any) => {
-          // 🟢 FIX: Route to the CUSTOMER'S location, not the restaurant!
           const pos = getPos(parse(o.location)) || getPos(parse(o.pickupLocation)) || getPos(defaultRepo);
           return { Position: pos };
       });
@@ -68,6 +82,7 @@ export const handler = async (event: any) => {
       });
 
       const response = await client.send(command);
+      console.log("✅ GeoRoutes Success!");
       const matrix = response.RouteMatrix || [];
 
       // --- STEP 3: ASSIGNMENT LOGIC ---
@@ -120,7 +135,7 @@ export const handler = async (event: any) => {
       };
 
   } catch (e) {
-      console.error("Optimization Failed:", e);
+      console.error("❌ Optimization Failed:", e);
       return { proposal: [], routeMetrics: [] };
   }
 };
