@@ -512,7 +512,7 @@ const DeliveryOptimizer = ({
           const now = Date.now();
           const features = [];
           
-          const validAgents = latestAgentsRef.current || [];
+          const validAgents = latestAgentsRef.current;
           const validAgentPhones = validAgents.map(a => getCleanPhone(a.id));
 
           Object.entries(agentAnimationState.current).forEach(([id, state]) => {
